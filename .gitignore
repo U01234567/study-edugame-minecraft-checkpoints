@@ -1,0 +1,6 @@
+# Log directories anywhere in the repo
+**/log/
+**/logs/
+
+# Local tree dump
+tree.txt
