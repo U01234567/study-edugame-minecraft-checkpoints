@@ -1,6 +1,13 @@
-# Log directories anywhere in the repo
+# Logs 
 **/log/
 **/logs/
 
-# Local tree dump
-tree.txt
+# Tree dumps
+**/tree.txt
+
+# Minecraft runtime / backup files
+world/session.lock
+world/level.dat_old
+
+# Player-specific data
+world/players/
