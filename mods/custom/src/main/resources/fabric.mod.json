@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "study-checkpoints",
+	"version": "${version}",
+	"name": "Study Checkpoints",
+	"description": "Mod for educational-game study about checkpoints",
+	"authors": [
+		"Jonas de Brouwer"
+	],
+	"contact": {
+		"homepage": "https://github.com/U01234567/",
+		"sources": "https://github.com/U01234567/study-edugame-minecraft-checkpoints"
+	},
+	"license": "Apache-2.0",
+	"icon": "assets/study-checkpoints/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"io.github.u01234567.studycheckpoints.StudyCheckpoints"
+		],
+		"fabric-datagen": [
+			"io.github.u01234567.studycheckpoints.StudyCheckpointsDataGenerator"
+		],
+		"client": [
+			"io.github.u01234567.studycheckpoints.StudyCheckpointsClient"
+		]
+	},
+	"mixins": [
+		"study-checkpoints.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
