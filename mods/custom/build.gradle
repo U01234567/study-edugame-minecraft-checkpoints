@@ -10,6 +10,11 @@ base {
 	archivesName = project.archives_base_name
 }
 
+// Copy the repo world into our mods, then start Minecraft directly from that world. 
+def studyWorldSourceDir = file("../../world")
+def studyWorldSaveName = "experiment-world"
+def studyWorldTargetDir = file("run/saves/${studyWorldSaveName}")
+
 repositories {
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
@@ -27,12 +32,47 @@ fabricApi {
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	
+
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	
+
+}
+
+// Firstly, delete previously copied Minecraft world
+tasks.register("deleteCopiedStudyWorld", Delete) {
+	delete studyWorldTargetDir
+}
+
+// Secondly, copy the repo Minecraft world into the mods directory
+tasks.register("copyStudyWorld", Copy) {
+	dependsOn tasks.named("deleteCopiedStudyWorld")
+
+	doFirst {
+		if (!studyWorldSourceDir.exists()) {
+			throw new GradleException(
+					"Study world source directory not found: ${studyWorldSourceDir}"
+			)
+		}
+	}
+
+	from(studyWorldSourceDir)
+	into(studyWorldTargetDir)
+}
+
+// Thirdly, make sure every 'runClient' starts from a newly copied study world
+// and run Minecraft directly from this world
+tasks.named("runClient") {
+	dependsOn tasks.named("copyStudyWorld")
+
+	doFirst {
+		logger.lifecycle(
+				"Prepared study world for dev run: ${studyWorldSourceDir} -> ${studyWorldTargetDir}"
+		)
+	}
+
+	args "--quickPlaySingleplayer", studyWorldSaveName
 }
 
 processResources {
