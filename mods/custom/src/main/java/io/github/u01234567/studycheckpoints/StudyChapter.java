@@ -1,0 +1,88 @@
+package io.github.u01234567.studycheckpoints;
+
+/**
+ * Fixed chapter definitions for the study.
+ * Each chapter knows:
+ * - its ordinal number
+ * - where the player should be placed
+ * - which yaw corresponds to the requested facing direction
+ * - how long the chapter lasts
+ * - which transition text to show afterwards
+ */
+
+public enum StudyChapter {
+    CHAPTER_0(
+            0,
+            62, 65, -238, 180.0F, "north",
+            20_000L,
+            "Ch0 complete. Move to Ch1."
+    ),
+    CHAPTER_1(
+            1,
+            66, 65, -238, -90.0F, "east",
+            20_000L,
+            "Ch1 complete. Move to Ch2."
+    ),
+    CHAPTER_2(
+            2,
+            71, 65, -238, 0.0F, "south",
+            20_000L,
+            "Ch2 complete. Move to Ch3."
+    ),
+    CHAPTER_3(
+            3,
+            75, 65, -238, 90.0F, "west",
+            20_000L,
+            "Ch3 complete. Click below to answer the questionnaire."
+    );
+
+    private final int chapterNumber;
+    private final int x;
+    private final int y;
+    private final int z;
+    private final float yawDegrees;
+    private final String facingLabel;
+    private final long durationMs;
+    private final String completionMessage;
+
+    StudyChapter(int chapterNumber,
+                 int x,
+                 int y,
+                 int z,
+                 float yawDegrees,
+                 String facingLabel,
+                 long durationMs,
+                 String completionMessage) {
+                    this.chapterNumber = chapterNumber;
+                    this.x = x;
+                    this.y = y;
+                    this.z = z;
+                    this.yawDegrees = yawDegrees;
+                    this.facingLabel = facingLabel;
+                    this.durationMs = durationMs;
+                    this.completionMessage = completionMessage;
+                 }
+
+    public int chapterNumber() { return chapterNumber; }
+    public int x() { return x; }
+    public int y() { return y; }
+    public int z() { return z; }
+    public float yawDegrees() { return yawDegrees; }
+    public String facingLabel() { return facingLabel; }
+    public long durationMs() { return durationMs; }
+    public String completionMessage() { return completionMessage; }
+
+    // Teleport player in center of spawn point
+    public double centerX() { return x + 0.5D; }
+    public double centerZ() { return z + 0.5D; }
+
+    public static StudyChapter first() {
+        return CHAPTER_0;
+    }
+
+    public StudyChapter next() {
+        StudyChapter[] values = values();
+        int nextIndex = this.ordinal() + 1;
+        return nextIndex < values.length ? values[nextIndex] : null;
+    }
+}

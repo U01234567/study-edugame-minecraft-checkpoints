@@ -33,10 +33,16 @@ public final class StudyEventLog {
 
     // Timestamp
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
-            DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("'['yyyy-MM-dd'] ['HH:mm:ss:SSS']'")
+                    .withZone(ZoneId.systemDefault());
 
     private StudyEventLog() {
         // Utility class; do not instantiate.
+    }
+
+    // MCID
+    public static String getSessionId() {
+        return SESSION_ID;
     }
 
     // Generate metadata header. Includes:
@@ -55,7 +61,7 @@ public final class StudyEventLog {
 
         appendLine("");
         appendLine("================================================================");
-        appendLine("study_session_started | time=" + now() + " | session_id=" + SESSION_ID);
+        appendLine(now() + " | study_session_started | session_id=" + SESSION_ID);
         appendLine("study_mod_version=" + getModVersion(StudyCheckpoints.MOD_ID));
         appendLine("minecraft_version=" + getModVersion("minecraft"));
         appendLine("fabric_loader_version=" + getModVersion("fabricloader"));
@@ -72,6 +78,41 @@ public final class StudyEventLog {
         logEvent(
                 "player_joined",
                 "player=" + safe(playerName)
+        );
+    }
+
+    public static void logConsentChoice(String choice) {
+        logSessionHeader();
+        logEvent(
+                "consent_choice",
+                "choice=" + safe(choice)
+        );
+    }
+
+    public static void logChapterStarted(int chapterNumber, String coordinates, String facing, long durationMs) {
+        logSessionHeader();
+        logEvent(
+                "chapter_started",
+                "chapter=" + chapterNumber,
+                "coords=" + safe(coordinates),
+                "facing=" + safe(facing),
+                "duration_ms=" + durationMs
+        );
+    }
+
+    public static void logChapterCompleted(int chapterNumber) {
+        logSessionHeader();
+        logEvent(
+                "chapter_completed",
+                "chapter=" + chapterNumber
+        );
+    }
+
+    public static void logQuestionnaireButtonPressed(String url) {
+        logSessionHeader();
+        logEvent(
+                "questionnaire_button_pressed",
+                "url=" + safe(url)
         );
     }
 
@@ -96,7 +137,7 @@ public final class StudyEventLog {
     }
 
     // Generate general log structure (both human-readable and easy to parse)
-    // Structure example: <timestamp> | <event_type> | session_id=... | key=value | key=value ...
+    // Structure example: [yyyy-mm-dd] [hh:mm:ss:ms] | <event_type> | session_id=... | key=value | key=value ...
     private static void logEvent(String eventType, String... fields) {
         StringBuilder line = new StringBuilder();
         line.append(now());
