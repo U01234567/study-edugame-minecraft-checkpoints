@@ -49,8 +49,9 @@ EVENT_LINE_RE = re.compile(
 )
 
 CREATURE_ENTRY_RE = re.compile(
-    r"Map\.entry\s*\(\s*EntityType\.(?P<entity_type>[A-Z0-9_]+)\s*,\s*"
-    r"new\s+CreatureCard\s*\(\s*"
+    r"Map\.entry\s*\(\s*"
+    r'(?:EntityType\.(?P<entity_type>[A-Z0-9_]+)|"(?P<custom_creature_id>[^"]+)")'
+    r"\s*,\s*new\s+CreatureCard\s*\(\s*"
     r'"(?P<display_name>[^"]+)"\s*,\s*'
     r"List\.of\s*\((?P<facts>.*?)\)\s*"
     r"\)\s*\)",
@@ -249,15 +250,20 @@ def parse_creature_cards(path: Path) -> list[CreatureDefinition]:
     """
     Parse StudyCreatureCards.java.
 
-    The parser is intentionally simple and expects entries in the form:
+    The parser is intentionally simple and expects entries in one of these forms:
         Map.entry(EntityType.COW, new CreatureCard("Cow", List.of(...)))
+        Map.entry("mantis", new CreatureCard("Praying mantis", List.of(...)))
     """
     text = path.read_text(encoding="utf-8")
 
     creatures: list[CreatureDefinition] = []
 
     for match in CREATURE_ENTRY_RE.finditer(text):
-        entity_type = match.group("entity_type").strip()
+        entity_type = (
+            match.group("entity_type")
+            or match.group("custom_creature_id")
+            or ""
+        ).strip()
         display_name = match.group("display_name").strip()
         facts_text = match.group("facts")
         facts = [fact.strip() for fact in QUOTED_STRING_RE.findall(facts_text) if fact.strip()]
