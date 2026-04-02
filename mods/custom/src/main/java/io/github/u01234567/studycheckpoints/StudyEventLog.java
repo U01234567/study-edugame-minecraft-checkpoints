@@ -8,6 +8,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -193,6 +194,74 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logCreatureCardOpened(String playerName,
+                                           String entityType,
+                                           String creatureLabel,
+                                           String entityUuid,
+                                           String entityBlockPos) {
+        logSessionHeader();
+        logEvent(
+                "creature_card_opened",
+                "player=" + safe(playerName),
+                "entity_type=" + safe(entityType),
+                "creature_label=" + safe(creatureLabel),
+                "entity_uuid=" + safe(entityUuid),
+                "entity_block_pos=" + safe(entityBlockPos)
+        );
+    }
+
+    public static void logBlockedAction(String playerName, String action, String detail) {
+        logSessionHeader();
+        logEvent(
+                "blocked_action",
+                "player=" + safe(playerName),
+                "action=" + safe(action),
+                "detail=" + safe(detail)
+        );
+    }
+
+    public static void logMovementSample(String playerName,
+                                         String chapterTitle,
+                                         double x,
+                                         double y,
+                                         double z,
+                                         double sampleDistance,
+                                         double totalDistance,
+                                         double totalSprintDistance,
+                                         boolean sprinting,
+                                         boolean onGround) {
+        logSessionHeader();
+        logEvent(
+                "movement_sample",
+                "player=" + safe(playerName),
+                "chapter_title=" + safe(chapterTitle),
+                "x=" + formatDouble(x),
+                "y=" + formatDouble(y),
+                "z=" + formatDouble(z),
+                "sample_distance=" + formatDouble(sampleDistance),
+                "total_distance=" + formatDouble(totalDistance),
+                "total_sprint_distance=" + formatDouble(totalSprintDistance),
+                "sprinting=" + sprinting,
+                "on_ground=" + onGround
+        );
+    }
+
+    public static void logJump(String playerName,
+                               String chapterTitle,
+                               double x,
+                               double y,
+                               double z) {
+        logSessionHeader();
+        logEvent(
+                "jump_started",
+                "player=" + safe(playerName),
+                "chapter_title=" + safe(chapterTitle),
+                "x=" + formatDouble(x),
+                "y=" + formatDouble(y),
+                "z=" + formatDouble(z)
+        );
+    }
+
     public static void logCowClick(String playerName, String clickType, String cowUuid, String cowBlockPos) {
         logSessionHeader();
         logEvent(
@@ -273,6 +342,10 @@ public final class StudyEventLog {
 
     private static String now() {
         return TIMESTAMP_FORMAT.format(Instant.now());
+    }
+
+    private static String formatDouble(double value) {
+        return String.format(Locale.ROOT, "%.3f", value);
     }
 
     // Avoid blank / null text

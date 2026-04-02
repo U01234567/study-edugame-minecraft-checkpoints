@@ -84,6 +84,14 @@ public final class StudyFlowController {
         return conditionAssignment.condition();
     }
 
+    public static boolean isChapterActive() {
+        return activeChapter != null;
+    }
+
+    public static StudyChapter getActiveChapter() {
+        return activeChapter;
+    }
+
     public static void continueFromFinalScreen(Minecraft client, StudyChapter completedChapter) {
         client.execute(() -> openQuestionnaire(client));
     }

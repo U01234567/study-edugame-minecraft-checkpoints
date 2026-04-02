@@ -6,5 +6,6 @@ public class StudyCheckpointsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         StudyFlowController.initializeClient();
+        StudyInteractionController.initializeClient();
     }
 }

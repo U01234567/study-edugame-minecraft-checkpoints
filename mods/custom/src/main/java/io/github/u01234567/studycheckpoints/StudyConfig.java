@@ -32,6 +32,10 @@ public final class StudyConfig {
     // Duration of the black pause overlay at checkpoint
     private static final long CHECKPOINT_PAUSE_DURATION_MS = 120_000L;
 
+    // Prevent the player from opening the escape menu during the experiment.
+    // This should remain false for real study sessions.
+    private static final boolean ALLOW_ESCAPE_MENU = true;
+
     private static Map<String, String> values;
 
     private StudyConfig() {
@@ -62,6 +66,11 @@ public final class StudyConfig {
     // Return delay of the black pause overlay
     public static long getCheckpointPauseDurationMs() {
         return CHECKPOINT_PAUSE_DURATION_MS;
+    }
+
+    // Return whether the participant may open the escape menu.
+    public static boolean isEscapeMenuAllowed() {
+        return ALLOW_ESCAPE_MENU;
     }
 
     private static synchronized void ensureLoaded() {
