@@ -5,6 +5,12 @@
 **/log/
 **/logs/
 
+# Outputs
+**/output/
+**/outputs/
+**/export/
+**/exports/
+
 # Tree dumps
 **/tree.txt
 
@@ -14,3 +20,6 @@ world/level.dat_old
 
 # Player-specific data
 world/players/
+
+# Cache files
+**/__pycache__
