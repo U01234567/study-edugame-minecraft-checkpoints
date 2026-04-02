@@ -10,13 +10,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
+import java.util.ArrayList;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -128,6 +132,8 @@ public final class StudyInteractionController {
     private static void onEndServerTick(MinecraftServer server) {
         serverTickCounter++;
 
+        enforceEntityWhitelist(server);
+
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             enforceServerPlayerState(player);
 
@@ -163,11 +169,60 @@ public final class StudyInteractionController {
         invokeNoArgs(player, "onUpdateAbilities");
     }
 
+    /**
+     * Enforce a strict world whitelist:
+     * - keep players
+     * - keep only creatures listed in StudyCreatureCards
+     * - remove all other entities
+     */
+    private static void enforceEntityWhitelist(MinecraftServer server) {
+        for (ServerLevel level : server.getAllLevels()) {
+            List<Entity> entitiesToRemove = new ArrayList<>();
+
+            for (Entity entity : level.getAllEntities()) {
+                if (entity instanceof ServerPlayer) {
+                    continue;
+                }
+
+                if (StudyCreatureCards.isAllowedStudyCreature(entity.getType())) {
+                    keepStudyCreatureAlive(entity);
+                    continue;
+                }
+
+                entitiesToRemove.add(entity);
+            }
+
+            for (Entity entity : entitiesToRemove) {
+                entity.discard();
+            }
+        }
+    }
+
     private static void enforceClientPlayerState(LocalPlayer player) {
         player.getAbilities().mayfly = false;
         player.getAbilities().flying = false;
         player.getAbilities().instabuild = false;
         invokeNoArgs(player, "onUpdateAbilities");
+    }
+
+    /**
+     * Keep allowed study creatures persistent and safe:
+     * - make them invulnerable
+     * - extinguish fire
+     * - restore health
+     * - mark mobs as persistent so they do not despawn naturally
+     */
+    private static void keepStudyCreatureAlive(Entity entity) {
+        entity.setInvulnerable(true);
+        entity.clearFire();
+
+        if (entity instanceof LivingEntity livingEntity) {
+            livingEntity.setHealth(livingEntity.getMaxHealth());
+        }
+
+        if (entity instanceof Mob mob) {
+            mob.setPersistenceRequired();
+        }
     }
 
     private static void clearNearbyMobTargets(ServerPlayer player) {

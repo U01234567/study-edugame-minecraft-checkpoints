@@ -2,8 +2,10 @@ package io.github.u01234567.studycheckpoints;
 
 import net.minecraft.world.entity.EntityType;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Central file for the creature cards (one per mob)
@@ -49,6 +51,16 @@ public final class StudyCreatureCards {
 
     public static CreatureCard get(EntityType<?> entityType) {
         return CARDS.get(entityType);
+    }
+
+    // Return whether an entity type is an allowed study creature.
+    public static boolean isAllowedStudyCreature(EntityType<?> entityType) {
+        return CARDS.containsKey(entityType);
+    }
+
+    // Return the full set of allowed study creature types.
+    public static Set<EntityType<?>> allowedEntityTypes() {
+        return Collections.unmodifiableSet(CARDS.keySet());
     }
 
     public record CreatureCard(String displayName, List<String> facts) {

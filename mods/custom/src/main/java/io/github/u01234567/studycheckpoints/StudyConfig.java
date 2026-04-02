@@ -34,7 +34,7 @@ public final class StudyConfig {
 
     // Prevent the player from opening the escape menu during the experiment.
     // This should remain false for real study sessions.
-    private static final boolean ALLOW_ESCAPE_MENU = true;
+    private static final boolean ALLOW_ESCAPE_MENU = false;
 
     private static Map<String, String> values;
 
