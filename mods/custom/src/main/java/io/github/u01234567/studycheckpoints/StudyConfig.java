@@ -18,11 +18,26 @@ public final class StudyConfig {
     private static final Path ENV_FILE = GAME_DIR.resolve("../../../.env").normalize().toAbsolutePath();
 
     private static final String QUALTRICS_URL_TEMPLATE_KEY = "QUALTRICS_URL_TEMPLATE";
+
+    // Choose study condition from:
+    // - cond_continue (forest green)
+    // - cond_pause (amber)
+    // - cond_choice (lilac)
+    // - none (= random assignment of the above)
+    private static final String FORCED_EXPERIMENT_CONDITION = "cond_choice";
+
+    // Delay time for 'click a button' reminder during checkpoints
+    private static final long CHECKPOINT_PROMPT_DELAY_MS = 20_000L;
+
+    // Duration of the black pause overlay at checkpoint
+    private static final long CHECKPOINT_PAUSE_DURATION_MS = 120_000L;
+
     private static Map<String, String> values;
 
     private StudyConfig() {
     }
 
+    // Return personalised Qualtrics URL from .env file (should contain {MCID} placeholder)
     public static String getQualtricsUrlTemplate() {
         ensureLoaded();
         String value = values.get(QUALTRICS_URL_TEMPLATE_KEY);
@@ -32,6 +47,21 @@ public final class StudyConfig {
         }
 
         return value;
+    }
+
+    // Return specified condition
+    public static String getForcedExperimentCondition() {
+        return FORCED_EXPERIMENT_CONDITION;
+    }
+
+    // Return delay for 'click a button' reminder during checkpoints
+    public static long getCheckpointPromptDelayMs() {
+        return CHECKPOINT_PROMPT_DELAY_MS;
+    }
+
+    // Return delay of the black pause overlay
+    public static long getCheckpointPauseDurationMs() {
+        return CHECKPOINT_PAUSE_DURATION_MS;
     }
 
     private static synchronized void ensureLoaded() {

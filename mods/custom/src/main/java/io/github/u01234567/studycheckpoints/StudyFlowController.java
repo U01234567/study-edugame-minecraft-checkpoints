@@ -23,21 +23,27 @@ import java.util.UUID;
  * 1. show intro once
  * 2. wait for explicit consent
  * 3. run exactly one chapter at a time
- * 4. show exactly one completion overlay between chapters
+ * 4. show manipulated checkpoint screens between chapters 1→2 and 2→3
  * 5. hand off to Qualtrics at the very end
  */
 public final class StudyFlowController {
     private static final int TIMER_COLOR_NORMAL = 0xFFFFFFFF;
     private static final int TIMER_COLOR_WARNING = 0xFFFF4D4D;
     private static final long WARNING_THRESHOLD_MS = 15_000L;
+    private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
+    private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
 
     private static boolean introShown;
     private static boolean windowPrepared;
-    private static boolean qualtricsOpened;
 
     private static StudyChapter activeChapter;
     private static long chapterDeadlineMs;
+    private static String chapterWelcomeMessage;
+    private static long chapterWelcomeDeadlineMs;
+    private static long questionnaireFirstOpenedAtMs;
+
+    private static StudyConditionAllocator.ConditionAssignment conditionAssignment;
 
     private StudyFlowController() {
     }
@@ -53,6 +59,8 @@ public final class StudyFlowController {
     }
 
     public static void acceptConsent(Minecraft client) {
+        StudyEventLog.logConsentChoice("agree_and_continue");
+
         client.execute(() -> {
             client.setScreen(null);
             startChapter(client, StudyChapter.first());
@@ -65,23 +73,80 @@ public final class StudyFlowController {
         requestClientStop(client);
     }
 
-    public static void continueAfterChapter(Minecraft client, StudyChapter completedChapter) {
+    // Close the client from the final questionnaire screen.
+    public static void closeAfterQuestionnaire(Minecraft client) {
+        StudyEventLog.logGameEnded(playerName(client), "questionnaire_completed");
+        requestClientStop(client);
+    }
+
+    public static StudyExperimentCondition getAssignedCondition() {
+        ensureConditionAssigned();
+        return conditionAssignment.condition();
+    }
+
+    public static void continueFromFinalScreen(Minecraft client, StudyChapter completedChapter) {
+        client.execute(() -> openQuestionnaire(client));
+    }
+
+    public static boolean canCloseQuestionnaireScreen() {
+        return questionnaireFirstOpenedAtMs > 0L
+                && nowMs() >= questionnaireFirstOpenedAtMs + QUESTIONNAIRE_CLOSE_DELAY_MS;
+    }
+
+    public static void continueFromCheckpoint(Minecraft client,
+                                              StudyChapter completedChapter,
+                                              StudyExperimentCondition condition) {
         StudyChapter nextChapter = completedChapter.next();
+        if (nextChapter == null) {
+            return;
+        }
 
-        client.execute(() -> {
-            client.setScreen(null);
+        StudyEventLog.logCheckpointChoice(
+                completedChapter.chapterNumber(),
+                nextChapter.chapterNumber(),
+                condition.id(),
+                "continue"
+        );
 
-            if (nextChapter == null) {
-                openQuestionnaire(client);
-                return;
-            }
+        advanceFromCompletedChapter(client, completedChapter);
+    }
 
-            startChapter(client, nextChapter);
-        });
+    public static void startPauseFromCheckpoint(Minecraft client,
+                                                StudyChapter completedChapter,
+                                                StudyExperimentCondition condition) {
+        StudyChapter nextChapter = completedChapter.next();
+        if (nextChapter == null) {
+            return;
+        }
+
+        long pauseDurationMs = StudyConfig.getCheckpointPauseDurationMs();
+
+        StudyEventLog.logCheckpointChoice(
+                completedChapter.chapterNumber(),
+                nextChapter.chapterNumber(),
+                condition.id(),
+                "pause"
+        );
+        StudyEventLog.logCheckpointPauseStarted(
+                completedChapter.chapterNumber(),
+                nextChapter.chapterNumber(),
+                pauseDurationMs
+        );
+
+        client.execute(() -> client.setScreen(new StudyPauseScreen(
+                pauseDurationMs,
+                () -> {
+                    StudyEventLog.logCheckpointPauseFinished(
+                            completedChapter.chapterNumber(),
+                            nextChapter.chapterNumber()
+                    );
+                    advanceFromCompletedChapter(client, completedChapter);
+                }
+        )));
     }
 
     public static void renderTimerHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        if (activeChapter == null) {
+        if (activeChapter == null && chapterWelcomeMessage == null) {
             return;
         }
 
@@ -90,17 +155,26 @@ public final class StudyFlowController {
             return;
         }
 
-        long remainingMs = Math.max(0L, chapterDeadlineMs - nowMs());
-        int totalSeconds = (int) Math.ceil(remainingMs / 1000.0D);
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
+        if (activeChapter != null) {
+            long remainingMs = Math.max(0L, chapterDeadlineMs - nowMs());
+            int totalSeconds = (int) Math.ceil(remainingMs / 1000.0D);
+            int minutes = totalSeconds / 60;
+            int seconds = totalSeconds % 60;
 
-        String timerText = String.format(Locale.ROOT, "%d:%02d", minutes, seconds);
-        int colour = remainingMs <= WARNING_THRESHOLD_MS ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+            String timerText = String.format(Locale.ROOT, "%d:%02d", minutes, seconds);
+            int colour = remainingMs <= WARNING_THRESHOLD_MS ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
 
-        int x = client.getWindow().getGuiScaledWidth() - client.font.width(timerText) - 12;
-        int y = 10;
-        graphics.text(client.font, timerText, x, y, colour, true);
+            int x = client.getWindow().getGuiScaledWidth() - client.font.width(timerText) - 12;
+            int y = 10;
+            graphics.text(client.font, timerText, x, y, colour, true);
+        }
+
+        if (chapterWelcomeMessage != null && nowMs() < chapterWelcomeDeadlineMs) {
+            int messageX = (client.getWindow().getGuiScaledWidth() - client.font.width(chapterWelcomeMessage)) / 2;
+            graphics.text(client.font, chapterWelcomeMessage, messageX, 10, 0xFFFFFFFF, true);
+        } else {
+            chapterWelcomeMessage = null;
+        }
     }
 
     private static void onEndClientTick(Minecraft client) {
@@ -109,6 +183,7 @@ public final class StudyFlowController {
         }
 
         ensureFullscreenAndFocus(client);
+        ensureConditionAssigned();
 
         if (!introShown) {
             introShown = true;
@@ -121,9 +196,28 @@ public final class StudyFlowController {
         }
     }
 
+    private static void ensureConditionAssigned() {
+        if (conditionAssignment != null) {
+            return;
+        }
+
+        conditionAssignment = StudyConditionAllocator.assignConditionForSession(
+                StudyConfig.getForcedExperimentCondition()
+        );
+
+        StudyEventLog.logExperimentConditionAssigned(
+                conditionAssignment.condition().id(),
+                conditionAssignment.source(),
+                conditionAssignment.condition().indicatorColourName(),
+                conditionAssignment.countsFile().toString()
+        );
+    }
+
     private static void startChapter(Minecraft client, StudyChapter chapter) {
         activeChapter = chapter;
         chapterDeadlineMs = nowMs() + chapter.durationMs();
+        chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
+        chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
 
         placePlayerForChapter(client, chapter);
         StudyEventLog.logChapterStarted(
@@ -143,12 +237,49 @@ public final class StudyFlowController {
         activeChapter = null;
 
         StudyEventLog.logChapterCompleted(completedChapter.chapterNumber());
-        client.setScreen(StudyOverlayScreen.createChapterCompleteScreen(completedChapter));
+
+        if (completedChapter.next() == null) {
+            client.setScreen(StudyOverlayScreen.createFinalQuestionnaireScreen(completedChapter));
+            return;
+        }
+
+        if (shouldShowExperimentalCheckpoint(completedChapter)) {
+            StudyEventLog.logCheckpointDisplayed(
+                    completedChapter.chapterNumber(),
+                    completedChapter.next().chapterNumber(),
+                    getAssignedCondition().id()
+            );
+            client.setScreen(new StudyCheckpointScreen(completedChapter, getAssignedCondition()));
+            return;
+        }
+
+        advanceFromCompletedChapter(client, completedChapter);
     }
 
-    /**
-     * Place the participant in the correct chapter location.
-     */
+    // There is a shared checkpoint between Ch 0 and 1, and manipulated
+    // checkpoints between Ch 1 and 2, and Ch 2 and 3.
+    private static boolean shouldShowExperimentalCheckpoint(StudyChapter completedChapter) {
+        return completedChapter == StudyChapter.CHAPTER_0
+                || completedChapter == StudyChapter.CHAPTER_1
+                || completedChapter == StudyChapter.CHAPTER_2;
+    }
+
+    private static void advanceFromCompletedChapter(Minecraft client, StudyChapter completedChapter) {
+        StudyChapter nextChapter = completedChapter.next();
+
+        client.execute(() -> {
+            client.setScreen(null);
+
+            if (nextChapter == null) {
+                openQuestionnaire(client);
+                return;
+            }
+
+            startChapter(client, nextChapter);
+        });
+    }
+
+    // Place the participant in the correct chapter location.
     private static void placePlayerForChapter(Minecraft client, StudyChapter chapter) {
         if (client.player != null) {
             moveEntity(
@@ -187,9 +318,7 @@ public final class StudyFlowController {
         });
     }
 
-    /**
-     * Try to open in fullscreen + focused on this program.
-     */
+    //Try to open in fullscreen + focused on this program.
     private static void ensureFullscreenAndFocus(Minecraft client) {
         if (windowPrepared) {
             return;
@@ -219,17 +348,16 @@ public final class StudyFlowController {
     }
 
     private static void openQuestionnaire(Minecraft client) {
-        if (qualtricsOpened) {
-            return;
-        }
-
         try {
+            if (questionnaireFirstOpenedAtMs == 0L) {
+                questionnaireFirstOpenedAtMs = nowMs();
+            }
+
             String template = StudyConfig.getQualtricsUrlTemplate();
             String url = template.replace("{MCID}", StudyEventLog.getSessionId());
             StudyEventLog.logQuestionnaireButtonPressed(url);
 
             if (openUrlInBrowser(url)) {
-                qualtricsOpened = true;
                 StudyCheckpoints.LOGGER.info("Opened questionnaire URL: {}", url);
             } else {
                 StudyCheckpoints.LOGGER.error("Failed to open Qualtrics URL: {}", url);

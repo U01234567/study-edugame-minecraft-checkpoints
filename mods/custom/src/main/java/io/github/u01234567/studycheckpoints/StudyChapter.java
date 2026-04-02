@@ -72,6 +72,16 @@ public enum StudyChapter {
     public long durationMs() { return durationMs; }
     public String completionMessage() { return completionMessage; }
 
+    // Chapter titles
+    public String displayTitle() {
+        return switch (this) {
+            case CHAPTER_0 -> "Chapter 0 (Get started)";
+            case CHAPTER_1 -> "Chapter 1 (The Museum)";
+            case CHAPTER_2 -> "Chapter 2 (The Farm)";
+            case CHAPTER_3 -> "Chapter 3 (The Forest)";
+        };
+    }
+
     // Teleport player in center of spawn point
     public double centerX() { return x + 0.5D; }
     public double centerZ() { return z + 0.5D; }

@@ -11,7 +11,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-// Helper: writes study log
+/**
+ * Helper: writes the main study log.
+ */
 public final class StudyEventLog {
     // Game directory (at custom/run)
     private static final Path GAME_DIR = FabricLoader.getInstance().getGameDir();
@@ -89,6 +91,20 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logExperimentConditionAssigned(String conditionId,
+                                                      String source,
+                                                      String indicatorColourName,
+                                                      String countsFilePath) {
+        logSessionHeader();
+        logEvent(
+                "experiment_condition_assigned",
+                "condition=" + safe(conditionId),
+                "source=" + safe(source),
+                "indicator_colour=" + safe(indicatorColourName),
+                "counts_file=" + safe(countsFilePath)
+        );
+    }
+
     public static void logChapterStarted(int chapterNumber, String coordinates, String facing, long durationMs) {
         logSessionHeader();
         logEvent(
@@ -105,6 +121,67 @@ public final class StudyEventLog {
         logEvent(
                 "chapter_completed",
                 "chapter=" + chapterNumber
+        );
+    }
+
+    public static void logCheckpointDisplayed(int completedChapterNumber,
+                                              int nextChapterNumber,
+                                              String conditionId) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_displayed",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "condition=" + safe(conditionId)
+        );
+    }
+
+    public static void logCheckpointPromptDisplayed(int completedChapterNumber,
+                                                    int nextChapterNumber,
+                                                    String conditionId,
+                                                    String promptText) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_prompt_displayed",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "condition=" + safe(conditionId),
+                "prompt=" + safe(promptText)
+        );
+    }
+
+    public static void logCheckpointChoice(int completedChapterNumber,
+                                           int nextChapterNumber,
+                                           String conditionId,
+                                           String choice) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_choice_made",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "condition=" + safe(conditionId),
+                "choice=" + safe(choice)
+        );
+    }
+
+    public static void logCheckpointPauseStarted(int completedChapterNumber,
+                                                 int nextChapterNumber,
+                                                 long pauseDurationMs) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_pause_started",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "pause_duration_ms=" + pauseDurationMs
+        );
+    }
+
+    public static void logCheckpointPauseFinished(int completedChapterNumber, int nextChapterNumber) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_pause_finished",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber
         );
     }
 

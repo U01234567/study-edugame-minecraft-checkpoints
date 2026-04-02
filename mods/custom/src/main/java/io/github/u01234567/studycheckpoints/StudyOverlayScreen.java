@@ -11,21 +11,32 @@ import java.util.List;
 /**
  * Design for reusable white overlay. Used for example for:
  * - the consent intro screen
- * - the chapter-complete continue screens
+ * - the final questionnaire hand-off screen
  */
 public class StudyOverlayScreen extends Screen {
     private final String heading;
     private final List<String> bodyLines;
     private final List<ButtonSpec> buttonSpecs;
+    private final IndicatorSpec indicatorSpec;
+    private final boolean showCloseButton;
+    private StudyColourButton closeButton;
 
-    private StudyOverlayScreen(String heading, List<String> bodyLines, List<ButtonSpec> buttonSpecs) {
+    private StudyOverlayScreen(String heading,
+                               List<String> bodyLines,
+                               List<ButtonSpec> buttonSpecs,
+                               IndicatorSpec indicatorSpec,
+                               boolean showCloseButton) {
         super(Component.empty());
         this.heading = heading;
         this.bodyLines = bodyLines;
         this.buttonSpecs = buttonSpecs;
+        this.indicatorSpec = indicatorSpec;
+        this.showCloseButton = showCloseButton;
     }
 
     public static StudyOverlayScreen createIntroScreen() {
+        StudyExperimentCondition assignedCondition = StudyFlowController.getAssignedCondition();
+
         List<String> lines = List.of(
                 "Please read the study information.",
                 "If you want to continue, click the green button below.",
@@ -46,37 +57,60 @@ public class StudyOverlayScreen extends Screen {
                 () -> StudyFlowController.stopHere(Minecraft.getInstance())
         ));
 
-        return new StudyOverlayScreen("Intro", lines, buttons);
+        IndicatorSpec indicator = new IndicatorSpec(
+                assignedCondition.indicatorLabel(),
+                assignedCondition.indicatorColour()
+        );
+
+        return new StudyOverlayScreen("Intro", lines, buttons, indicator, false);
     }
 
-    public static StudyOverlayScreen createChapterCompleteScreen(StudyChapter completedChapter) {
-        String heading = "Chapter " + completedChapter.chapterNumber() + " complete";
-        boolean finalChapter = completedChapter.next() == null;
-        String message = finalChapter
-                ? "Chapter 3 complete. Click below to answer the questionnaire in your browser."
-                : completedChapter.completionMessage();
-        String buttonLabel = finalChapter ? "Answer questionnaire" : "Continue";
+    public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
+        String heading = completedChapter.displayTitle() + " complete";
+        List<String> messageLines = List.of(
+                "Click below to answer the questionnaire in your browser."
+        );
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
-                buttonLabel,
+                "Answer questionnaire",
                 0xFF2F6FED,
                 0xFF4C85F5,
-                () -> StudyFlowController.continueAfterChapter(Minecraft.getInstance(), completedChapter)
+                () -> StudyFlowController.continueFromFinalScreen(Minecraft.getInstance(), completedChapter)
         ));
 
-        return new StudyOverlayScreen(heading, List.of(message), buttons);
+        return new StudyOverlayScreen(heading, messageLines, buttons, null, true);
     }
 
     @Override
     protected void init() {
         this.clearWidgets();
 
-        int buttonWidth = buttonSpecs.size() == 1 ? 140 : 170;
+        if (showCloseButton) {
+            int panelWidth = Math.min(440, this.width - 40);
+            int panelHeight = 156;
+            int panelLeft = (this.width - panelWidth) / 2;
+            int panelTop = (this.height - panelHeight) / 2;
+
+            closeButton = this.addRenderableWidget(new StudyColourButton(
+                    panelLeft + panelWidth - 30,
+                    panelTop + 10,
+                    16,
+                    16,
+                    Component.literal("X"),
+                    0xFF999999,
+                    0xFFBBBBBB,
+                    () -> StudyFlowController.closeAfterQuestionnaire(Minecraft.getInstance())
+            ));
+            closeButton.visible = StudyFlowController.canCloseQuestionnaireScreen();
+            closeButton.active = closeButton.visible;
+        }
+
+        int buttonWidth = buttonSpecs.size() == 1 ? 160 : 170;
         int buttonHeight = 24;
         int buttonSpacing = 12;
         int totalButtonsWidth = (buttonWidth * buttonSpecs.size()) + (buttonSpacing * Math.max(0, buttonSpecs.size() - 1));
         int buttonsLeft = (this.width - totalButtonsWidth) / 2;
-        int buttonY = this.height / 2 + 55;
+        int buttonY = this.height / 2 + 68;
 
         for (int i = 0; i < buttonSpecs.size(); i++) {
             ButtonSpec spec = buttonSpecs.get(i);
@@ -100,11 +134,13 @@ public class StudyOverlayScreen extends Screen {
         int panelColour = 0xF5FFFFFF;
         int borderColour = 0xFFDDDDDD;
 
-        int panelWidth = Math.min(420, this.width - 40);
-        int panelHeight = 150;
+        int panelWidth = Math.min(440, this.width - 40);
+        int panelHeight = 176;
         int panelLeft = (this.width - panelWidth) / 2;
         int panelTop = (this.height - panelHeight) / 2;
         int textLeft = panelLeft + 20;
+        int textRight = panelLeft + panelWidth - 20;
+        int maxTextWidth = textRight - textLeft;
 
         graphics.fill(0, 0, this.width, this.height, dimColour);
         graphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, panelColour);
@@ -116,16 +152,35 @@ public class StudyOverlayScreen extends Screen {
         int headingX = (this.width - this.font.width(heading)) / 2;
         graphics.text(this.font, heading, headingX, panelTop + 18, 0xFF111111, false);
 
+        if (indicatorSpec != null) {
+            int swatchSize = 7;
+            int swatchRight = panelLeft + panelWidth - 20;
+            int swatchLeft = swatchRight - swatchSize;
+            int swatchTop = panelTop + 18;
+
+            graphics.fill(swatchLeft, swatchTop, swatchRight, swatchTop + swatchSize, indicatorSpec.colour());
+        }
+
         int y = panelTop + 48;
         for (String line : bodyLines) {
-            graphics.text(this.font, line, textLeft, y, 0xFF222222, false);
-            y += 14;
+            for (String wrappedLine : wrapLine(line, maxTextWidth)) {
+                graphics.text(this.font, wrappedLine, textLeft, y, 0xFF222222, false);
+                y += 14;
+            }
         }
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public void tick() {
+        if (showCloseButton && closeButton != null) {
+            closeButton.visible = StudyFlowController.canCloseQuestionnaireScreen();
+            closeButton.active = closeButton.visible;
+        }
     }
 
     @Override
@@ -139,5 +194,42 @@ public class StudyOverlayScreen extends Screen {
     }
 
     private record ButtonSpec(String label, int baseColour, int hoverColour, Runnable onPress) {
+    }
+
+    private record IndicatorSpec(String label, int colour) {
+    }
+
+    // Margins so text cannot disappear off-screen
+    private List<String> wrapLine(String line, int maxWidth) {
+        List<String> wrappedLines = new ArrayList<>();
+
+        if (line == null || line.isBlank()) {
+            wrappedLines.add("");
+            return wrappedLines;
+        }
+
+        String[] words = line.split("\\s+");
+        StringBuilder currentLine = new StringBuilder();
+
+        for (String word : words) {
+            String candidate = currentLine.isEmpty() ? word : currentLine + " " + word;
+
+            if (!currentLine.isEmpty() && this.font.width(candidate) > maxWidth) {
+                wrappedLines.add(currentLine.toString());
+                currentLine.setLength(0);
+                currentLine.append(word);
+            } else {
+                if (!currentLine.isEmpty()) {
+                    currentLine.append(' ');
+                }
+                currentLine.append(word);
+            }
+        }
+
+        if (!currentLine.isEmpty()) {
+            wrappedLines.add(currentLine.toString());
+        }
+
+        return wrappedLines;
     }
 }
