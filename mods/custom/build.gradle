@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'maven-publish'
@@ -14,6 +16,11 @@ base {
 def studyWorldSourceDir = file("../../world")
 def studyWorldSaveName = "experiment-world"
 def studyWorldTargetDir = file("run/saves/${studyWorldSaveName}")
+def externalBlockbenchDir = file("../external/blockbench")
+def externalLibsDir = file("../external/libs")
+def generatedStudyCreatureResourcesDir = layout.buildDirectory.dir("generated/studyCreatureResources")
+def generatedStudyCreatureAssetsDir = layout.buildDirectory.dir("generated/studyCreatureResources/assets/study-checkpoints")
+def geckoLibJar = file("${externalLibsDir}/geckolib-fabric-${project.minecraft_version}-${project.geckolib_version}.jar")
 
 repositories {
 	// Add repositories to retrieve artifacts from in here.
@@ -38,11 +45,83 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
+	// GeckoLib from our local external libs folder
+	implementation files(geckoLibJar)
+}
+
+// Build generated runtime resources from ../external/blockbench/*
+tasks.register("syncStudyCreatureAssets") {
+	doNotTrackState("Copies external Blockbench creature assets into generated runtime resources.")
+
+	doLast {
+		File generatedResourcesDir = generatedStudyCreatureResourcesDir.get().asFile
+		File generatedAssetsDir = generatedStudyCreatureAssetsDir.get().asFile
+
+		delete(generatedResourcesDir)
+
+		def creatureIds = []
+		if (externalBlockbenchDir.exists()) {
+			externalBlockbenchDir.eachDir { creatureDir ->
+				String creatureId = creatureDir.name
+
+				File geoFile = new File(creatureDir, "${creatureId}.geo.json")
+				File animationFile = new File(creatureDir, "${creatureId}.animation.json")
+				File textureFile = new File(creatureDir, "${creatureId}.png")
+
+				if (!geoFile.exists()) {
+					throw new GradleException("Missing geo model file: ${geoFile}")
+				}
+				if (!animationFile.exists()) {
+					throw new GradleException("Missing animation file: ${animationFile}")
+				}
+				if (!textureFile.exists()) {
+					throw new GradleException("Missing texture file: ${textureFile}")
+				}
+
+				creatureIds.add(creatureId)
+
+				copy {
+					from geoFile
+					into new File(generatedAssetsDir, "geckolib/models/entity")
+				}
+
+				copy {
+					from animationFile
+					into new File(generatedAssetsDir, "geckolib/animations/entity")
+				}
+
+				copy {
+					from textureFile
+					into new File(generatedAssetsDir, "textures/entity")
+				}
+			}
+		}
+
+		creatureIds = creatureIds.sort()
+
+		File manifestFile = new File(generatedAssetsDir, "study-creatures/creatures.json")
+		manifestFile.parentFile.mkdirs()
+		manifestFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+				creature_ids: creatureIds
+		]))
+	}
 }
 
 // Firstly, delete previously copied Minecraft world
 tasks.register("deleteCopiedStudyWorld", Delete) {
 	delete studyWorldTargetDir
+}
+
+// Copy external runtime jars into run/mods so the dev client can load them as mods
+tasks.register("copyExternalRuntimeMods", Copy) {
+	doFirst {
+		if (!geckoLibJar.exists()) {
+			throw new GradleException("GeckoLib jar not found: ${geckoLibJar}")
+		}
+	}
+
+	from(geckoLibJar)
+	into(file("run/mods"))
 }
 
 // Secondly, copy the repo Minecraft world into the mods directory
@@ -65,6 +144,8 @@ tasks.register("copyStudyWorld", Copy) {
 // and run Minecraft directly from this world
 tasks.named("runClient") {
 	dependsOn tasks.named("copyStudyWorld")
+	dependsOn tasks.named("syncStudyCreatureAssets")
+	dependsOn tasks.named("copyExternalRuntimeMods")
 
 	doFirst {
 		logger.lifecycle(
@@ -76,6 +157,9 @@ tasks.named("runClient") {
 }
 
 processResources {
+	dependsOn tasks.named("syncStudyCreatureAssets")
+	from(generatedStudyCreatureResourcesDir)
+
 	inputs.property "version", project.version
 
 	filesMatching("fabric.mod.json") {

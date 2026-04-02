@@ -1,5 +1,6 @@
 package io.github.u01234567.studycheckpoints;
 
+import io.github.u01234567.studycheckpoints.entity.StudyEntities;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 
@@ -17,6 +18,8 @@ public class StudyCheckpoints implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Study Checkpoints mod initialized.");
+		StudyEntities.initialise();
+		StudyCreatureCards.validateCustomCreatureCards();
 		StudyInteractionController.initializeCommon();
 
 		// LOG: player joins world
