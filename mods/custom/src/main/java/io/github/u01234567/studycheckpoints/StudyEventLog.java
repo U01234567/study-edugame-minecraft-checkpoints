@@ -195,18 +195,46 @@ public final class StudyEventLog {
     }
 
     public static void logCreatureCardOpened(String playerName,
-                                           String entityType,
-                                           String creatureLabel,
-                                           String entityUuid,
-                                           String entityBlockPos) {
+                                             String entityType,
+                                             String creatureLabel,
+                                             String creatureName,
+                                             String entityUuid,
+                                             String entityBlockPos,
+                                             boolean interactedBefore) {
         logSessionHeader();
         logEvent(
                 "creature_card_opened",
                 "player=" + safe(playerName),
                 "entity_type=" + safe(entityType),
                 "creature_label=" + safe(creatureLabel),
+                "creature_name=" + safe(creatureName),
                 "entity_uuid=" + safe(entityUuid),
-                "entity_block_pos=" + safe(entityBlockPos)
+                "entity_block_pos=" + safe(entityBlockPos),
+                "interacted_before=" + interactedBefore
+        );
+    }
+
+    public static void logStudyCreatureSpawned(String entityType,
+                                               String creatureLabel,
+                                               String creatureName,
+                                               String entityUuid,
+                                               String chapterTitle,
+                                               String entityBlockPos,
+                                               String facing,
+                                               String movementMode,
+                                               boolean success) {
+        logSessionHeader();
+        logEvent(
+                "study_creature_spawned",
+                "entity_type=" + safe(entityType),
+                "creature_label=" + safe(creatureLabel),
+                "creature_name=" + safe(creatureName),
+                "entity_uuid=" + safe(entityUuid),
+                "chapter_title=" + safe(chapterTitle),
+                "entity_block_pos=" + safe(entityBlockPos),
+                "facing=" + safe(facing),
+                "movement_mode=" + safe(movementMode),
+                "success=" + success
         );
     }
 

@@ -227,6 +227,7 @@ public final class StudyFlowController {
         chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
         chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
 
+        StudyInteractionController.prepareCreaturesForChapter(client, chapter);
         placePlayerForChapter(client, chapter);
         StudyEventLog.logChapterStarted(
                 chapter.chapterNumber(),

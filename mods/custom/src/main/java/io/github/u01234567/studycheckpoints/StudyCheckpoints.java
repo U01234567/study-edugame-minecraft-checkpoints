@@ -20,6 +20,7 @@ public class StudyCheckpoints implements ModInitializer {
 		LOGGER.info("Study Checkpoints mod initialized.");
 		StudyEntities.initialise();
 		StudyCreatureCards.validateCustomCreatureCards();
+		StudyCreatureCards.validateCreaturePlacements();
 		StudyInteractionController.initializeCommon();
 
 		// LOG: player joins world

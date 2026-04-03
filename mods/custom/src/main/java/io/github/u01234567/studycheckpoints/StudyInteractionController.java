@@ -15,13 +15,21 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
-import java.util.ArrayList;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Central place for participant interaction restrictions. Instead of keeping the player
@@ -31,6 +39,12 @@ import java.util.Locale;
 public final class StudyInteractionController {
     private static final long MOVEMENT_SAMPLE_INTERVAL_MS = 1_000L;
     private static final double MOB_TARGET_CLEAR_RADIUS = 24.0D;
+
+    // Runtime roster of the study creatures that currently exist in the world (based on chapter).
+    private static final Map<UUID, SpawnedStudyCreature> ACTIVE_STUDY_CREATURES = new HashMap<>();
+
+    // To log which uniquely named creatures the participant has already clicked at least once.
+    private static final Set<String> INTERACTED_CREATURE_NAMES = new HashSet<>();
 
     private static long serverTickCounter;
 
@@ -56,16 +70,23 @@ public final class StudyInteractionController {
             }
 
             StudyCreatureCards.CreatureCard card = StudyCreatureCards.get(entity.getType());
-            if (card == null) {
+            SpawnedStudyCreature spawnedStudyCreature = ACTIVE_STUDY_CREATURES.get(entity.getUUID());
+
+            if (card == null || spawnedStudyCreature == null) {
                 return InteractionResult.PASS;
             }
+
+            boolean interactedBefore = INTERACTED_CREATURE_NAMES.contains(spawnedStudyCreature.creatureName());
+            INTERACTED_CREATURE_NAMES.add(spawnedStudyCreature.creatureName());
 
             StudyEventLog.logCreatureCardOpened(
                     player.getName().getString(),
                     entityTypeId(entity),
                     card.displayName(),
+                    spawnedStudyCreature.creatureName(),
                     entity.getUUID().toString(),
-                    entity.blockPosition().toShortString()
+                    entity.blockPosition().toShortString(),
+                    interactedBefore
             );
             return InteractionResult.SUCCESS;
         });
@@ -132,6 +153,7 @@ public final class StudyInteractionController {
     private static void onEndServerTick(MinecraftServer server) {
         serverTickCounter++;
 
+        enforceNoFreeMobSpawning(server);
         enforceEntityWhitelist(server);
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -170,10 +192,135 @@ public final class StudyInteractionController {
     }
 
     /**
+     * Server becomes source of truth for creature existence:
+     * - clear all living non-player entities
+     * - empty the current runtime roster
+     * - spawn exactly the configured chapter roster
+     */
+    public static void prepareCreaturesForChapter(Minecraft client, StudyChapter chapter) {
+        MinecraftServer server = client.getSingleplayerServer();
+        if (server == null) {
+            StudyCheckpoints.LOGGER.error("Could not prepare chapter creatures because the integrated server is unavailable.");
+            return;
+        }
+
+        server.execute(() -> prepareCreaturesForChapter(server, chapter));
+    }
+
+    private static void prepareCreaturesForChapter(MinecraftServer server, StudyChapter chapter) {
+        clearAllNonPlayerLivingCreatures(server);
+        ACTIVE_STUDY_CREATURES.clear();
+
+        ServerLevel level = server.overworld();
+        if (level == null) {
+            throw new IllegalStateException("Could not find the overworld while preparing chapter creatures.");
+        }
+
+        for (StudyCreatureCards.CreatureSpawnAssignment assignment : StudyCreatureCards.spawnAssignmentsForChapter(chapter)) {
+            boolean spawned = spawnConfiguredCreature(level, assignment);
+            if (!spawned) {
+                throw new IllegalStateException("Failed to spawn configured study creature: " + assignment.spawn().uniqueName());
+            }
+        }
+    }
+
+    private static void clearAllNonPlayerLivingCreatures(MinecraftServer server) {
+        for (ServerLevel level : server.getAllLevels()) {
+            List<Entity> entitiesToRemove = new ArrayList<>();
+
+            for (Entity entity : level.getAllEntities()) {
+                if (entity instanceof ServerPlayer) {
+                    continue;
+                }
+
+                if (entity instanceof LivingEntity) {
+                    entitiesToRemove.add(entity);
+                }
+            }
+
+            for (Entity entity : entitiesToRemove) {
+                ACTIVE_STUDY_CREATURES.remove(entity.getUUID());
+                entity.discard();
+            }
+        }
+    }
+
+    private static boolean spawnConfiguredCreature(ServerLevel level,
+                                                   StudyCreatureCards.CreatureSpawnAssignment assignment) {
+        Entity entity = assignment.entityType().create(level, EntitySpawnReason.COMMAND);
+        String configuredBlockPos = assignment.spawn().x()
+                + "," + assignment.spawn().y()
+                + "," + assignment.spawn().z();
+
+        if (entity == null) {
+            StudyEventLog.logStudyCreatureSpawned(
+                    entityTypeId(assignment.entityType()),
+                    assignment.card().displayName(),
+                    assignment.spawn().uniqueName(),
+                    "not_created",
+                    assignment.card().chapter().displayTitle(),
+                    configuredBlockPos,
+                    assignment.spawn().facing().name().toLowerCase(Locale.ROOT),
+                    assignment.card().movementMode().name().toLowerCase(Locale.ROOT),
+                    false
+            );
+            return false;
+        }
+
+        moveEntityReflectively(
+                assignment.spawn().centerX(),
+                assignment.spawn().y(),
+                assignment.spawn().centerZ(),
+                assignment.spawn().facing().yawDegrees(),
+                0.0F,
+                entity
+        );
+        entity.setDeltaMovement(0.0D, 0.0D, 0.0D);
+        entity.setInvulnerable(true);
+
+        SpawnedStudyCreature spawnedStudyCreature = new SpawnedStudyCreature(
+                assignment.card().displayName(),
+                assignment.spawn().uniqueName(),
+                entity.getUUID().toString(),
+                assignment.card().chapter(),
+                assignment.card().movementMode(),
+                configuredBlockPos
+        );
+
+        applyManagedCreatureState(entity, spawnedStudyCreature);
+
+        boolean added = level.addFreshEntity(entity);
+        if (added) {
+            ACTIVE_STUDY_CREATURES.put(entity.getUUID(), spawnedStudyCreature);
+            keepStudyCreatureAlive(entity, spawnedStudyCreature);
+        }
+
+        StudyEventLog.logStudyCreatureSpawned(
+                entityTypeId(assignment.entityType()),
+                assignment.card().displayName(),
+                assignment.spawn().uniqueName(),
+                entity.getUUID().toString(),
+                assignment.card().chapter().displayTitle(),
+                configuredBlockPos,
+                assignment.spawn().facing().name().toLowerCase(Locale.ROOT),
+                assignment.card().movementMode().name().toLowerCase(Locale.ROOT),
+                added
+        );
+
+        return added;
+    }
+
+    private static void enforceNoFreeMobSpawning(MinecraftServer server) {
+        for (ServerLevel level : server.getAllLevels()) {
+            disableDoMobSpawningReflectively(level, server);
+        }
+    }
+
+    /**
      * Enforce a strict world whitelist:
      * - keep players
-     * - keep only creatures listed in StudyCreatureCards
-     * - remove all other entities
+     * - keep only the current study roster
+     * - remove all other living entities
      */
     private static void enforceEntityWhitelist(MinecraftServer server) {
         for (ServerLevel level : server.getAllLevels()) {
@@ -184,8 +331,13 @@ public final class StudyInteractionController {
                     continue;
                 }
 
-                if (StudyCreatureCards.isAllowedStudyCreature(entity.getType())) {
-                    keepStudyCreatureAlive(entity);
+                if (!(entity instanceof LivingEntity)) {
+                    continue;
+                }
+
+                SpawnedStudyCreature spawnedStudyCreature = ACTIVE_STUDY_CREATURES.get(entity.getUUID());
+                if (spawnedStudyCreature != null) {
+                    keepStudyCreatureAlive(entity, spawnedStudyCreature);
                     continue;
                 }
 
@@ -206,13 +358,13 @@ public final class StudyInteractionController {
     }
 
     /**
-     * Keep allowed study creatures persistent and safe:
+     * Keep spawned study creatures persistent and safe:
      * - make them invulnerable
      * - extinguish fire
      * - restore health
-     * - mark mobs as persistent so they do not despawn naturally
+     * - enforce the configured FIXED/FREE movement rule
      */
-    private static void keepStudyCreatureAlive(Entity entity) {
+    private static void keepStudyCreatureAlive(Entity entity, SpawnedStudyCreature spawnedStudyCreature) {
         entity.setInvulnerable(true);
         entity.clearFire();
 
@@ -222,6 +374,22 @@ public final class StudyInteractionController {
 
         if (entity instanceof Mob mob) {
             mob.setPersistenceRequired();
+            applyManagedCreatureState(entity, spawnedStudyCreature);
+        }
+    }
+
+    private static void applyManagedCreatureState(Entity entity, SpawnedStudyCreature spawnedStudyCreature) {
+        if (!(entity instanceof Mob mob)) {
+            return;
+        }
+
+        if (spawnedStudyCreature.movementMode() == StudyCreatureCards.CreatureMovementMode.FIXED) {
+            mob.setNoAi(true);
+            mob.setTarget(null);
+            mob.getNavigation().stop();
+            mob.setDeltaMovement(0.0D, 0.0D, 0.0D);
+        } else {
+            mob.setNoAi(false);
         }
     }
 
@@ -375,6 +543,81 @@ public final class StudyInteractionController {
         return String.valueOf(entity.getType()).toLowerCase(Locale.ROOT);
     }
 
+    private static String entityTypeId(EntityType<?> entityType) {
+        return String.valueOf(entityType).toLowerCase(Locale.ROOT);
+    }
+
+    private static void moveEntityReflectively(double x,
+                                               double y,
+                                               double z,
+                                               float yaw,
+                                               float pitch,
+                                               Entity entity) {
+        try {
+            Method moveToMethod = entity.getClass().getMethod(
+                    "moveTo",
+                    double.class,
+                    double.class,
+                    double.class,
+                    float.class,
+                    float.class
+            );
+            moveToMethod.setAccessible(true);
+            moveToMethod.invoke(entity, x, y, z, yaw, pitch);
+            return;
+        } catch (Exception ignored) {
+            // Try the next candidate method name.
+        }
+
+        try {
+            Method snapToMethod = entity.getClass().getMethod(
+                    "snapTo",
+                    double.class,
+                    double.class,
+                    double.class,
+                    float.class,
+                    float.class
+            );
+            snapToMethod.setAccessible(true);
+            snapToMethod.invoke(entity, x, y, z, yaw, pitch);
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not position spawned study creature.", e);
+        }
+    }
+
+    private static void disableDoMobSpawningReflectively(ServerLevel level, MinecraftServer server) {
+        try {
+            Object gameRules = level.getGameRules();
+            Class<?> gameRulesClass = gameRules.getClass();
+
+            Field ruleField = gameRulesClass.getDeclaredField("RULE_DOMOBSPAWNING");
+            ruleField.setAccessible(true);
+            Object ruleKey = ruleField.get(null);
+
+            Method getRuleMethod = gameRulesClass.getMethod("getRule", ruleField.getType());
+            Object ruleValue = getRuleMethod.invoke(gameRules, ruleKey);
+
+            Method getMethod = ruleValue.getClass().getMethod("get");
+            Object currentValue = getMethod.invoke(ruleValue);
+
+            if (!(currentValue instanceof Boolean booleanValue) || !booleanValue) {
+                return;
+            }
+
+            for (Method method : ruleValue.getClass().getMethods()) {
+                if (!method.getName().equals("set") || method.getParameterCount() != 2) {
+                    continue;
+                }
+
+                method.setAccessible(true);
+                method.invoke(ruleValue, false, server);
+                return;
+            }
+        } catch (Exception e) {
+            StudyCheckpoints.LOGGER.warn("Could not disable doMobSpawning reflectively.", e);
+        }
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static void setAdventureModeReflectively(ServerPlayer player) {
         try {
@@ -384,7 +627,7 @@ public final class StudyInteractionController {
             method.invoke(player, adventureValue);
         } catch (Exception e) {
             // Keep the study running even if mappings differ.
-                }
+        }
     }
 
     private static void invokeNoArgs(Object target, String methodName) {
@@ -395,5 +638,15 @@ public final class StudyInteractionController {
         } catch (Exception ignored) {
             // Best-effort only.
         }
+    }
+
+    private record SpawnedStudyCreature(
+            String creatureLabel,
+            String creatureName,
+            String creatureUuid,
+            StudyChapter chapter,
+            StudyCreatureCards.CreatureMovementMode movementMode,
+            String configuredBlockPos
+    ) {
     }
 }
