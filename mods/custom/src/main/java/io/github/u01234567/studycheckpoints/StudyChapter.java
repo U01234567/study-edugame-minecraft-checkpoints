@@ -13,25 +13,25 @@ package io.github.u01234567.studycheckpoints;
 public enum StudyChapter {
     CHAPTER_0(
             0,
-            62, 65, -238, 180.0F, "north",
+            -77, 63, -524, -90.0F, "east",
             20_000L,
             "Ch0 complete. Move to Ch1."
     ),
     CHAPTER_1(
             1,
-            66, 65, -238, -90.0F, "east",
+            -126, 69, 114, 90.0F, "west",
             480_000L,
             "Ch1 complete. Move to Ch2."
     ),
     CHAPTER_2(
             2,
-            71, 65, -238, 0.0F, "south",
+            286, 75, -240, 90.0F, "west",
             480_000L,
             "Ch2 complete. Move to Ch3."
     ),
     CHAPTER_3(
             3,
-            75, 65, -238, 90.0F, "west",
+            171, 64, 652, -90.0F, "east",
             480_000L,
             "Ch3 complete. Click below to answer the questionnaire."
     );
@@ -53,15 +53,15 @@ public enum StudyChapter {
                  String facingLabel,
                  long durationMs,
                  String completionMessage) {
-                    this.chapterNumber = chapterNumber;
-                    this.x = x;
-                    this.y = y;
-                    this.z = z;
-                    this.yawDegrees = yawDegrees;
-                    this.facingLabel = facingLabel;
-                    this.durationMs = durationMs;
-                    this.completionMessage = completionMessage;
-                 }
+        this.chapterNumber = chapterNumber;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.yawDegrees = yawDegrees;
+        this.facingLabel = facingLabel;
+        this.durationMs = durationMs;
+        this.completionMessage = completionMessage;
+    }
 
     public int chapterNumber() { return chapterNumber; }
     public int x() { return x; }
