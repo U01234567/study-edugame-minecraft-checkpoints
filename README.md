@@ -167,6 +167,8 @@ From `mods/custom/`, run the Fabric development client with:
 .\gradlew.bat runClient
 ```
 
+On the first run after cloning the repository, when no mods/custom/run/ folder exists yet, Minecraft may still show its normal opening screen once so that local client settings such as sound and narrator can be adjusted. This should not happen again on later runs, because the generated runtime files will then already exist.
+
 If `gradlew.bat` reports that Gradle is using Java 8 or Java 17, verify that your terminal environment, `JAVA_HOME`, Project SDK, and Gradle JVM all point to the installed JDK version above.
 
 ## Adding new creatures to the game
