@@ -21,6 +21,7 @@ def externalLibsDir = file("../external/libs")
 def generatedStudyCreatureResourcesDir = layout.buildDirectory.dir("generated/studyCreatureResources")
 def generatedStudyCreatureAssetsDir = layout.buildDirectory.dir("generated/studyCreatureResources/assets/study-checkpoints")
 def geckoLibJar = file("${externalLibsDir}/geckolib-fabric-${project.minecraft_version}-${project.geckolib_version}.jar")
+def worldEditJar = file("${externalLibsDir}/${project.worldedit_jar_name}")
 
 repositories {
 	// Add repositories to retrieve artifacts from in here.
@@ -118,9 +119,13 @@ tasks.register("copyExternalRuntimeMods", Copy) {
 		if (!geckoLibJar.exists()) {
 			throw new GradleException("GeckoLib jar not found: ${geckoLibJar}")
 		}
+		if (!worldEditJar.exists()) {
+			throw new GradleException("WorldEdit jar not found: ${worldEditJar}")
+		}
 	}
 
 	from(geckoLibJar)
+	from(worldEditJar)
 	into(file("run/mods"))
 }
 
