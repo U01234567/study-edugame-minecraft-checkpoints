@@ -248,6 +248,20 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logTestingTimeSkip(String playerName,
+                                          String phase,
+                                          long remainingBeforeMs,
+                                          long remainingAfterMs) {
+        logSessionHeader();
+        logEvent(
+                "testing_time_skip",
+                "player=" + safe(playerName),
+                "phase=" + safe(phase),
+                "remaining_before_ms=" + remainingBeforeMs,
+                "remaining_after_ms=" + remainingAfterMs
+        );
+    }
+
     public static void logMovementSample(String playerName,
                                          String chapterTitle,
                                          double x,

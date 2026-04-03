@@ -32,10 +32,13 @@ public final class StudyConfig {
     // Duration of the black pause overlay at checkpoint
     private static final long CHECKPOINT_PAUSE_DURATION_MS = 120_000L;
 
+    // Testing helper: shorten the current timed study phase to this remaining time.
+    private static final long TESTING_SKIP_REMAINING_MS = 20_000L;
+
     // Prevent the player from opening the escape menu during the experiment.
     // When this is false, chat typing is also blocked.
     // This should remain false for real study sessions.
-    private static final boolean ALLOW_ESCAPE_MENU = false;
+    private static final boolean ALLOW_ESCAPE_MENU = true;
 
     private static Map<String, String> values;
 
@@ -67,6 +70,11 @@ public final class StudyConfig {
     // Return delay of the black pause overlay
     public static long getCheckpointPauseDurationMs() {
         return CHECKPOINT_PAUSE_DURATION_MS;
+    }
+
+    // Return the remaining time used by the testing skip command.
+    public static long getTestingSkipRemainingMs() {
+        return TESTING_SKIP_REMAINING_MS;
     }
 
     // Return whether the participant may open the escape menu.

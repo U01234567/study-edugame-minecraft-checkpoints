@@ -47,6 +47,23 @@ public class StudyCheckpointScreen extends Screen {
         this.promptDelayMs = StudyConfig.getCheckpointPromptDelayMs();
     }
 
+    // Return the remaining time before the delayed red prompt should appear.
+    public long remainingPromptDelayMs() {
+        if (this.openedAtMs == 0L) {
+            return this.promptDelayMs;
+        }
+
+        long promptAtMs = this.openedAtMs + this.promptDelayMs;
+        return Math.max(0L, promptAtMs - System.currentTimeMillis());
+    }
+
+    // Testing helper: shorten the remaining prompt delay without extending it.
+    public void shortenRemainingPromptDelayTo(long remainingMs) {
+        long currentRemainingMs = remainingPromptDelayMs();
+        long clampedRemainingMs = Math.min(currentRemainingMs, Math.max(0L, remainingMs));
+        this.openedAtMs = System.currentTimeMillis() - (this.promptDelayMs - clampedRemainingMs);
+    }
+
     @Override
     protected void init() {
         this.clearWidgets();

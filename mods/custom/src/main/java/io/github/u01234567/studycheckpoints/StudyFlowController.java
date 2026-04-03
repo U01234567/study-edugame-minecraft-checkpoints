@@ -13,7 +13,9 @@ import org.lwjgl.glfw.GLFW;
 
 import java.awt.Desktop;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.net.URI;
 import java.util.Locale;
 import java.util.UUID;
@@ -42,6 +44,8 @@ public final class StudyFlowController {
     private static String chapterWelcomeMessage;
     private static long chapterWelcomeDeadlineMs;
     private static long questionnaireFirstOpenedAtMs;
+    private static StudyChapter pausedCompletedChapter;
+    private static long pauseDeadlineMs;
 
     private static StudyConditionAllocator.ConditionAssignment conditionAssignment;
 
@@ -110,6 +114,22 @@ public final class StudyFlowController {
                 && nowMs() >= questionnaireFirstOpenedAtMs + QUESTIONNAIRE_CLOSE_DELAY_MS;
     }
 
+    // Testing helper: shorten the currently active timed study phase to the last N milliseconds.
+    // This is intended for local development only.
+    public static boolean requestTestingSkipToLastRemainingMs(String playerName, long remainingMs) {
+        if (!StudyConfig.isEscapeMenuAllowed()) {
+            return false;
+        }
+
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) {
+            return false;
+        }
+
+        client.execute(() -> applyTestingSkip(client, playerName, remainingMs));
+        return true;
+    }
+
     public static void continueFromCheckpoint(Minecraft client,
                                               StudyChapter completedChapter,
                                               StudyExperimentCondition condition) {
@@ -150,16 +170,7 @@ public final class StudyFlowController {
                 pauseDurationMs
         );
 
-        client.execute(() -> client.setScreen(new StudyPauseScreen(
-                pauseDurationMs,
-                () -> {
-                    StudyEventLog.logCheckpointPauseFinished(
-                            completedChapter.chapterNumber(),
-                            nextChapter.chapterNumber()
-                    );
-                    advanceFromCompletedChapter(client, completedChapter);
-                }
-        )));
+        client.execute(() -> openPauseScreen(client, completedChapter, pauseDurationMs));
     }
 
     public static void renderTimerHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
@@ -201,6 +212,7 @@ public final class StudyFlowController {
 
         ensureFullscreenAndFocus(client);
         ensureConditionAssigned();
+        suppressAdvancementToasts(client);
 
         if (!introShown) {
             introShown = true;
@@ -235,6 +247,8 @@ public final class StudyFlowController {
         chapterDeadlineMs = nowMs() + chapter.durationMs();
         chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
         chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
+        pausedCompletedChapter = null;
+        pauseDeadlineMs = 0L;
 
         StudyInteractionController.prepareCreaturesForChapter(client, chapter);
         placePlayerForChapter(client, chapter);
@@ -286,6 +300,8 @@ public final class StudyFlowController {
         StudyChapter nextChapter = completedChapter.next();
 
         client.execute(() -> {
+            pausedCompletedChapter = null;
+            pauseDeadlineMs = 0L;
             client.setScreen(null);
 
             if (nextChapter == null) {
@@ -295,6 +311,121 @@ public final class StudyFlowController {
 
             startChapter(client, nextChapter);
         });
+    }
+
+    private static void openPauseScreen(Minecraft client,
+                                        StudyChapter completedChapter,
+                                        long pauseDurationMs) {
+        StudyChapter nextChapter = completedChapter.next();
+        if (nextChapter == null) {
+            return;
+        }
+
+        pausedCompletedChapter = completedChapter;
+        pauseDeadlineMs = nowMs() + pauseDurationMs;
+
+        client.setScreen(new StudyPauseScreen(
+                pauseDurationMs,
+                () -> {
+                    pausedCompletedChapter = null;
+                    pauseDeadlineMs = 0L;
+                    StudyEventLog.logCheckpointPauseFinished(
+                            completedChapter.chapterNumber(),
+                            nextChapter.chapterNumber()
+                    );
+                    advanceFromCompletedChapter(client, completedChapter);
+                }
+        ));
+    }
+
+    private static void applyTestingSkip(Minecraft client, String playerName, long requestedRemainingMs) {
+        long now = nowMs();
+        long targetRemainingMs = Math.max(0L, requestedRemainingMs);
+
+        String phase = "none";
+        long remainingBeforeMs = 0L;
+        long remainingAfterMs = 0L;
+
+        if (activeChapter != null) {
+            remainingBeforeMs = Math.max(0L, chapterDeadlineMs - now);
+            remainingAfterMs = Math.min(remainingBeforeMs, targetRemainingMs);
+            chapterDeadlineMs = now + remainingAfterMs;
+            phase = "chapter";
+        } else if (client.screen instanceof StudyPauseScreen && pausedCompletedChapter != null) {
+            remainingBeforeMs = Math.max(0L, pauseDeadlineMs - now);
+            remainingAfterMs = Math.min(remainingBeforeMs, targetRemainingMs);
+            openPauseScreen(client, pausedCompletedChapter, remainingAfterMs);
+            phase = "pause";
+        } else if (client.screen instanceof StudyCheckpointScreen checkpointScreen) {
+            remainingBeforeMs = checkpointScreen.remainingPromptDelayMs();
+            checkpointScreen.shortenRemainingPromptDelayTo(targetRemainingMs);
+            remainingAfterMs = checkpointScreen.remainingPromptDelayMs();
+            phase = "checkpoint_prompt";
+        } else if (questionnaireFirstOpenedAtMs > 0L && client.screen instanceof StudyOverlayScreen) {
+            long closeAllowedAtMs = questionnaireFirstOpenedAtMs + QUESTIONNAIRE_CLOSE_DELAY_MS;
+            remainingBeforeMs = Math.max(0L, closeAllowedAtMs - now);
+            remainingAfterMs = Math.min(remainingBeforeMs, targetRemainingMs);
+            questionnaireFirstOpenedAtMs = now - (QUESTIONNAIRE_CLOSE_DELAY_MS - remainingAfterMs);
+            phase = "questionnaire_close_delay";
+        }
+
+        StudyEventLog.logTestingTimeSkip(playerName, phase, remainingBeforeMs, remainingAfterMs);
+    }
+
+    // Best-effort client-side suppression of advancement toast pop-ups.
+    // The study already suppresses advancement chat announcements on the server side.
+    private static void suppressAdvancementToasts(Minecraft client) {
+        Object toastManager = client.getToastManager();
+        if (toastManager == null) {
+            return;
+        }
+
+        for (Field field : toastManager.getClass().getDeclaredFields()) {
+            try {
+                field.setAccessible(true);
+                Object value = field.get(toastManager);
+
+                if (value == null) {
+                    continue;
+                }
+
+                if (value instanceof Collection<?> collection) {
+                    collection.removeIf(StudyFlowController::containsAdvancementToast);
+                    continue;
+                }
+
+                if (containsAdvancementToast(value) && !field.getType().isPrimitive()) {
+                    field.set(toastManager, null);
+                }
+            } catch (Exception ignored) {
+                // Best effort only; do nothing if the internal toast structure changes.
+            }
+        }
+    }
+
+    private static boolean containsAdvancementToast(Object value) {
+        if (value == null) {
+            return false;
+        }
+
+        String className = value.getClass().getSimpleName();
+        if (className.contains("AdvancementToast")) {
+            return true;
+        }
+
+        for (Field field : value.getClass().getDeclaredFields()) {
+            try {
+                field.setAccessible(true);
+                Object nestedValue = field.get(value);
+                if (nestedValue != null && nestedValue.getClass().getSimpleName().contains("AdvancementToast")) {
+                    return true;
+                }
+            } catch (Exception ignored) {
+                // Ignore internal reflection failures here.
+            }
+        }
+
+        return false;
     }
 
     // Place the participant in the correct chapter location.
