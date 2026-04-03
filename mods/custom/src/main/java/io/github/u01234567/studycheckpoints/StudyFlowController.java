@@ -51,6 +51,15 @@ public final class StudyFlowController {
     public static void initializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(StudyFlowController::onEndClientTick);
 
+        // Remove vanilla survival HUD elements that are not relevant to the study:
+        // - hearts
+        // - hunger
+        // - experience bar / level
+        HudElementRegistry.removeElement(VanillaHudElements.HEALTH_BAR);
+        HudElementRegistry.removeElement(VanillaHudElements.FOOD_BAR);
+        HudElementRegistry.removeElement(VanillaHudElements.INFO_BAR);
+        HudElementRegistry.removeElement(VanillaHudElements.EXPERIENCE_LEVEL);
+
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.CHAT,
                 Identifier.fromNamespaceAndPath(StudyCheckpoints.MOD_ID, "study_timer"),

@@ -427,6 +427,12 @@ public final class StudyInteractionController {
             return;
         }
 
+        if (!StudyConfig.isEscapeMenuAllowed() && isChatLikeScreen(screen)) {
+            logBlockedScreenOnce(client, "chat_screen_blocked");
+            client.setScreen(null);
+            return;
+        }
+
         if (isInventoryLikeScreen(screen)) {
             logBlockedScreenOnce(client, "inventory_screen_blocked");
             client.setScreen(null);
@@ -443,6 +449,11 @@ public final class StudyInteractionController {
                 || screenName.contains("CreativeMode");
     }
 
+    private static boolean isChatLikeScreen(Screen screen) {
+        String screenName = screen.getClass().getSimpleName();
+        return screenName.contains("Chat");
+    }
+
     private static void logBlockedScreenOnce(Minecraft client, String action) {
         if (action.equals(blockedScreenKey)) {
             return;
@@ -457,6 +468,14 @@ public final class StudyInteractionController {
     }
 
     private static void logBlockedKeyAttempts(Minecraft client) {
+        if (!StudyConfig.isEscapeMenuAllowed() && client.options.keyChat.consumeClick()) {
+            StudyEventLog.logBlockedAction(
+                    client.player.getName().getString(),
+                    "chat_key_blocked",
+                    "key=chat"
+            );
+        }
+
         if (client.options.keyInventory.consumeClick()) {
             StudyEventLog.logBlockedAction(client.player.getName().getString(), "inventory_key_blocked", "key=inventory");
         }

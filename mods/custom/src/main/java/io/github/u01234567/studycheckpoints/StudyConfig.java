@@ -33,8 +33,9 @@ public final class StudyConfig {
     private static final long CHECKPOINT_PAUSE_DURATION_MS = 120_000L;
 
     // Prevent the player from opening the escape menu during the experiment.
+    // When this is false, chat typing is also blocked.
     // This should remain false for real study sessions.
-    private static final boolean ALLOW_ESCAPE_MENU = true;
+    private static final boolean ALLOW_ESCAPE_MENU = false;
 
     private static Map<String, String> values;
 
@@ -69,6 +70,7 @@ public final class StudyConfig {
     }
 
     // Return whether the participant may open the escape menu.
+    // When false, chat typing is also blocked on the client.
     public static boolean isEscapeMenuAllowed() {
         return ALLOW_ESCAPE_MENU;
     }
