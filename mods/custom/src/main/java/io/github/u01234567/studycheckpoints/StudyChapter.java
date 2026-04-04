@@ -78,7 +78,7 @@ public enum StudyChapter {
             case CHAPTER_0 -> "Chapter 0 (Get started)";
             case CHAPTER_1 -> "Chapter 1 (The Museum)";
             case CHAPTER_2 -> "Chapter 2 (The Farm)";
-            case CHAPTER_3 -> "Chapter 3 (The Forest)";
+            case CHAPTER_3 -> "Chapter 3 (The Jungle)";
         };
     }
 
