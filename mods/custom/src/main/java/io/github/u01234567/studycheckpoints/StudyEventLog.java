@@ -117,6 +117,24 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logChapterLoadingStarted(int chapterNumber, String chapterTitle) {
+        logSessionHeader();
+        logEvent(
+                "chapter_loading_started",
+                "chapter=" + chapterNumber,
+                "chapter_title=" + safe(chapterTitle)
+        );
+    }
+
+    public static void logChapterLoadingFinished(int chapterNumber, String chapterTitle) {
+        logSessionHeader();
+        logEvent(
+                "chapter_loading_finished",
+                "chapter=" + chapterNumber,
+                "chapter_title=" + safe(chapterTitle)
+        );
+    }
+
     public static void logChapterCompleted(int chapterNumber) {
         logSessionHeader();
         logEvent(

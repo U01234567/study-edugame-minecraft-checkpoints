@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
@@ -33,6 +34,7 @@ public final class StudyFlowController {
     private static final int TIMER_COLOR_WARNING = 0xFFFF4D4D;
     private static final long WARNING_THRESHOLD_MS = 15_000L;
     private static final long RECOVERY_MESSAGE_DURATION_MS = 3_000L;
+    private static final long CLIENT_CHAPTER_READY_STABILITY_MS = 500L;
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
@@ -41,6 +43,11 @@ public final class StudyFlowController {
 
     private static boolean introShown;
     private static boolean windowPrepared;
+
+    private static StudyChapter loadingChapter;
+    private static long loadingScreenOpenedAtMs;
+    private static long loadingClientReadySinceMs;
+    private static boolean loadingPreparationComplete;
 
     private static StudyChapter activeChapter;
     private static long chapterDeadlineMs;
@@ -203,7 +210,7 @@ public final class StudyFlowController {
     }
 
     public static void renderTimerHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        if (activeChapter == null && chapterWelcomeMessage == null) {
+        if (activeChapter == null && chapterWelcomeMessage == null && recoveryMessage == null) {
             return;
         }
 
@@ -252,9 +259,14 @@ public final class StudyFlowController {
         suppressAdvancementToasts(client);
 
         if (!introShown) {
+            StudyInteractionController.prewarmChapterArea(client, StudyChapter.first());
             introShown = true;
             client.setScreen(StudyOverlayScreen.createIntroScreen());
             return;
+        }
+
+        if (loadingChapter != null) {
+            tickChapterLoading(client);
         }
 
         if (activeChapter != null && nowMs() >= chapterDeadlineMs) {
@@ -280,6 +292,72 @@ public final class StudyFlowController {
     }
 
     private static void startChapter(Minecraft client, StudyChapter chapter) {
+        if (chapter == null) {
+            return;
+        }
+
+        loadingChapter = chapter;
+        loadingScreenOpenedAtMs = nowMs();
+        loadingClientReadySinceMs = 0L;
+        loadingPreparationComplete = false;
+
+        activeChapter = null;
+        chapterDeadlineMs = 0L;
+        chapterWelcomeMessage = null;
+        chapterWelcomeDeadlineMs = 0L;
+        pausedCompletedChapter = null;
+        pauseDeadlineMs = 0L;
+
+        client.setScreen(new StudyLoadingScreen("Chapter loading..."));
+        StudyEventLog.logChapterLoadingStarted(chapter.chapterNumber(), chapter.displayTitle());
+
+        StudyInteractionController.prepareChapterForStart(client, chapter, () -> {
+            if (loadingChapter != chapter) {
+                return;
+            }
+
+            placePlayerForChapter(client, chapter);
+            loadingPreparationComplete = true;
+        });
+    }
+
+    // Keep the loading screen visible until both conditions are true:
+    // - server-side chapter preparation has finished
+    // - the client can see that the destination chunk neighbourhood is present
+    private static void tickChapterLoading(Minecraft client) {
+        if (!loadingPreparationComplete || loadingChapter == null) {
+            loadingClientReadySinceMs = 0L;
+            return;
+        }
+
+        if (!isClientReadyForChapter(client, loadingChapter)) {
+            loadingClientReadySinceMs = 0L;
+            return;
+        }
+
+        long now = nowMs();
+        if (loadingClientReadySinceMs == 0L) {
+            loadingClientReadySinceMs = now;
+        }
+
+        if (now >= loadingScreenOpenedAtMs + StudyConfig.getChapterLoadingMinScreenMs()
+                && now >= loadingClientReadySinceMs + CLIENT_CHAPTER_READY_STABILITY_MS) {
+            finishChapterStart(client);
+        }
+    }
+
+    private static void finishChapterStart(Minecraft client) {
+        if (loadingChapter == null) {
+            return;
+        }
+
+        StudyChapter chapter = loadingChapter;
+
+        loadingChapter = null;
+        loadingClientReadySinceMs = 0L;
+        loadingScreenOpenedAtMs = 0L;
+        loadingPreparationComplete = false;
+
         activeChapter = chapter;
         chapterDeadlineMs = nowMs() + chapter.durationMs();
         chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
@@ -287,14 +365,39 @@ public final class StudyFlowController {
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
 
-        StudyInteractionController.prepareCreaturesForChapter(client, chapter);
-        placePlayerForChapter(client, chapter);
+        client.setScreen(null);
+
+        StudyEventLog.logChapterLoadingFinished(chapter.chapterNumber(), chapter.displayTitle());
         StudyEventLog.logChapterStarted(
                 chapter.chapterNumber(),
                 chapter.x() + "," + chapter.y() + "," + chapter.z(),
                 chapter.facingLabel(),
                 chapter.durationMs()
         );
+
+        StudyInteractionController.prewarmChapterArea(client, chapter.next());
+    }
+
+    // Check whether the client has the chapter start area available locally.
+    private static boolean isClientReadyForChapter(Minecraft client, StudyChapter chapter) {
+        if (client == null || client.level == null || client.player == null || chapter == null) {
+            return false;
+        }
+        int chunkRadius = Math.max(1, StudyConfig.getChapterPrewarmChunkRadius());
+        int centreChunkX = Math.floorDiv(chapter.x(), 16);
+        int centreChunkZ = Math.floorDiv(chapter.z(), 16);
+
+        for (int dx = -chunkRadius; dx <= chunkRadius; dx++) {
+            for (int dz = -chunkRadius; dz <= chunkRadius; dz++) {
+                int blockX = ((centreChunkX + dx) << 4) + 8;
+                int blockZ = ((centreChunkZ + dz) << 4) + 8;
+                if (!client.level.hasChunkAt(new BlockPos(blockX, chapter.y(), blockZ))) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static void finishActiveChapter(Minecraft client) {
@@ -318,6 +421,7 @@ public final class StudyFlowController {
                     completedChapter.next().chapterNumber(),
                     getAssignedCondition().id()
             );
+            StudyInteractionController.prewarmChapterArea(client, completedChapter.next());
             client.setScreen(new StudyCheckpointScreen(completedChapter, getAssignedCondition()));
             return;
         }

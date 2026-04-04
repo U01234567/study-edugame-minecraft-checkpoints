@@ -59,6 +59,7 @@ public final class StudyInteractionController {
     private static double totalSprintDistance;
     private static boolean previousOnGround;
     private static StudyChapter trackedChapter;
+    private static StudyChapter prewarmedChapter;
 
     private StudyInteractionController() {
     }
@@ -196,18 +197,57 @@ public final class StudyInteractionController {
 
     /**
      * Server becomes source of truth for creature existence:
-     * - clear all living non-player entities
-     * - empty the current runtime roster
-     * - spawn exactly the configured chapter roster
+     * - optionally keep the next chapter area warm before the participant gets there
+     * - when starting a chapter, prepare that target area on the server first
+     * - only then notify the client to reveal the scene
      */
-    public static void prepareCreaturesForChapter(Minecraft client, StudyChapter chapter) {
+    public static void prewarmChapterArea(Minecraft client, StudyChapter chapter) {
+        if (client == null || chapter == null) {
+            return;
+        }
         MinecraftServer server = client.getSingleplayerServer();
         if (server == null) {
-            StudyCheckpoints.LOGGER.error("Could not prepare chapter creatures because the integrated server is unavailable.");
             return;
         }
 
-        server.execute(() -> prepareCreaturesForChapter(server, chapter));
+        server.execute(() -> prewarmChapterArea(server, chapter));
+    }
+
+    public static void prepareChapterForStart(Minecraft client, StudyChapter chapter, Runnable onPrepared) {
+        if (client == null || chapter == null || onPrepared == null) {
+            return;
+        }
+
+        MinecraftServer server = client.getSingleplayerServer();
+        if (server == null) {
+            StudyCheckpoints.LOGGER.error("Could not prepare the chapter because the integrated server is unavailable.");
+            client.execute(onPrepared);
+            return;
+        }
+
+        server.execute(() -> {
+            prewarmChapterArea(server, chapter);
+            prepareCreaturesForChapter(server, chapter);
+            client.execute(onPrepared);
+        });
+    }
+
+    private static void prewarmChapterArea(MinecraftServer server, StudyChapter chapter) {
+        ServerLevel level = server.overworld();
+        if (level == null || chapter == null) {
+            return;
+        }
+
+        if (prewarmedChapter == chapter) {
+            return;
+        }
+
+        if (prewarmedChapter != null) {
+            setChapterChunksForced(level, prewarmedChapter, false);
+        }
+
+        setChapterChunksForced(level, chapter, true);
+        prewarmedChapter = chapter;
     }
 
     private static void prepareCreaturesForChapter(MinecraftServer server, StudyChapter chapter) {
@@ -223,6 +263,24 @@ public final class StudyInteractionController {
             boolean spawned = spawnConfiguredCreature(level, assignment);
             if (!spawned) {
                 throw new IllegalStateException("Failed to spawn configured study creature: " + assignment.spawn().uniqueName());
+            }
+        }
+    }
+
+    private static void setChapterChunksForced(ServerLevel level, StudyChapter chapter, boolean forced) {
+        int chunkRadius = Math.max(0, StudyConfig.getChapterPrewarmChunkRadius());
+        int centreChunkX = Math.floorDiv(chapter.x(), 16);
+        int centreChunkZ = Math.floorDiv(chapter.z(), 16);
+
+        for (int dx = -chunkRadius; dx <= chunkRadius; dx++) {
+            for (int dz = -chunkRadius; dz <= chunkRadius; dz++) {
+                int chunkX = centreChunkX + dx;
+                int chunkZ = centreChunkZ + dz;
+                level.setChunkForced(chunkX, chunkZ, forced);
+
+                if (forced) {
+                    level.getChunk(chunkX, chunkZ);
+                }
             }
         }
     }
@@ -437,6 +495,7 @@ public final class StudyInteractionController {
         if (screen instanceof StudyOverlayScreen
                 || screen instanceof StudyCheckpointScreen
                 || screen instanceof StudyPauseScreen
+                || screen instanceof StudyLoadingScreen
                 || screen instanceof StudyCreatureInfoScreen) {
             alternatePauseMenuOpen = false;
             return;
@@ -513,6 +572,7 @@ public final class StudyInteractionController {
         if (screen instanceof StudyOverlayScreen
                 || screen instanceof StudyCheckpointScreen
                 || screen instanceof StudyPauseScreen
+                || screen instanceof StudyLoadingScreen
                 || screen instanceof StudyCreatureInfoScreen) {
             blockedScreenKey = null;
             alternatePauseMenuOpen = false;

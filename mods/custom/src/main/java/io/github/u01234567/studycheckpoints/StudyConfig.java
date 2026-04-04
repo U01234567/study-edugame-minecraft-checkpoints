@@ -35,6 +35,14 @@ public final class StudyConfig {
     // Testing helper: shorten the current timed study phase to this remaining time.
     private static final long TESTING_SKIP_REMAINING_MS = 20_000L;
 
+    // Keep the chapter loading screen visible for at least this long, even if
+    // the server finishes quickly. This avoids a one-frame flash.
+    private static final long CHAPTER_LOADING_MIN_SCREEN_MS = 1_000L;
+
+    // Number of chunks to keep warm around the target chapter start chunk.
+    // Radius 2 = 5 x 5 chunks centred on the chapter start.
+    private static final int CHAPTER_PREWARM_CHUNK_RADIUS = 2;
+
     // Allow the alternate menu key to open the vanilla pause menu during the experiment.
     // The alternate key uses the player-list binding, which is Tab by default.
     // Escape itself is reserved for returning the participant to the current chapter start.
@@ -76,6 +84,16 @@ public final class StudyConfig {
     // Return the remaining time used by the testing skip command.
     public static long getTestingSkipRemainingMs() {
         return TESTING_SKIP_REMAINING_MS;
+    }
+
+    // Return the minimum time that the loading screen should stay visible.
+    public static long getChapterLoadingMinScreenMs() {
+        return CHAPTER_LOADING_MIN_SCREEN_MS;
+    }
+
+    // Return the chunk radius used to prewarm a chapter area.
+    public static int getChapterPrewarmChunkRadius() {
+        return CHAPTER_PREWARM_CHUNK_RADIUS;
     }
 
     // Return whether the participant may open the escape menu.
