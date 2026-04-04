@@ -20,6 +20,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public final class StudyInteractionController {
     private static long serverTickCounter;
 
     private static String blockedScreenKey;
+    private static boolean alternatePauseMenuOpen;
     private static long lastMovementSampleMs;
     private static double lastSampleX;
     private static double lastSampleY;
@@ -171,6 +173,7 @@ public final class StudyInteractionController {
         }
 
         enforceClientPlayerState(client.player);
+        handleStudyHotkeys(client);
         blockForbiddenScreens(client);
         logBlockedKeyAttempts(client);
         sampleMovement(client.player);
@@ -404,10 +407,106 @@ public final class StudyInteractionController {
         }
     }
 
+    /**
+     * Handle study-specific keyboard behaviour:
+     * - Escape always becomes a recovery action back to the active chapter start.
+     * - The alternate menu key uses the player-list binding, which is Tab by default.
+     * - The alternate menu key only opens the menu when ALLOW_ESCAPE_MENU is true.
+     */
+    private static void handleStudyHotkeys(Minecraft client) {
+        Screen screen = client.screen;
+
+        if (screen == null) {
+            alternatePauseMenuOpen = false;
+
+            if (client.options.keyPlayerList.consumeClick()) {
+                if (StudyConfig.isEscapeMenuAllowed()) {
+                    alternatePauseMenuOpen = openAllowedPauseMenu(client);
+                } else {
+                    StudyEventLog.logBlockedAction(
+                            client.player.getName().getString(),
+                            "alternate_menu_key_blocked",
+                            "key=player_list_default_tab"
+                    );
+                }
+            }
+            return;
+        }
+
+        // Never interfere with the study-owned overlays.
+        if (screen instanceof StudyOverlayScreen
+                || screen instanceof StudyCheckpointScreen
+                || screen instanceof StudyPauseScreen
+                || screen instanceof StudyCreatureInfoScreen) {
+            alternatePauseMenuOpen = false;
+            return;
+        }
+
+        // Escape cannot be disabled reliably, so treat any vanilla pause screen as an
+        // Escape-triggered recovery request and immediately return the participant.
+        if (isVanillaPauseScreen(screen)) {
+            if (alternatePauseMenuOpen && StudyConfig.isEscapeMenuAllowed()) {
+                return;
+            }
+
+            alternatePauseMenuOpen = false;
+            client.setScreen(null);
+
+            boolean moved = StudyFlowController.returnPlayerToActiveChapterStart(client, "escape");
+            if (!moved) {
+                StudyEventLog.logBlockedAction(
+                        client.player != null ? client.player.getName().getString() : "unknown",
+                        "escape_recovery_ignored",
+                        "reason=no_active_chapter"
+                );
+            }
+            return;
+        }
+
+        alternatePauseMenuOpen = false;
+    }
+
+    private static boolean isVanillaPauseScreen(Screen screen) {
+        return screen != null && "PauseScreen".equals(screen.getClass().getSimpleName());
+    }
+
+    /**
+     * Open the vanilla pause menu reflectively so the study code stays resilient if the
+     * exact constructor signature changes between mappings or minor versions.
+     */
+    private static boolean openAllowedPauseMenu(Minecraft client) {
+        try {
+            Class<?> pauseScreenClass = Class.forName("net.minecraft.client.gui.screens.PauseScreen");
+
+            Object screenInstance;
+            try {
+                Constructor<?> constructor = pauseScreenClass.getConstructor(boolean.class);
+                constructor.setAccessible(true);
+                screenInstance = constructor.newInstance(true);
+            } catch (NoSuchMethodException ignored) {
+                Constructor<?> constructor = pauseScreenClass.getConstructor();
+                constructor.setAccessible(true);
+                screenInstance = constructor.newInstance();
+            }
+
+            if (screenInstance instanceof Screen screen) {
+                client.setScreen(screen);
+                return true;
+            }
+
+            throw new IllegalStateException("PauseScreen did not produce a Screen instance.");
+        } catch (Exception e) {
+            StudyCheckpoints.LOGGER.warn("Could not open the alternate pause menu key.", e);
+        }
+
+        return false;
+    }
+
     private static void blockForbiddenScreens(Minecraft client) {
         Screen screen = client.screen;
         if (screen == null) {
             blockedScreenKey = null;
+            alternatePauseMenuOpen = false;
             return;
         }
 
@@ -416,12 +515,19 @@ public final class StudyInteractionController {
                 || screen instanceof StudyPauseScreen
                 || screen instanceof StudyCreatureInfoScreen) {
             blockedScreenKey = null;
+            alternatePauseMenuOpen = false;
             return;
         }
 
         String screenName = screen.getClass().getSimpleName();
 
-        if (!StudyConfig.isEscapeMenuAllowed() && screenName.contains("PauseScreen")) {
+        if (isVanillaPauseScreen(screen)) {
+            if (alternatePauseMenuOpen && StudyConfig.isEscapeMenuAllowed()) {
+                blockedScreenKey = null;
+                return;
+            }
+
+            alternatePauseMenuOpen = false;
             logBlockedScreenOnce(client, "escape_menu_blocked");
             client.setScreen(null);
             return;

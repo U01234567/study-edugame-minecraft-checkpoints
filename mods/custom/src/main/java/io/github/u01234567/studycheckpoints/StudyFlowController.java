@@ -32,9 +32,12 @@ public final class StudyFlowController {
     private static final int TIMER_COLOR_NORMAL = 0xFFFFFFFF;
     private static final int TIMER_COLOR_WARNING = 0xFFFF4D4D;
     private static final long WARNING_THRESHOLD_MS = 15_000L;
+    private static final long RECOVERY_MESSAGE_DURATION_MS = 3_000L;
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
+    private static final String ESCAPE_RECOVERY_MESSAGE = "Esc pressed: back to chapter start.";
+    private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
 
     private static boolean introShown;
     private static boolean windowPrepared;
@@ -43,6 +46,8 @@ public final class StudyFlowController {
     private static long chapterDeadlineMs;
     private static String chapterWelcomeMessage;
     private static long chapterWelcomeDeadlineMs;
+    private static String recoveryMessage;
+    private static long recoveryMessageDeadlineMs;
     private static long questionnaireFirstOpenedAtMs;
     private static StudyChapter pausedCompletedChapter;
     private static long pauseDeadlineMs;
@@ -103,6 +108,30 @@ public final class StudyFlowController {
 
     public static StudyChapter getActiveChapter() {
         return activeChapter;
+    }
+
+    // Press ESC to teleport back to the start location of the current chapter.
+    // Also show a short action-bar message so the participant understands what happened.
+    public static boolean returnPlayerToActiveChapterStart(Minecraft client, String triggerLabel) {
+        if (client == null || activeChapter == null) {
+            return false;
+        }
+
+        client.execute(() -> {
+            StudyChapter chapterToRestore = activeChapter;
+
+            client.setScreen(null);
+            placePlayerForChapter(client, chapterToRestore);
+            recoveryMessage = ESCAPE_RECOVERY_MESSAGE;
+            recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
+
+            StudyEventLog.logBlockedAction(
+                    playerName(client),
+                    "chapter_recovery_teleport",
+                    "trigger=" + triggerLabel + ",chapter=" + chapterToRestore.chapterNumber()
+            );
+        });
+        return true;
     }
 
     public static void continueFromFinalScreen(Minecraft client, StudyChapter completedChapter) {
@@ -203,6 +232,14 @@ public final class StudyFlowController {
         } else {
             chapterWelcomeMessage = null;
         }
+
+        if (recoveryMessage != null && nowMs() < recoveryMessageDeadlineMs) {
+            int messageX = (client.getWindow().getGuiScaledWidth() - client.font.width(recoveryMessage)) / 2;
+            int messageY = 24;
+            graphics.text(client.font, recoveryMessage, messageX, messageY, RECOVERY_MESSAGE_COLOUR, true);
+        } else {
+            recoveryMessage = null;
+        }
     }
 
     private static void onEndClientTick(Minecraft client) {
@@ -299,18 +336,16 @@ public final class StudyFlowController {
     private static void advanceFromCompletedChapter(Minecraft client, StudyChapter completedChapter) {
         StudyChapter nextChapter = completedChapter.next();
 
-        client.execute(() -> {
-            pausedCompletedChapter = null;
-            pauseDeadlineMs = 0L;
-            client.setScreen(null);
+        pausedCompletedChapter = null;
+        pauseDeadlineMs = 0L;
+        client.setScreen(null);
 
-            if (nextChapter == null) {
-                openQuestionnaire(client);
-                return;
-            }
+        if (nextChapter == null) {
+            openQuestionnaire(client);
+            return;
+        }
 
-            startChapter(client, nextChapter);
-        });
+        startChapter(client, nextChapter);
     }
 
     private static void openPauseScreen(Minecraft client,

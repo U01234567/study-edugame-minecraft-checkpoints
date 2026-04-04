@@ -35,9 +35,10 @@ public final class StudyConfig {
     // Testing helper: shorten the current timed study phase to this remaining time.
     private static final long TESTING_SKIP_REMAINING_MS = 20_000L;
 
-    // Prevent the player from opening the escape menu during the experiment.
+    // Allow the alternate menu key to open the vanilla pause menu during the experiment.
+    // The alternate key uses the player-list binding, which is Tab by default.
+    // Escape itself is reserved for returning the participant to the current chapter start.
     // When this is false, chat typing is also blocked.
-    // This should remain false for real study sessions.
     private static final boolean ALLOW_ESCAPE_MENU = true;
 
     private static Map<String, String> values;
