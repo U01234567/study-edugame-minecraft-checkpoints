@@ -19,7 +19,7 @@ The repository is intended to preserve the materials, code, and documented exter
 
 * `world/` — Minecraft world files for the study environment
 * `mods/custom/` — Fabric-based custom study mod source code
-* `mods/external/` — third-party runtime jars, external asset references, and source credits
+* `mods/external/` — third-party runtime jars, external creature assets, conversion scripts, and source credits
 * `server/` — local server setup and scripts for running the world
 * `analysis/` — scripts for statistical analysis
 
@@ -34,9 +34,11 @@ The main credit and provenance register is here:
 That file should be treated as the source of truth for:
 
 * third-party runtime jars
-* external modelling and animation references
+* external creature model sources
+* Blockbench and GLTF asset provenance
 * adapted buildings, schematics, and world ideas
 * tutorials, workflows, and general technical references
+* AI-assisted development notes for the external creature-generation scripts
 
 ## Development environment and core dependencies
 
@@ -46,16 +48,16 @@ The table below documents the main software and versions used during development
 |---|---|---|
 | Operating system during development | Windows 11 | Primary development environment |
 | Java (JDK) | Eclipse Temurin JDK 25.0.2+10-LTS | Used for Gradle and mod development |
+| Python | Python 3.13 | Used for creature conversion and code-generation scripts |
 | IntelliJ IDEA | 2026.1 | Main IDE for mod development |
 | Minecraft Launcher | v3.29.53-2.5.2 | Used for local development and testing |
 | Minecraft | 26.1 | Project target version |
 | Fabric Loader | 0.18.5 | Project dependency |
 | Fabric API | 0.144.3+26.1 | Project dependency |
-| Fabric Loom | 1.15-SNAPSHOT | Build tooling configured in the project |
-| GeckoLib | 5.5 | Runtime dependency for animated study creatures |
+| Fabric Loom | 1.15.5 | Build tooling configured in the project |
 | WorldEdit (Fabric) | `worldedit-fabric-mc26.1-7.4.2-SNAPSHOT-dist.jar` | Local development dependency |
-| Blockbench | 5.1.1 | Used to author creature models |
-| Blockbench plugin | GeckoLib Models & Animations v4.2.4 | Used to generate `.geo.json` and `.animation.json` from `.bbmodel` files |
+| Blockbench | 5.1.1 | Used to inspect and prepare creature models |
+| Blockbench plugin | Fabric Modded Entity plugin | Current Blockbench export workflow used for Java-backed creature models |
 
 ## Get started for developers
 
@@ -70,7 +72,7 @@ Check whether Java and the Java compiler are available:
 ```bash
 java -version
 javac -version
-```
+````
 
 If either command is missing, or if the reported version does not match this project’s setup, install a JDK. A separate JRE is not required.
 
@@ -86,9 +88,31 @@ For mod development in this repository, we use:
 
 Important: IntelliJ can use a different Java runtime for Gradle than for the project itself. Make sure that both the **Project SDK** and the **Gradle JVM** are set to the installed JDK version above.
 
-If Gradle sync fails with an error stating that the build is using Java 17, change the Gradle JVM to **Temurin 25** or another **JDK 21+** installation.
+If Gradle sync fails with an error stating that the build is using an older Java version, change the Gradle JVM to **Temurin 25** or another compatible **JDK 25** installation.
 
-### 3. Install Minecraft Launcher
+### 3. Install Python and the script dependency
+
+Creature generation for this repository depends on Python.
+
+Check whether Python is available:
+
+```bash
+python --version
+```
+
+The external creature pipeline currently depends on Pillow for texture processing. Install it in your virtual environment or local Python environment with:
+
+```bash
+pip install pillow
+```
+
+If you use a project-local virtual environment, you can point Gradle to that interpreter when running the client:
+
+```powershell
+.\gradlew.bat runClient -PstudyPythonCommand="C:\path\to\python.exe"
+```
+
+### 4. Install Minecraft Launcher
 
 If not already installed, install the official Minecraft Launcher.
 
@@ -102,7 +126,7 @@ This repository was developed and tested with:
 * **Minecraft Launcher v3.29.53-2.5.2**
 * **Minecraft version 26.1**
 
-### 4. (Once, at start of study) Generate the Fabric mod template
+### 5. (Once, at start of study) Generate the Fabric mod template
 
 The Fabric mod scaffold used for this project was generated from Fabric’s official template generator:
 
@@ -124,7 +148,7 @@ Advanced options used:
 
 *Note.* Keep the Java package name short and stable. The repository name is intentionally descriptive, but the Java package should remain concise for maintainability.
 
-### 5. Clone the repository and open the mod project
+### 6. Clone the repository and open the mod project
 
 Clone this repository locally, then open the Fabric mod project in IntelliJ IDEA from:
 
@@ -132,7 +156,7 @@ Clone this repository locally, then open the Fabric mod project in IntelliJ IDEA
 
 Wait until Gradle initialisation and project import have finished.
 
-### 6. External runtime jars
+### 7. External runtime jars
 
 Development runs use local third-party jars stored under:
 
@@ -140,9 +164,8 @@ Development runs use local third-party jars stored under:
 mods/external/libs/
 ```
 
-At the moment this includes at least:
+At the moment this includes:
 
-* GeckoLib
 * WorldEdit
 
 These jars are copied automatically into:
@@ -159,7 +182,7 @@ Important:
 * do **not** manually maintain long-term dependency copies only inside `run/mods/`
 * place managed third-party runtime jars in `mods/external/libs/`
 
-### 7. Run the Minecraft client for development
+### 8. Run the Minecraft client for development
 
 From `mods/custom/`, run the Fabric development client with:
 
@@ -167,19 +190,42 @@ From `mods/custom/`, run the Fabric development client with:
 .\gradlew.bat runClient
 ```
 
-On the first run after cloning the repository, when no mods/custom/run/ folder exists yet, Minecraft may still show its normal opening screen once so that local client settings such as sound and narrator can be adjusted. This should not happen again on later runs, because the generated runtime files will then already exist.
+If your Python interpreter is not available as `python` on the command line, pass it explicitly:
 
-If `gradlew.bat` reports that Gradle is using Java 8 or Java 17, verify that your terminal environment, `JAVA_HOME`, Project SDK, and Gradle JVM all point to the installed JDK version above.
+```powershell
+.\gradlew.bat runClient -PstudyPythonCommand="C:\path\to\python.exe"
+```
+
+On the first run after cloning the repository, when no `mods/custom/run/` folder exists yet, Minecraft may still show its normal opening screen once so that local client settings such as sound and narrator can be adjusted. This should not happen again on later runs, because the generated runtime files will then already exist.
+
+If `gradlew.bat` reports that Gradle is using the wrong Java version, verify that your terminal environment, `JAVA_HOME`, Project SDK, and Gradle JVM all point to the installed JDK version above.
 
 ## Adding new creatures to the game
+
 ### Overview
 
 A new custom study creature currently involves four parts:
 
-1. create or edit the model in Blockbench
-2. export the GeckoLib runtime files
-3. place the source asset files in the expected external folder
-4. add the creature metadata and spawn entries in `StudyCreatureCards.java`
+1. add a `CreatureCard` entry in `StudyCreatureCards.java`
+2. place the source files under either `mods/external/blockbench/` or `mods/external/gltf/`
+3. run the Gradle generation pipeline
+4. verify the generated model, texture, placement, and behaviour in game
+
+The current system supports two input pipelines:
+
+1. **Blockbench Java export pipeline**
+
+   * source folder under `mods/external/blockbench/<creature_id>/`
+   * expected files: `model.java` and `model.png`
+   * optional files: `model-anim.java` and `model.bbmodel`
+
+2. **GLTF conversion pipeline**
+
+   * source folder under `mods/external/gltf/<creature_id>/`
+   * expected files: `source/*.gltf` and `textures/*.png`
+   * converted automatically into generated Java model classes and baked texture atlases
+
+FBX files may exist in `mods/external/gltf/` for reference, but they are **not** currently part of the automated conversion pipeline.
 
 ### Naming rules
 
@@ -195,50 +241,111 @@ stag_beetle
 This id should be used consistently across:
 
 * folder name
-* model file base name
-* animation file base name
-* texture file base name
-* Java-side custom creature id where applicable
+* generated texture base name
+* Java-side custom creature id
+* creature manifest id
+* creature-card entry where applicable
 
-### Required file layout for a custom creature
+### Required file layout for a Blockbench-exported creature
 
-For a creature with id `mantis`, the editable source assets should live in:
-
-```text
-mods/external/blockbench/mantis/
-```
-
-Expected files:
+For a creature with id `mantis_2`, the editable source assets should live in:
 
 ```text
-mods/external/blockbench/mantis/mantis.bbmodel
-mods/external/blockbench/mantis/mantis.geo.json
-mods/external/blockbench/mantis/mantis.animation.json
-mods/external/blockbench/mantis/mantis.png
+mods/external/blockbench/mantis_2/
 ```
+
+Expected minimum files:
+
+```text
+mods/external/blockbench/mantis_2/model.java
+mods/external/blockbench/mantis_2/model.png
+```
+
+Optional companion files:
+
+```text
+mods/external/blockbench/mantis_2/model-anim.java
+mods/external/blockbench/mantis_2/model.bbmodel
+```
+
+### Required file layout for a GLTF creature
+
+For a creature with id `allay`, the source assets should live in:
+
+```text
+mods/external/gltf/allay/
+```
+
+Expected minimum files:
+
+```text
+mods/external/gltf/allay/source/model.gltf
+mods/external/gltf/allay/textures/gltf_embedded_0.png
+```
+
+Additional texture files may also be present. These are used by the conversion scripts when possible.
 
 ### Blockbench workflow
 
-Use Blockbench together with the **GeckoLib Models & Animations** plugin.
+The current Blockbench workflow uses the **Fabric Modded Entity plugin**.
 
 Typical workflow:
 
-1. create or edit `x.bbmodel`
-2. use the GeckoLib plugin in Blockbench
-3. export:
+1. create or edit the model in Blockbench
 
-    * `x.geo.json`
-    * `x.animation.json`
-4. export or save the matching texture image:
+2. export the Java model via the Fabric Modded Entity plugin
 
-    * `x.png`
+3. save the exported files as:
+
+   * `model.java`
+   * `model.png`
+
+4. if available, keep the editable source file and animation sidecar in the same folder:
+
+   * `model.bbmodel`
+   * `model-anim.java`
 
 Important:
 
-* the base name should stay the same for all four files
-* the creature folder name should also match that same id
-* the `.bbmodel` file is the editable source file
-* the `.geo.json` and `.animation.json` files are generated runtime assets
+* the creature folder name should match the final creature id
+* the Java export is treated as an input file, not as checked-in runtime source under `mods/custom/src/main/java/`
+* the `.bbmodel` file is the editable source file when present
+
+### GLTF workflow
+
+The GLTF pipeline is driven by the Python scripts in:
+
+```text
+mods/external/scripts/
+```
+
+The main files currently involved are:
+
+* `generate_study_creatures.py`
+* `convert_gltf_to_java.py`
+* `study_creature_codegen.py`
+
+The Gradle task scans `mods/external/gltf/`, converts supported `.gltf` creature folders into Java-backed Fabric entity models, and writes generated outputs into the build directory.
+
+Generated Java files are written under:
+
+```text
+mods/custom/build/generated/sources/studyCreatures/java/main/
+```
+
+Generated resources are written under:
+
+```text
+mods/custom/build/generated/studyCreatures/resources/main/
+```
+
+The GLTF pipeline can also generate:
+
+* baked texture atlases
+* optional outer-layer models and textures
+* embedded animation data where the source format is compatible with the current generator
+
+Animation support exists, but it is still format-dependent and should be treated as partial rather than guaranteed for every external source model.
 
 ### Add the card entry in `StudyCreatureCards.java`
 
@@ -274,9 +381,9 @@ Map.entry(EntityType.COW, new CreatureCard(
 Example for a custom creature:
 
 ```java
-Map.entry("mantis", new CreatureCard(
+Map.entry("mantis_2", new CreatureCard(
         "Praying mantis",
-        StudyChapter.CHAPTER_3,
+        StudyChapter.CHAPTER_1,
         CreatureMovementMode.FIXED,
         List.of(
                 "A praying mantis is an insect.",
@@ -284,7 +391,7 @@ Map.entry("mantis", new CreatureCard(
                 "It often stays still and ambushes other animals."
         ),
         List.of(
-                new CreatureSpawn("mantis_a", 82, 65, -233, FacingDirection.WEST)
+                new CreatureSpawn("mantis_2_a", -56, 63, 17, FacingDirection.NORTH)
         )
 ))
 ```
@@ -302,7 +409,7 @@ Each configured spawn must have a unique name, for example:
 
 * `cow_a`
 * `cow_b`
-* `mantis_a`
+* `mantis_2_a`
 
 These names are used in logging and analysis, so they must be:
 
@@ -322,13 +429,13 @@ Do not assign a creature to multiple chapters in the card data. The current game
 
 Before committing, verify all of the following:
 
-* the folder name under `mods/external/blockbench/` matches the creature id
-* the `.bbmodel`, `.geo.json`, `.animation.json`, and `.png` names all match the same id
 * the creature has a `CreatureCard` entry
 * the creature has exactly one chapter
 * the creature has one movement mode
 * all configured creature spawn names are globally unique
 * all spawn coordinates and facing values are intentional
+* the source folder is in the correct location under either `mods/external/blockbench/` or `mods/external/gltf/`
+* the expected source files exist for the chosen pipeline
 * the client starts with:
 
 ```powershell
@@ -344,8 +451,10 @@ If the creature, model idea, texture, animation approach, tutorial, or other sou
 That includes:
 
 * downloaded jars
-* model tutorials
-* animation tutorials
+* model sources
+* texture sources
+* conversion references
+* tutorials
 * general design references
 * reused or adapted external files
 
