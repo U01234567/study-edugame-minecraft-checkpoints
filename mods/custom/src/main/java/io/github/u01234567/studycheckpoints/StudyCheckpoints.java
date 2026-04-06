@@ -1,6 +1,6 @@
 package io.github.u01234567.studycheckpoints;
 
-import io.github.u01234567.studycheckpoints.entity.StudyEntities;
+import io.github.u01234567.studycheckpoints.creatures.StudyEntities;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;

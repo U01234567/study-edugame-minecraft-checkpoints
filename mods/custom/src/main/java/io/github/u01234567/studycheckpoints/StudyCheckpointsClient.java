@@ -1,7 +1,7 @@
 package io.github.u01234567.studycheckpoints;
 
-import io.github.u01234567.studycheckpoints.entity.StudyEntities;
-import io.github.u01234567.studycheckpoints.entity.client.StudyCreatureGeoRenderer;
+import io.github.u01234567.studycheckpoints.creatures.StudyEntities;
+import io.github.u01234567.studycheckpoints.creatures.client.StudyCreatureJavaRenderer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 
@@ -13,7 +13,7 @@ public class StudyCheckpointsClient implements ClientModInitializer {
         for (StudyEntities.CustomCreatureDefinition definition : StudyEntities.customCreatureDefinitions()) {
             EntityRenderers.register(
                     StudyEntities.byId(definition.id()),
-                    context -> new StudyCreatureGeoRenderer(context, definition.id())
+                    context -> new StudyCreatureJavaRenderer(context, definition)
             );
         }
 
