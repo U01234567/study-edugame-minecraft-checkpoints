@@ -102,9 +102,14 @@ These files are source assets for custom study creatures. They are not loaded di
 
 ## Buildings, schematics, and adapted world content
 
-| Repo path / reference | Creator(s) | Reference to source | Used for | Notes |
-|---|---|---|---|---|
+| Repo path / reference | Creator(s) | Reference to source                                                                                                               | Used for | Notes |
+|---|---|-----------------------------------------------------------------------------------------------------------------------------------|---|---|
 | `world/` museum area (adapted in study world) | Original PlanetMinecraft project creator(s) for the source build; study repository authors for the adapted study version | [Victorian Museum / Nordiska Museet — PlanetMinecraft](https://www.planetminecraft.com/project/victorian-museum-nordiska-museet/) | Basis for the museum area used in the study world | Downloaded and adapted for this project |
+| Medieval Bridge (adapted in study world) | Original creator: Munkei | [Pinterest post](https://pinterest.com/pin/254805291413716333/) and [Patreon page](https://www.patreon.com/cw/Munkei/posts)       | Chapter 2 (The Farm) | |
+| Windmill (adapted in study world) | Original creator: Goldrobin | [YouTube video](https://www.youtube.com/watch?v=CDEDBIGCRDY)                                                                      | Chapter 2 (The Farm) | |
+| Large Greenhouse (adapted in study world) | Original creator: SheraNom | [YouTube video](https://www.youtube.com/watch?v=gcKYJBeUkn4)                                                                      | Chapter 2 (The Farm) | | 
+| Horse Stable (adapted in study world) | Original creator: yas xx | [Pinterest post](https://pinterest.com/pin/986429124611563006/)                                                                   | Chapter 2 (The Farm) | | 
+| Farm ideas | Original creator: Cryptozoology | [Instagram post](https://www.instagram.com/p/CkYXMgsMg0y) and [YouTube channel](https://www.youtube.com/@Cryptozoology)                                                 | Chapter 2 (The Farm) | | 
 
 ## Tutorials, workflows, and general technical references
 
