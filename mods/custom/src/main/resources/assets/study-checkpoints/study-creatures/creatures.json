@@ -45,17 +45,6 @@
       "outer_texture_resource_path": null
     },
     {
-      "id": "dragon",
-      "display_name": "Dragon",
-      "hitbox_width": 0.5,
-      "hitbox_height": 1.0,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.DragonModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/dragon.png",
-      "outer_texture_resource_path": null
-    },
-    {
       "id": "ender_ape",
       "display_name": "EnderApe",
       "hitbox_width": 0.812,
@@ -100,39 +89,6 @@
       "outer_texture_resource_path": null
     },
     {
-      "id": "grassling_spreder",
-      "display_name": "GrasslingSpreder",
-      "hitbox_width": 4.0,
-      "hitbox_height": 3.125,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GrasslingSprederModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/grassling_spreder.png",
-      "outer_texture_resource_path": null
-    },
-    {
-      "id": "greater_lurker",
-      "display_name": "GreaterLurker",
-      "hitbox_width": 1.906,
-      "hitbox_height": 4.0,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GreaterLurkerModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/greater_lurker.png",
-      "outer_texture_resource_path": null
-    },
-    {
-      "id": "hell_horse_yitrium",
-      "display_name": "HellHorseYitrium",
-      "hitbox_width": 0.688,
-      "hitbox_height": 2.509,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.HellHorseYitriumModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/hell_horse_yitrium.png",
-      "outer_texture_resource_path": null
-    },
-    {
       "id": "ice_golem",
       "display_name": "IceGolem",
       "hitbox_width": 4.0,
@@ -163,17 +119,6 @@
       "outer_model_class_name": null,
       "animation_class_name": null,
       "texture_resource_path": "textures/entity/lizard_knight.png",
-      "outer_texture_resource_path": null
-    },
-    {
-      "id": "mini_dragon",
-      "display_name": "MiniDragon",
-      "hitbox_width": 0.438,
-      "hitbox_height": 1.438,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.MiniDragonModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/mini_dragon.png",
       "outer_texture_resource_path": null
     },
     {
@@ -229,28 +174,6 @@
       "outer_model_class_name": null,
       "animation_class_name": null,
       "texture_resource_path": "textures/entity/scrambler_king.png",
-      "outer_texture_resource_path": null
-    },
-    {
-      "id": "soul_lizard",
-      "display_name": "SoulLizard",
-      "hitbox_width": 0.667,
-      "hitbox_height": 0.456,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.SoulLizardModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/soul_lizard.png",
-      "outer_texture_resource_path": null
-    },
-    {
-      "id": "tv_man",
-      "display_name": "TvMan",
-      "hitbox_width": 1.0,
-      "hitbox_height": 2.25,
-      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.TvManModel",
-      "outer_model_class_name": null,
-      "animation_class_name": null,
-      "texture_resource_path": "textures/entity/tv_man.png",
       "outer_texture_resource_path": null
     },
     {

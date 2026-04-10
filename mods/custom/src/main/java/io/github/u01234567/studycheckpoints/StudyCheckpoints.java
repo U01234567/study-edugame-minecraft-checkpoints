@@ -33,6 +33,7 @@ public class StudyCheckpoints implements ModInitializer {
 		// LOG: player joins world
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			suppressAdvancementNotifications(server);
+			StudyInteractionController.applyConfiguredPlayerMode(handler.player);
 			StudyEventLog.logSessionHeader();
 			StudyEventLog.logPlayerJoined(handler.player.getName().getString());
 		});
@@ -46,7 +47,7 @@ public class StudyCheckpoints implements ModInitializer {
 	private static void registerTestingCommands() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(Commands.literal("timetravel")
-					.requires(source -> StudyConfig.isEscapeMenuAllowed())
+					.requires(source -> StudyConfig.isTestingPhase())
 					.executes(context -> executeTimetravelCommand(context.getSource()))
 			);
 		});

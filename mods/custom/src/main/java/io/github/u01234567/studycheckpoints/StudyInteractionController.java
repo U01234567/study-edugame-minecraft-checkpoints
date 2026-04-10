@@ -33,9 +33,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Central place for participant interaction restrictions. Instead of keeping the player
- * in creative mode, we enforce a restrictive adventure-style state and make the player
- * invulnerable so they cannot die.
+ * Central place for participant interaction restrictions and managed study-creature state.
+ * In the real study, the player is kept in a restrictive adventure-style state and made
+ * invulnerable. In TESTING_PHASE, the player is switched to creative mode once on join
+ * and most participant restrictions are relaxed for local development.
  */
 public final class StudyInteractionController {
     private static final long MOVEMENT_SAMPLE_INTERVAL_MS = 1_000L;
@@ -98,6 +99,9 @@ public final class StudyInteractionController {
             if (world.isClientSide() || hand != InteractionHand.MAIN_HAND) {
                 return InteractionResult.PASS;
             }
+            if (StudyConfig.isTestingPhase()) {
+                return InteractionResult.PASS;
+            }
 
             StudyEventLog.logBlockedAction(
                     player.getName().getString(),
@@ -112,6 +116,10 @@ public final class StudyInteractionController {
                 return InteractionResult.PASS;
             }
 
+            if (StudyConfig.isTestingPhase()) {
+                return InteractionResult.PASS;
+            }
+
             StudyEventLog.logBlockedAction(
                     player.getName().getString(),
                     "attack_block_blocked",
@@ -122,6 +130,9 @@ public final class StudyInteractionController {
 
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (world.isClientSide() || hand != InteractionHand.MAIN_HAND) {
+                return InteractionResult.PASS;
+            }
+            if (StudyConfig.isTestingPhase()) {
                 return InteractionResult.PASS;
             }
 
@@ -178,26 +189,30 @@ public final class StudyInteractionController {
             return;
         }
 
-        enforceClientPlayerState(client.player);
         handleStudyHotkeys(client);
         blockForbiddenScreens(client);
         logBlockedKeyAttempts(client);
         sampleMovement(client.player);
     }
 
+    public static void applyConfiguredPlayerMode(ServerPlayer player) {
+        if (StudyConfig.isTestingPhase()) {
+            setGameModeReflectively(player, "CREATIVE");
+        } else {
+            setGameModeReflectively(player, "ADVENTURE");
+        }
+    }
+
     private static void enforceServerPlayerState(ServerPlayer player) {
-        setAdventureModeReflectively(player);
+        if (StudyConfig.isTestingPhase()) {
+            return;
+        }
 
         player.setInvulnerable(true);
         player.clearFire();
         player.setHealth(player.getMaxHealth());
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(20.0F);
-
-        player.getAbilities().mayfly = false;
-        player.getAbilities().flying = false;
-        player.getAbilities().instabuild = false;
-        invokeNoArgs(player, "onUpdateAbilities");
     }
 
     /**
@@ -350,6 +365,7 @@ public final class StudyInteractionController {
                 entity.getUUID().toString(),
                 assignment.card().chapter(),
                 assignment.card().movementMode(),
+                assignment.spawn().facing(),
                 configuredBlockPos
         );
 
@@ -416,13 +432,6 @@ public final class StudyInteractionController {
         }
     }
 
-    private static void enforceClientPlayerState(LocalPlayer player) {
-        player.getAbilities().mayfly = false;
-        player.getAbilities().flying = false;
-        player.getAbilities().instabuild = false;
-        invokeNoArgs(player, "onUpdateAbilities");
-    }
-
     /**
      * Keep spawned study creatures persistent and safe:
      * - make them invulnerable
@@ -450,6 +459,7 @@ public final class StudyInteractionController {
         }
 
         if (spawnedStudyCreature.movementMode() == StudyCreatureCards.CreatureMovementMode.FIXED) {
+            applyManagedCreatureFacing(mob, spawnedStudyCreature.facing());
             mob.setNoAi(true);
             mob.setTarget(null);
             mob.getNavigation().stop();
@@ -457,6 +467,18 @@ public final class StudyInteractionController {
         } else {
             mob.setNoAi(false);
         }
+    }
+
+    private static void applyManagedCreatureFacing(Mob mob, StudyCreatureCards.FacingDirection facing) {
+        float yaw = facing.yawDegrees();
+        mob.setYRot(yaw);
+        mob.yRotO = yaw;
+        mob.setXRot(0.0F);
+        mob.xRotO = 0.0F;
+        mob.setYHeadRot(yaw);
+        mob.yHeadRotO = yaw;
+        mob.setYBodyRot(yaw);
+        mob.yBodyRotO = yaw;
     }
 
     private static void clearNearbyMobTargets(ServerPlayer player) {
@@ -474,7 +496,7 @@ public final class StudyInteractionController {
      * Handle study-specific keyboard behaviour:
      * - Escape always becomes a recovery action back to the active chapter start.
      * - The alternate menu key uses the player-list binding, which is Tab by default.
-     * - The alternate menu key only opens the menu when ALLOW_ESCAPE_MENU is true.
+     * - The alternate menu key only opens the menu when TESTING_PHASE is true.
      */
     private static void handleStudyHotkeys(Minecraft client) {
         Screen screen = client.screen;
@@ -483,7 +505,7 @@ public final class StudyInteractionController {
             alternatePauseMenuOpen = false;
 
             if (client.options.keyPlayerList.consumeClick()) {
-                if (StudyConfig.isEscapeMenuAllowed()) {
+                if (StudyConfig.isTestingPhase()) {
                     alternatePauseMenuOpen = openAllowedPauseMenu(client);
                 } else {
                     StudyEventLog.logBlockedAction(
@@ -509,7 +531,7 @@ public final class StudyInteractionController {
         // Escape cannot be disabled reliably, so treat any vanilla pause screen as an
         // Escape-triggered recovery request and immediately return the participant.
         if (isVanillaPauseScreen(screen)) {
-            if (alternatePauseMenuOpen && StudyConfig.isEscapeMenuAllowed()) {
+            if (alternatePauseMenuOpen && StudyConfig.isTestingPhase()) {
                 return;
             }
 
@@ -584,10 +606,8 @@ public final class StudyInteractionController {
             return;
         }
 
-        String screenName = screen.getClass().getSimpleName();
-
         if (isVanillaPauseScreen(screen)) {
-            if (alternatePauseMenuOpen && StudyConfig.isEscapeMenuAllowed()) {
+            if (alternatePauseMenuOpen && StudyConfig.isTestingPhase()) {
                 blockedScreenKey = null;
                 return;
             }
@@ -598,13 +618,13 @@ public final class StudyInteractionController {
             return;
         }
 
-        if (!StudyConfig.isEscapeMenuAllowed() && isChatLikeScreen(screen)) {
+        if (!StudyConfig.isTestingPhase() && isChatLikeScreen(screen)) {
             logBlockedScreenOnce(client, "chat_screen_blocked");
             client.setScreen(null);
             return;
         }
 
-        if (isInventoryLikeScreen(screen)) {
+        if (!StudyConfig.isTestingPhase() && isInventoryLikeScreen(screen)) {
             logBlockedScreenOnce(client, "inventory_screen_blocked");
             client.setScreen(null);
             return;
@@ -639,7 +659,7 @@ public final class StudyInteractionController {
     }
 
     private static void logBlockedKeyAttempts(Minecraft client) {
-        if (!StudyConfig.isEscapeMenuAllowed() && client.options.keyChat.consumeClick()) {
+        if (!StudyConfig.isTestingPhase() && client.options.keyChat.consumeClick()) {
             StudyEventLog.logBlockedAction(
                     client.player.getName().getString(),
                     "chat_key_blocked",
@@ -647,19 +667,19 @@ public final class StudyInteractionController {
             );
         }
 
-        if (client.options.keyInventory.consumeClick()) {
+        if (!StudyConfig.isTestingPhase() && client.options.keyInventory.consumeClick()) {
             StudyEventLog.logBlockedAction(client.player.getName().getString(), "inventory_key_blocked", "key=inventory");
         }
 
-        if (client.options.keyPickItem.consumeClick()) {
+        if (!StudyConfig.isTestingPhase() && client.options.keyPickItem.consumeClick()) {
             StudyEventLog.logBlockedAction(client.player.getName().getString(), "pick_block_key_blocked", "key=pick_item");
         }
 
-        if (client.options.keyDrop.consumeClick()) {
+        if (!StudyConfig.isTestingPhase() && client.options.keyDrop.consumeClick()) {
             StudyEventLog.logBlockedAction(client.player.getName().getString(), "drop_key_blocked", "key=drop");
         }
 
-        if (client.options.keySwapOffhand.consumeClick()) {
+        if (!StudyConfig.isTestingPhase() && client.options.keySwapOffhand.consumeClick()) {
             StudyEventLog.logBlockedAction(client.player.getName().getString(), "swap_offhand_key_blocked", "key=swap_offhand");
         }
     }
@@ -809,24 +829,14 @@ public final class StudyInteractionController {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void setAdventureModeReflectively(ServerPlayer player) {
+    private static void setGameModeReflectively(ServerPlayer player, String gameTypeName) {
         try {
             Class enumClass = Class.forName("net.minecraft.world.level.GameType");
-            Object adventureValue = Enum.valueOf(enumClass, "ADVENTURE");
+            Object gameTypeValue = Enum.valueOf(enumClass, gameTypeName);
             Method method = player.getClass().getMethod("setGameMode", enumClass);
-            method.invoke(player, adventureValue);
+            method.invoke(player, gameTypeValue);
         } catch (Exception e) {
             // Keep the study running even if mappings differ.
-        }
-    }
-
-    private static void invokeNoArgs(Object target, String methodName) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            method.setAccessible(true);
-            method.invoke(target);
-        } catch (Exception ignored) {
-            // Best-effort only.
         }
     }
 
@@ -836,6 +846,7 @@ public final class StudyInteractionController {
             String creatureUuid,
             StudyChapter chapter,
             StudyCreatureCards.CreatureMovementMode movementMode,
+            StudyCreatureCards.FacingDirection facing,
             String configuredBlockPos
     ) {
     }

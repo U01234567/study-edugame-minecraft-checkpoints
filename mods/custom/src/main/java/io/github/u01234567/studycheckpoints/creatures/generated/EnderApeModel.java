@@ -59,10 +59,10 @@ public class EnderApeModel extends EntityModel<LivingEntityRenderState> {
     private static final float[] WALKING_LEFTHAND_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
     private static final float[] WALKING_RIGHTHAND_ROTATION_TIMES = new float[]{0.0F, 0.125F, 0.25F, 0.375F, 0.5F};
     private static final float[] WALKING_RIGHTHAND_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
-    private static final float[] WALKING_LEFTFOOT_ROTATION_TIMES = new float[]{0.0F, 0.0417F, 0.0833F, 0.125F, 0.1667F, 0.2083F, 0.25F, 0.2917F, 0.3333F, 0.375F, 0.4167F, 0.4583F, 0.5F};
-    private static final float[] WALKING_LEFTFOOT_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
-    private static final float[] WALKING_RIGHTFOOT_ROTATION_TIMES = new float[]{0.0F, 0.0417F, 0.0833F, 0.125F, 0.1667F, 0.2083F, 0.25F, 0.2917F, 0.3333F, 0.375F, 0.4167F, 0.4583F, 0.5F};
-    private static final float[] WALKING_RIGHTFOOT_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+    private static final float[] WALKING_LEFTFOOT_ROTATION_TIMES = new float[]{0.0F, 0.125F, 0.25F, 0.375F, 0.5F};
+    private static final float[] WALKING_LEFTFOOT_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+    private static final float[] WALKING_RIGHTFOOT_ROTATION_TIMES = new float[]{0.0F, 0.125F, 0.25F, 0.375F, 0.5F};
+    private static final float[] WALKING_RIGHTFOOT_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, -0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5236F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
     private static final float TURNING_FALL_DAMAGE_TO_ATTACK_LENGTH = 0.5F;
     private static final float[] TURNING_FALL_DAMAGE_TO_ATTACK_BODY_ROTATION_TIMES = new float[]{0.0F, 0.125F, 0.3125F, 0.5F};
     private static final float[] TURNING_FALL_DAMAGE_TO_ATTACK_BODY_ROTATION_VALUES = new float[]{0.0F, 0.0F, 0.0F, 1.1781F, 0.0F, 0.0F, -2.5525F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
@@ -210,13 +210,12 @@ public class EnderApeModel extends EntityModel<LivingEntityRenderState> {
 
     private void applyGeneratedAnimation(LivingEntityRenderState state) {
         this.root.getAllParts().forEach(ModelPart::resetPose);
-        // Blockbench animation sidecar merged from model-anim.java.
-        float idleTimeSeconds = state.ageInTicks / 20.0F;
+        // The exported file includes a one-shot SPAWN clip but no idle loop.
+        // Replaying SPAWN continuously makes the head and hands snap several times per second,
+        // so keep the neutral pose when stationary and only play the walk cycle while moving.
         float walkTimeSeconds = state.walkAnimationPos / 20.0F;
         if (state.walkAnimationSpeed > 0.12F) {
             applyClipWALKING(walkTimeSeconds);
-        } else {
-            applyClipSPAWN(idleTimeSeconds);
         }
     }
 

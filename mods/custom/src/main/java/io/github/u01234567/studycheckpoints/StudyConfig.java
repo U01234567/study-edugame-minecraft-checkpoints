@@ -43,11 +43,17 @@ public final class StudyConfig {
     // Radius 2 = 5 x 5 chunks centred on the chapter start.
     private static final int CHAPTER_PREWARM_CHUNK_RADIUS = 2;
 
-    // Allow the alternate menu key to open the vanilla pause menu during the experiment.
-    // The alternate key uses the player-list binding, which is Tab by default.
-    // Escape itself is reserved for returning the participant to the current chapter start.
-    // When this is false, chat typing is also blocked.
-    private static final boolean ALLOW_ESCAPE_MENU = true;
+    // Enable local testing mode instead of the normal participant restrictions.
+    // When true:
+    // - the player is switched to creative mode once when joining the world
+    // - building, breaking, inventory access, item dropping, pick-block, and offhand swap stay enabled
+    // - chat typing remains available
+    // - the alternate menu key may open the vanilla pause menu
+    // - testing-only helpers such as /timetravel stay enabled
+    // - shortened testing hotbar layouts stay allowed
+    // The alternate menu key still uses the player-list binding, which is Tab by default.
+    // Escape itself is still reserved for returning the participant to the current chapter start.
+    private static final boolean TESTING_PHASE = true;
 
     private static Map<String, String> values;
 
@@ -96,10 +102,9 @@ public final class StudyConfig {
         return CHAPTER_PREWARM_CHUNK_RADIUS;
     }
 
-    // Return whether the participant may open the escape menu.
-    // When false, chat typing is also blocked on the client.
-    public static boolean isEscapeMenuAllowed() {
-        return ALLOW_ESCAPE_MENU;
+    // Return whether testing-only helpers and relaxed restrictions are enabled.
+    public static boolean isTestingPhase() {
+        return TESTING_PHASE;
     }
 
     private static synchronized void ensureLoaded() {

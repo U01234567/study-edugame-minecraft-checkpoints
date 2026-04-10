@@ -19,7 +19,7 @@ public final class StudyCreatureCards {
     private static final Map<String, CreatureCard> CUSTOM_CREATURE_CARDS = orderedMap(
         Map.entry("abyss_deer", new CreatureCard(
                 "Abyss deer",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a dark deer-like fantasy creature.",
@@ -27,12 +27,21 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("abyss_deer_a", -56, 63, 17, FacingDirection.NORTH)
+                        new CreatureSpawn("abyss_deer_a", 272, 71, -335, FacingDirection.WEST),
+                        new CreatureSpawn("abyss_deer_b", 274, 71, -335, FacingDirection.EAST),
+                        new CreatureSpawn("abyss_deer_c", 272, 71, -337, FacingDirection.NORTH),
+                        new CreatureSpawn("abyss_deer_d", 275, 71, -336, FacingDirection.SOUTH),
+                        new CreatureSpawn("abyss_deer_e", 273, 71, -338, FacingDirection.WEST),
+                        new CreatureSpawn("abyss_deer_f", 276, 71, -337, FacingDirection.NORTH),
+                        new CreatureSpawn("abyss_deer_g", 277, 71, -339, FacingDirection.EAST),
+                        new CreatureSpawn("abyss_deer_h", 274, 71, -340, FacingDirection.SOUTH),
+                        new CreatureSpawn("abyss_deer_i", 272, 71, -340, FacingDirection.EAST),
+                        new CreatureSpawn("abyss_deer_j", 276, 71, -335, FacingDirection.WEST)
                 )
         )),
         Map.entry("amethyst_scarab", new CreatureCard(
                 "Amethyst scarab",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a scarab-like fantasy creature.",
@@ -40,7 +49,9 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("amethyst_scarab_a", -56, 63, 20, FacingDirection.NORTH)
+                        new CreatureSpawn("amethyst_scarab_a", 258, 66, 815, FacingDirection.NORTH),
+                        new CreatureSpawn("amethyst_scarab_b", 221, 68, 656, FacingDirection.NORTH),
+                        new CreatureSpawn("amethyst_scarab_c", 345, 64, 455, FacingDirection.NORTH)
                 )
         )),
         Map.entry("axolotl_dragon", new CreatureCard(
@@ -53,12 +64,12 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("axolotl_dragon_a", -56, 63, 23, FacingDirection.NORTH)
+                        new CreatureSpawn("axolotl_dragon_a", -147, 87, 55, FacingDirection.SOUTH)
                 )
         )),
         Map.entry("cave_dweller", new CreatureCard(
                 "Cave dweller",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a cave-themed fantasy creature.",
@@ -66,25 +77,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("cave_dweller_a", -56, 63, 29, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("dragon", new CreatureCard(
-                "Dragon",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a large dragon-like fantasy creature.",
-                        "It has a strong body and a dramatic silhouette.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("dragon_a", -56, 63, 32, FacingDirection.NORTH)
+                        new CreatureSpawn("cave_dweller_a", 234, 72, -263, FacingDirection.EAST),
+                        new CreatureSpawn("cave_dweller_b", 234, 72, -248, FacingDirection.NORTH),
+                        new CreatureSpawn("cave_dweller_c", 220, 72, -249, FacingDirection.WEST)
                 )
         )),
         Map.entry("ender_ape", new CreatureCard(
                 "Ender ape",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is an ape-like fantasy creature with an end-themed design.",
@@ -92,12 +92,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("ender_ape_a", -56, 63, 38, FacingDirection.NORTH)
+                        new CreatureSpawn("ender_ape_a", 225, 65, 852, FacingDirection.NORTH),
+                        new CreatureSpawn("ender_ape_b", 283, 70, 657, FacingDirection.NORTH),
+                        new CreatureSpawn("ender_ape_c", 266, 70, 542, FacingDirection.NORTH)
                 )
         )),
         Map.entry("flying_bunny", new CreatureCard(
                 "Flying bunny",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This creature looks like a rabbit with unusual flying features.",
@@ -105,12 +107,13 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("flying_bunny_a", -56, 63, 44, FacingDirection.NORTH)
+                        new CreatureSpawn("flying_bunny_a", 348, 69, -230, FacingDirection.WEST),
+                        new CreatureSpawn("flying_bunny_b", 346, 70, -228, FacingDirection.EAST)
                 )
         )),
         Map.entry("glare", new CreatureCard(
                 "Glare",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a small flying fantasy creature.",
@@ -118,7 +121,9 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("glare_a", -56, 63, 50, FacingDirection.NORTH)
+                        new CreatureSpawn("glare_a", 171, 63, 837, FacingDirection.NORTH),
+                        new CreatureSpawn("glare_b", 321, 72, 651, FacingDirection.NORTH),
+                        new CreatureSpawn("glare_c", 315, 66, 520, FacingDirection.NORTH)
                 )
         )),
         Map.entry("grand_grassling_father", new CreatureCard(
@@ -131,46 +136,7 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("grand_grassling_father_a", -56, 63, 53, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("grassling_spreder", new CreatureCard(
-                "Grassling spreder",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a small grass-themed fantasy creature.",
-                        "It looks like it belongs in an overgrown forest.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("grassling_spreder_a", -56, 63, 56, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("greater_lurker", new CreatureCard(
-                "Greater lurker",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a heavy fantasy creature with a lurking posture.",
-                        "It appears broad and imposing.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("greater_lurker_a", -56, 63, 59, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("hell_horse_yitrium", new CreatureCard(
-                "Hell horse yitrium",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a fiery horse-like fantasy creature.",
-                        "It has a sharp and dramatic profile.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("hell_horse_yitrium_a", -56, 63, 65, FacingDirection.NORTH)
+                        new CreatureSpawn("grand_grassling_father_a", -144, 71, 68, FacingDirection.EAST)
                 )
         )),
         Map.entry("ice_golem", new CreatureCard(
@@ -183,12 +149,12 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("ice_golem_a", -56, 63, 68, FacingDirection.NORTH)
+                        new CreatureSpawn("ice_golem_a", -152, 71, 68, FacingDirection.WEST)
                 )
         )),
         Map.entry("killer_crab", new CreatureCard(
                 "Killer crab",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a crab-like fantasy creature.",
@@ -196,12 +162,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("killer_crab_a", -56, 63, 77, FacingDirection.NORTH)
+                        new CreatureSpawn("killer_crab_a", 248, 71, -177, FacingDirection.NORTH),
+                        new CreatureSpawn("killer_crab_b", 233, 71, -192, FacingDirection.WEST),
+                        new CreatureSpawn("killer_crab_c", 265, 71, -195, FacingDirection.WEST)
                 )
         )),
         Map.entry("lizard_knight", new CreatureCard(
                 "Lizard knight",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This creature combines reptile features with a knightly shape.",
@@ -209,25 +177,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("lizard_knight_a", -56, 63, 80, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("mini_dragon", new CreatureCard(
-                "Mini dragon",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a smaller dragon-like creature.",
-                        "It keeps the classic dragon look in a compact form.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("mini_dragon_a", -56, 63, 86, FacingDirection.NORTH)
+                        new CreatureSpawn("lizard_knight_a", 139, 64, 783, FacingDirection.SOUTH),
+                        new CreatureSpawn("lizard_knight_b", 225, 67, 714, FacingDirection.SOUTH),
+                        new CreatureSpawn("lizard_knight_c", 267, 66, 472, FacingDirection.SOUTH)
                 )
         )),
         Map.entry("mushroom_bup", new CreatureCard(
                 "Mushroom bup",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a mushroom-themed fantasy creature.",
@@ -235,12 +192,15 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("mushroom_bup_a", -56, 63, 89, FacingDirection.NORTH)
+                        new CreatureSpawn("mushroom_bup_a", 332, 63, -294, FacingDirection.WEST),
+                        new CreatureSpawn("mushroom_bup_b", 342, 63, -301, FacingDirection.SOUTH),
+                        new CreatureSpawn("mushroom_bup_c", 344, 63, -288, FacingDirection.NORTH),
+                        new CreatureSpawn("mushroom_bup_d", 347, 63, -307, FacingDirection.EAST)
                 )
         )),
         Map.entry("orc", new CreatureCard(
                 "Orc",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a broad humanoid fantasy creature.",
@@ -248,12 +208,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("orc_a", -56, 63, 95, FacingDirection.NORTH)
+                        new CreatureSpawn("orc_a", 114, 65, 820, FacingDirection.NORTH),
+                        new CreatureSpawn("orc_b", 351, 64, 665, FacingDirection.NORTH),
+                        new CreatureSpawn("orc_c", 372, 65, 600, FacingDirection.NORTH)
                 )
         )),
         Map.entry("prototype_warden", new CreatureCard(
                 "Prototype warden",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a warden-like fantasy creature in an experimental form.",
@@ -261,12 +223,14 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("prototype_warden_a", -56, 63, 98, FacingDirection.NORTH)
+                        new CreatureSpawn("prototype_warden_a", 225, 66, 771, FacingDirection.SOUTH),
+                        new CreatureSpawn("prototype_warden_b", 178, 64, 620, FacingDirection.SOUTH),
+                        new CreatureSpawn("prototype_warden_c", 228, 65, 547, FacingDirection.SOUTH)
                 )
         )),
         Map.entry("retro_tv_robot", new CreatureCard(
                 "Retro TV robot",
-                StudyChapter.CHAPTER_1,
+                StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FIXED,
                 List.of(
                         "This is a robot-like creature with a retro television theme.",
@@ -274,7 +238,7 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("retro_tv_robot_a", -56, 63, 101, FacingDirection.NORTH)
+                        new CreatureSpawn("retro_tv_robot_a", 282, 72, -174, FacingDirection.NORTH)
                 )
         )),
         Map.entry("scrambler_king", new CreatureCard(
@@ -287,33 +251,7 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("scrambler_king_a", -56, 63, 104, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("soul_lizard", new CreatureCard(
-                "Soul lizard",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a lizard-like creature with a spectral theme.",
-                        "It looks agile and slightly eerie.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("soul_lizard_a", -56, 63, 107, FacingDirection.NORTH)
-                )
-        )),
-        Map.entry("tv_man", new CreatureCard(
-                "TV man",
-                StudyChapter.CHAPTER_1,
-                CreatureMovementMode.FIXED,
-                List.of(
-                        "This is a humanoid fantasy creature with a television-like head.",
-                        "It has a strange and comic appearance.",
-                        "It should stay still for the museum-style display."
-                ),
-                List.of(
-                        new CreatureSpawn("tv_man_a", -56, 63, 113, FacingDirection.NORTH)
+                        new CreatureSpawn("scrambler_king_a", -143, 71, 160, FacingDirection.EAST)
                 )
         )),
         Map.entry("walking_robot_guy", new CreatureCard(
@@ -326,7 +264,7 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("walking_robot_guy_a", -56, 63, 116, FacingDirection.NORTH)
+                        new CreatureSpawn("walking_robot_guy_a", -153, 71, 161, FacingDirection.WEST)
                 )
         )),
         Map.entry("wardigo", new CreatureCard(
@@ -339,7 +277,7 @@ public final class StudyCreatureCards {
                         "It should stay still for the museum-style display."
                 ),
                 List.of(
-                        new CreatureSpawn("wardigo_a", -56, 63, 119, FacingDirection.NORTH)
+                        new CreatureSpawn("wardigo_a", -147, 100, 50, FacingDirection.NORTH)
                 )
         ))
 );
@@ -395,7 +333,7 @@ public final class StudyCreatureCards {
         for (StudyChapter chapter : List.of(StudyChapter.CHAPTER_1, StudyChapter.CHAPTER_2, StudyChapter.CHAPTER_3)) {
             int configuredCreatureCount = creatureCardsForChapter(chapter).size();
 
-            if (StudyConfig.isEscapeMenuAllowed()) {
+            if (StudyConfig.isTestingPhase()) {
                 continue;
             }
 
@@ -417,7 +355,7 @@ public final class StudyCreatureCards {
             return chapterCards;
         }
 
-        if (StudyConfig.isEscapeMenuAllowed()) {
+        if (StudyConfig.isTestingPhase()) {
             return List.copyOf(chapterCards.subList(0, Math.min(6, chapterCards.size())));
         }
 
