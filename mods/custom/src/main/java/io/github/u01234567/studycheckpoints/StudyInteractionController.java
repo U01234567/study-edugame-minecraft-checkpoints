@@ -147,6 +147,11 @@ public final class StudyInteractionController {
                 return InteractionResult.PASS;
             }
 
+            String creatureId = StudyCreatureCards.creatureIdForEntityType(entity.getType());
+            if (creatureId != null) {
+                StudyChapterHotbarTracker.markCreatureInteracted(creatureId);
+            }
+
             Minecraft client = Minecraft.getInstance();
             client.execute(() -> client.setScreen(new StudyCreatureInfoScreen(card)));
             return InteractionResult.SUCCESS;

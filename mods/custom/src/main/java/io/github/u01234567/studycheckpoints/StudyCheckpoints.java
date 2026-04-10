@@ -26,6 +26,7 @@ public class StudyCheckpoints implements ModInitializer {
 		StudyEntities.initialise();
 		StudyCreatureCards.validateCustomCreatureCards();
 		StudyCreatureCards.validateCreaturePlacements();
+		StudyCreatureCards.validateStudyHotbarConfiguration();
 		StudyInteractionController.initializeCommon();
 		registerTestingCommands();
 

@@ -1,6 +1,7 @@
 package io.github.u01234567.studycheckpoints;
 
 import io.github.u01234567.studycheckpoints.creatures.StudyEntities;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.ArrayList;
@@ -15,7 +16,7 @@ import java.util.Set;
  * Central file for the creature cards (one per mob, incl. chapter, position, and spawn metadata)
  */
 public final class StudyCreatureCards {
-    private static final Map<String, CreatureCard> CUSTOM_CREATURE_CARDS = Map.ofEntries(
+    private static final Map<String, CreatureCard> CUSTOM_CREATURE_CARDS = orderedMap(
         Map.entry("abyss_deer", new CreatureCard(
                 "Abyss deer",
                 StudyChapter.CHAPTER_1,
@@ -343,62 +344,97 @@ public final class StudyCreatureCards {
         ))
 );
 
-    private static final Map<EntityType<?>, CreatureCard> CARDS = Map.ofEntries(
+    private static final Map<EntityType<?>, CreatureCard> CARDS = orderedMap(
             Map.entry(EntityType.COW, new CreatureCard(
                     "Cow",
-                    StudyChapter.CHAPTER_1,
-                    CreatureMovementMode.FIXED,
+                    StudyChapter.CHAPTER_0,
+                    CreatureMovementMode.FREE,
                     List.of(
                             "Cows are mammals.",
                             "They eat grass and other plants.",
                             "Calves drink milk from their mothers."
                     ),
                     List.of(
-                            new CreatureSpawn("cow_a", -56, 63, -1, FacingDirection.NORTH)
-                    )
-            )),
-            Map.entry(EntityType.SHEEP, new CreatureCard(
-                    "Sheep",
-                    StudyChapter.CHAPTER_1,
-                    CreatureMovementMode.FIXED,
-                    List.of(
-                            "Sheep are covered in wool.",
-                            "They are herbivores.",
-                            "Wool helps keep them warm."
-                    ),
-                    List.of(
-                            new CreatureSpawn("sheep_a", -56, 63, 3, FacingDirection.NORTH)
+                            new CreatureSpawn("cow_a", -79, 63, -515, FacingDirection.NORTH)
                     )
             )),
             Map.entry(EntityType.PIG, new CreatureCard(
                     "Pig",
-                    StudyChapter.CHAPTER_1,
-                    CreatureMovementMode.FIXED,
+                    StudyChapter.CHAPTER_0,
+                    CreatureMovementMode.FREE,
                     List.of(
                             "Pigs are intelligent animals.",
                             "They use their snouts to explore.",
                             "They eat many different foods."
                     ),
                     List.of(
-                            new CreatureSpawn("pig_a", -56, 63, 7, FacingDirection.NORTH)
+                            new CreatureSpawn("pig_a", -70, 64, -515, FacingDirection.EAST)
                     )
             )),
             Map.entry(EntityType.CHICKEN, new CreatureCard(
                     "Chicken",
-                    StudyChapter.CHAPTER_1,
-                    CreatureMovementMode.FIXED,
+                    StudyChapter.CHAPTER_0,
+                    CreatureMovementMode.FREE,
                     List.of(
                             "Chickens are birds.",
                             "They scratch the ground to look for food.",
                             "Hens lay eggs."
                     ),
                     List.of(
-                            new CreatureSpawn("chicken_a", -56, 63, 11, FacingDirection.NORTH)
+                            new CreatureSpawn("chicken_a", -63, 65, -518, FacingDirection.SOUTH)
                     )
             ))
     );
 
     private StudyCreatureCards() {
+    }
+
+    public static void validateStudyHotbarConfiguration() {
+        validateChapterZeroHotbarCount();
+
+        for (StudyChapter chapter : List.of(StudyChapter.CHAPTER_1, StudyChapter.CHAPTER_2, StudyChapter.CHAPTER_3)) {
+            int configuredCreatureCount = creatureCardsForChapter(chapter).size();
+
+            if (StudyConfig.isEscapeMenuAllowed()) {
+                continue;
+            }
+
+            if (configuredCreatureCount != 6) {
+                throw new IllegalStateException(
+                        chapter.displayTitle()
+                                + " must define exactly 6 creature cards, but found "
+                                + configuredCreatureCount
+                );
+            }
+        }
+    }
+
+    public static List<CreatureCardReference> hotbarCardsForChapter(StudyChapter chapter) {
+        List<CreatureCardReference> chapterCards = creatureCardsForChapter(chapter);
+
+        if (chapter == StudyChapter.CHAPTER_0) {
+            validateChapterZeroHotbarCount();
+            return chapterCards;
+        }
+
+        if (StudyConfig.isEscapeMenuAllowed()) {
+            return List.copyOf(chapterCards.subList(0, Math.min(6, chapterCards.size())));
+        }
+
+        return chapterCards;
+    }
+
+    public static String creatureIdForEntityType(EntityType<?> entityType) {
+        StudyEntities.CustomCreatureDefinition customDefinition = StudyEntities.findDefinition(entityType);
+        if (customDefinition != null) {
+            return customDefinition.id();
+        }
+
+        if (!CARDS.containsKey(entityType)) {
+            return null;
+        }
+
+        return BuiltInRegistries.ENTITY_TYPE.getKey(entityType).getPath();
     }
 
     public static CreatureCard get(EntityType<?> entityType) {
@@ -480,6 +516,42 @@ public final class StudyCreatureCards {
 
             validateCreatureCard("custom:" + definition.id(), card, seenNames);
         }
+    }
+
+    private static List<CreatureCardReference> creatureCardsForChapter(StudyChapter chapter) {
+        List<CreatureCardReference> cards = new ArrayList<>();
+
+        for (Map.Entry<String, CreatureCard> entry : CUSTOM_CREATURE_CARDS.entrySet()) {
+            addCardReference(cards, entry.getKey(), entry.getValue(), chapter);
+        }
+
+        for (Map.Entry<EntityType<?>, CreatureCard> entry : CARDS.entrySet()) {
+            addCardReference(cards, creatureIdForEntityType(entry.getKey()), entry.getValue(), chapter);
+        }
+
+        return List.copyOf(cards);
+    }
+
+    private static void validateChapterZeroHotbarCount() {
+        int chapterZeroCardCount = creatureCardsForChapter(StudyChapter.CHAPTER_0).size();
+        if (chapterZeroCardCount < 1 || chapterZeroCardCount > 9) {
+            throw new IllegalStateException(
+                    StudyChapter.CHAPTER_0.displayTitle()
+                            + " must define between 1 and 9 cards for the hotbar, but found "
+                            + chapterZeroCardCount
+            );
+        }
+    }
+
+    private static void addCardReference(List<CreatureCardReference> cards,
+                                         String creatureId,
+                                         CreatureCard card,
+                                         StudyChapter chapter) {
+        if (card.chapter() != chapter || creatureId == null || creatureId.isBlank()) {
+            return;
+        }
+
+        cards.add(new CreatureCardReference(creatureId, card));
     }
 
     private static void addAssignments(List<CreatureSpawnAssignment> assignments,
@@ -573,6 +645,13 @@ public final class StudyCreatureCards {
             CreatureSpawn spawn
     ) {
     }
+
+    public record CreatureCardReference(
+            String creatureId,
+            CreatureCard card
+    ) {
+    }
+
     public record CreatureCard(
             String displayName,
             StudyChapter chapter,
@@ -580,5 +659,18 @@ public final class StudyCreatureCards {
             List<String> facts,
             List<CreatureSpawn> spawns
     ) {
+    }
+
+    @SafeVarargs
+    private static <K, V> Map<K, V> orderedMap(Map.Entry<K, V>... entries) {
+        Map<K, V> ordered = new LinkedHashMap<>();
+
+        for (Map.Entry<K, V> entry : entries) {
+            if (ordered.put(entry.getKey(), entry.getValue()) != null) {
+                throw new IllegalStateException("Duplicate creature card key detected: " + entry.getKey());
+            }
+        }
+
+        return Collections.unmodifiableMap(ordered);
     }
 }

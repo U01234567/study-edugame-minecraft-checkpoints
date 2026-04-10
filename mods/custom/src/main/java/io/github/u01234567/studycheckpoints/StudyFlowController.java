@@ -81,6 +81,11 @@ public final class StudyFlowController {
                 Identifier.fromNamespaceAndPath(StudyCheckpoints.MOD_ID, "study_timer"),
                 StudyFlowController::renderTimerHud
         );
+        HudElementRegistry.attachElementAfter(
+                VanillaHudElements.HOTBAR,
+                Identifier.fromNamespaceAndPath(StudyCheckpoints.MOD_ID, "study_chapter_hotbar_tracker"),
+                StudyChapterHotbarTracker::render
+        );
     }
 
     public static void acceptConsent(Minecraft client) {
@@ -308,6 +313,7 @@ public final class StudyFlowController {
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
 
+        StudyChapterHotbarTracker.reset();
         client.setScreen(new StudyLoadingScreen("Chapter loading..."));
         StudyEventLog.logChapterLoadingStarted(chapter.chapterNumber(), chapter.displayTitle());
 
@@ -365,6 +371,7 @@ public final class StudyFlowController {
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
 
+        StudyChapterHotbarTracker.startChapter(chapter);
         client.setScreen(null);
 
         StudyEventLog.logChapterLoadingFinished(chapter.chapterNumber(), chapter.displayTitle());
@@ -408,6 +415,7 @@ public final class StudyFlowController {
         StudyChapter completedChapter = activeChapter;
         activeChapter = null;
 
+        StudyChapterHotbarTracker.reset();
         StudyEventLog.logChapterCompleted(completedChapter.chapterNumber());
 
         if (completedChapter.next() == null) {
