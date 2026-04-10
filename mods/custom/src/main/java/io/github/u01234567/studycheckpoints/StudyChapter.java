@@ -20,7 +20,7 @@ public enum StudyChapter {
     CHAPTER_1(
             1,
             -126, 69, 114, 90.0F, "west",
-            4800_000L,
+            480_000L,
             "Ch1 complete. Move to Ch2."
     ),
     CHAPTER_2(

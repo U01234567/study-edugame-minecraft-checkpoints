@@ -293,7 +293,7 @@ public final class StudyCreatureCards {
                             "Calves drink milk from their mothers."
                     ),
                     List.of(
-                            new CreatureSpawn("cow_a", -79, 63, -515, FacingDirection.NORTH)
+                            new CreatureSpawn("cow_a", -60, 65, -500, FacingDirection.SOUTH)
                     )
             )),
             Map.entry(EntityType.PIG, new CreatureCard(
@@ -306,7 +306,7 @@ public final class StudyCreatureCards {
                             "They eat many different foods."
                     ),
                     List.of(
-                            new CreatureSpawn("pig_a", -70, 64, -515, FacingDirection.EAST)
+                            new CreatureSpawn("pig_a", -68, 65, -499, FacingDirection.EAST)
                     )
             )),
             Map.entry(EntityType.CHICKEN, new CreatureCard(
@@ -319,7 +319,7 @@ public final class StudyCreatureCards {
                             "Hens lay eggs."
                     ),
                     List.of(
-                            new CreatureSpawn("chicken_a", -63, 65, -518, FacingDirection.SOUTH)
+                            new CreatureSpawn("chicken_a", -61, 65, -496, FacingDirection.WEST)
                     )
             ))
     );

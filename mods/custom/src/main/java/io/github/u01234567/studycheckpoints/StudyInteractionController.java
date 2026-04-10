@@ -213,7 +213,7 @@ public final class StudyInteractionController {
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             enforceServerPlayerState(player);
-            enforceEmptyInventory(player);
+            // enforceEmptyInventory(player);
             purgeNearbyGroundItems(player);
 
             if (serverTickCounter % 10L == 0L) {
