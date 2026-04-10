@@ -271,52 +271,52 @@ def emit_model_java(model: CreatureModelDef) -> str:
     clip_name_to_const: dict[str, str] = {}
     animation_field_lines: list[str] = []
     animation_clip_methods: list[str] = []
-    
+
     for clip in model.animation_clips:
         clip_const = sanitize_java_constant(clip.name)
         clip_name_to_const[clip.name] = clip_const
         animation_field_lines.append(f"    private static final float {clip_const}_LENGTH = {fmtf(clip.length)};")
-        
+
         clip_method: list[str] = [
             "",
             f"    private void applyClip{clip_const}(float time) {{",
             f"        float wrappedTime = wrapAnimationTime(time, {clip_const}_LENGTH);",
         ]
-        
+
         for track in clip.tracks:
             if track.part_name not in java_by_name:
                 continue
-            
+
             part_ref = "this.root" if track.part_name == "root" else f"this.{java_by_name[track.part_name]}"
             part_const = sanitize_java_constant(java_by_name[track.part_name])
-            
+
             if track.translation_times:
                 times_name = f"{clip_const}_{part_const}_TRANSLATION_TIMES"
                 values_name = f"{clip_const}_{part_const}_TRANSLATION_VALUES"
                 animation_field_lines.append(f"    private static final float[] {times_name} = {emit_float_array(track.translation_times)};")
                 animation_field_lines.append(f"    private static final float[] {values_name} = {emit_vec3_array(track.translation_values)};")
                 clip_method.append(f"        applyTranslationTrack({part_ref}, {times_name}, {values_name}, wrappedTime);")
-                
+
             if track.rotation_times:
                 times_name = f"{clip_const}_{part_const}_ROTATION_TIMES"
                 values_name = f"{clip_const}_{part_const}_ROTATION_VALUES"
                 animation_field_lines.append(f"    private static final float[] {times_name} = {emit_float_array(track.rotation_times)};")
                 animation_field_lines.append(f"    private static final float[] {values_name} = {emit_vec3_array(track.rotation_values)};")
                 clip_method.append(f"        applyRotationTrack({part_ref}, {times_name}, {values_name}, wrappedTime);")
-                
+
             if track.scale_times:
                 times_name = f"{clip_const}_{part_const}_SCALE_TIMES"
                 values_name = f"{clip_const}_{part_const}_SCALE_VALUES"
                 animation_field_lines.append(f"    private static final float[] {times_name} = {emit_float_array(track.scale_times)};")
                 animation_field_lines.append(f"    private static final float[] {values_name} = {emit_vec3_array(track.scale_values)};")
                 clip_method.append(f"        applyScaleTrack({part_ref}, {times_name}, {values_name}, wrappedTime);")
-                
+
         clip_method.append("    }")
         animation_clip_methods.extend(clip_method)
-        
+
     idle_clip = model.preferred_idle_clip or (model.animation_clips[0].name if model.animation_clips else None)
     walk_clip = model.preferred_walk_clip
-    
+
     if idle_clip and idle_clip in clip_name_to_const:
         method_lines.append("        float idleTimeSeconds = state.ageInTicks / 20.0F;")
         method_lines.append("        float walkTimeSeconds = state.walkAnimationPos / 20.0F;")

@@ -1,0 +1,180 @@
+// Generated for /mods/external/blockbench/cave_dweller/
+// Class B: uses texture_fix.py to write ./model.png from ./textures/gltf_embedded_0.png
+
+package com.example.mod;
+
+public class cave_dweller extends EntityModel<Entity> {
+    private final ModelPart root;
+    private final ModelPart node_51;
+    private final ModelPart base;
+    private final ModelPart lowerbody;
+    private final ModelPart lowerbody_2;
+    private final ModelPart upperbody;
+    private final ModelPart upperbody_2;
+    private final ModelPart neck;
+    private final ModelPart neck_2;
+    private final ModelPart neck_3;
+    private final ModelPart head;
+    private final ModelPart head_2;
+    private final ModelPart head_3;
+    private final ModelPart head_4;
+    private final ModelPart head_5;
+    private final ModelPart head_6;
+    private final ModelPart head_7;
+    private final ModelPart jaw;
+    private final ModelPart jaw_2;
+    private final ModelPart jaw_3;
+    private final ModelPart jaw_4;
+    private final ModelPart jaw_5;
+    private final ModelPart jaw_6;
+    private final ModelPart rightupperarm;
+    private final ModelPart rightupperarm_2;
+    private final ModelPart rightlowerarm;
+    private final ModelPart rightlowerarm_2;
+    private final ModelPart righthand;
+    private final ModelPart righthand_2;
+    private final ModelPart righthand_3;
+    private final ModelPart righthand_4;
+    private final ModelPart righthand_5;
+    private final ModelPart leftupperarm;
+    private final ModelPart leftupperarm_2;
+    private final ModelPart leftlowerarm;
+    private final ModelPart leftlowerarm_2;
+    private final ModelPart lefthand;
+    private final ModelPart lefthand_2;
+    private final ModelPart lefthand_3;
+    private final ModelPart lefthand_4;
+    private final ModelPart lefthand_5;
+    private final ModelPart upperleftleg;
+    private final ModelPart upperleftleg_2;
+    private final ModelPart lowerleftleg;
+    private final ModelPart lowerleftleg_2;
+    private final ModelPart leftfoot;
+    private final ModelPart leftfoot_2;
+    private final ModelPart upperrightleg;
+    private final ModelPart upperrightleg_2;
+    private final ModelPart lowerrightleg;
+    private final ModelPart lowerrightleg_2;
+    private final ModelPart rightfoot;
+    private final ModelPart rightfoot_2;
+
+    public cave_dweller(ModelPart root) {
+        this.root = root.getChild("root");
+        this.node_51 = this.root.getChild("node_51");
+        this.base = this.node_51.getChild("base");
+        this.lowerbody = this.base.getChild("lowerbody");
+        this.lowerbody_2 = this.lowerbody.getChild("lowerbody_2");
+        this.upperbody = this.lowerbody.getChild("upperbody");
+        this.upperbody_2 = this.upperbody.getChild("upperbody_2");
+        this.neck = this.upperbody.getChild("neck");
+        this.neck_2 = this.neck.getChild("neck_2");
+        this.neck_3 = this.neck.getChild("neck_3");
+        this.head = this.neck.getChild("head");
+        this.head_2 = this.head.getChild("head_2");
+        this.head_3 = this.head.getChild("head_3");
+        this.head_4 = this.head.getChild("head_4");
+        this.head_5 = this.head.getChild("head_5");
+        this.head_6 = this.head.getChild("head_6");
+        this.head_7 = this.head.getChild("head_7");
+        this.jaw = this.head.getChild("jaw");
+        this.jaw_2 = this.jaw.getChild("jaw_2");
+        this.jaw_3 = this.jaw.getChild("jaw_3");
+        this.jaw_4 = this.jaw.getChild("jaw_4");
+        this.jaw_5 = this.jaw.getChild("jaw_5");
+        this.jaw_6 = this.jaw.getChild("jaw_6");
+        this.rightupperarm = this.upperbody.getChild("rightupperarm");
+        this.rightupperarm_2 = this.rightupperarm.getChild("rightupperarm_2");
+        this.rightlowerarm = this.rightupperarm.getChild("rightlowerarm");
+        this.rightlowerarm_2 = this.rightlowerarm.getChild("rightlowerarm_2");
+        this.righthand = this.rightlowerarm.getChild("righthand");
+        this.righthand_2 = this.righthand.getChild("righthand_2");
+        this.righthand_3 = this.righthand.getChild("righthand_3");
+        this.righthand_4 = this.righthand.getChild("righthand_4");
+        this.righthand_5 = this.righthand.getChild("righthand_5");
+        this.leftupperarm = this.upperbody.getChild("leftupperarm");
+        this.leftupperarm_2 = this.leftupperarm.getChild("leftupperarm_2");
+        this.leftlowerarm = this.leftupperarm.getChild("leftlowerarm");
+        this.leftlowerarm_2 = this.leftlowerarm.getChild("leftlowerarm_2");
+        this.lefthand = this.leftlowerarm.getChild("lefthand");
+        this.lefthand_2 = this.lefthand.getChild("lefthand_2");
+        this.lefthand_3 = this.lefthand.getChild("lefthand_3");
+        this.lefthand_4 = this.lefthand.getChild("lefthand_4");
+        this.lefthand_5 = this.lefthand.getChild("lefthand_5");
+        this.upperleftleg = this.lowerbody.getChild("upperleftleg");
+        this.upperleftleg_2 = this.upperleftleg.getChild("upperleftleg_2");
+        this.lowerleftleg = this.upperleftleg.getChild("lowerleftleg");
+        this.lowerleftleg_2 = this.lowerleftleg.getChild("lowerleftleg_2");
+        this.leftfoot = this.lowerleftleg.getChild("leftfoot");
+        this.leftfoot_2 = this.leftfoot.getChild("leftfoot_2");
+        this.upperrightleg = this.lowerbody.getChild("upperrightleg");
+        this.upperrightleg_2 = this.upperrightleg.getChild("upperrightleg_2");
+        this.lowerrightleg = this.upperrightleg.getChild("lowerrightleg");
+        this.lowerrightleg_2 = this.lowerrightleg.getChild("lowerrightleg_2");
+        this.rightfoot = this.lowerrightleg.getChild("rightfoot");
+        this.rightfoot_2 = this.rightfoot.getChild("rightfoot_2");
+    }
+
+    public static TexturedModelData getTexturedModelData() {
+        ModelData modelData = new ModelData();
+        ModelPartData modelPartData = modelData.getRoot();
+        ModelPartData root = modelPartData.addChild("root", ModelPartBuilder.create(), ModelTransform.pivot(0.0F, 24.0F, 0.0F));
+        ModelPartData node_51 = root.addChild("node_51", ModelPartBuilder.create(), ModelTransform.pivot(0.0F, 0.0F, 0.0F));
+        ModelPartData base = node_51.addChild("base", ModelPartBuilder.create(), ModelTransform.of(0.0F, -15.0F, 0.0F, 0.0F, 1.5708F, 0.0F));
+        ModelPartData lowerbody = base.addChild("lowerbody", ModelPartBuilder.create(), ModelTransform.of(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, -0.0873F));
+        ModelPartData lowerbody_2 = lowerbody.addChild("lowerbody_2", ModelPartBuilder.create().uv(0, 0).cuboid(-1.0F, -21.0F, -3.0F, 2.0F, 6.0F, 6.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 15.0F, 0.0F));
+        ModelPartData upperbody = lowerbody.addChild("upperbody", ModelPartBuilder.create(), ModelTransform.of(0.0F, -6.0F, 0.0F, 0.0F, 0.0F, 0.1309F));
+        ModelPartData upperbody_2 = upperbody.addChild("upperbody_2", ModelPartBuilder.create().uv(18, 0).cuboid(-1.0F, -29.0F, -3.0F, 2.0F, 8.0F, 6.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 21.0F, 0.0F));
+        ModelPartData neck = upperbody.addChild("neck", ModelPartBuilder.create(), ModelTransform.of(0.0F, -8.0F, 0.0F, 0.0F, 0.0F, 0.2182F));
+        ModelPartData neck_2 = neck.addChild("neck_2", ModelPartBuilder.create().uv(36, 0).cuboid(-0.5F, -32.0F, -1.5F, 1.5F, 3.0F, 3.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 29.0F, 0.0F));
+        ModelPartData neck_3 = neck.addChild("neck_3", ModelPartBuilder.create().uv(48, 0).cuboid(0.25F, -34.0F, -1.5F, 1.75F, 3.0F, 3.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 29.0F, 0.0F));
+        ModelPartData head = neck.addChild("head", ModelPartBuilder.create(), ModelTransform.pivot(1.5934F, -3.9167F, 0.0025F));
+        ModelPartData head_2 = head.addChild("head_2", ModelPartBuilder.create().uv(60, 0).cuboid(1.0F, -37.0F, -2.0F, 3.0F, 4.0F, 4.0F, new Dilation(0.0F)), ModelTransform.pivot(-1.5934F, 32.9167F, -0.0025F));
+        ModelPartData head_3 = head.addChild("head_3", ModelPartBuilder.create().uv(76, 0).cuboid(-0.375F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(2.2816F, 0.4167F, -2.0025F, 0.0F, 1.309F, 0.0F));
+        ModelPartData head_4 = head.addChild("head_4", ModelPartBuilder.create().uv(82, 0).cuboid(0.125F, -0.5F, -1.0F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(1.2463F, 0.4167F, 1.8612F, 0.0F, -1.1345F, 0.0F));
+        ModelPartData head_5 = head.addChild("head_5", ModelPartBuilder.create().uv(88, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(2.2816F, 0.4167F, -1.0025F, 0.0F, -0.1745F, 0.0F));
+        ModelPartData head_6 = head.addChild("head_6", ModelPartBuilder.create().uv(94, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(2.2816F, 0.4167F, -0.0025F, 0.0F, -0.1309F, 0.0F));
+        ModelPartData head_7 = head.addChild("head_7", ModelPartBuilder.create().uv(100, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(2.2816F, 0.4167F, 0.9975F, 0.0F, 0.3054F, 0.0F));
+        ModelPartData jaw = head.addChild("jaw", ModelPartBuilder.create(), ModelTransform.of(0.4066F, -0.0833F, -0.0025F, 0.0F, 0.0F, 0.829F));
+        ModelPartData jaw_2 = jaw.addChild("jaw_2", ModelPartBuilder.create().uv(106, 0).cuboid(2.0F, -33.0F, -1.75F, 2.0F, 0.75F, 3.5F, new Dilation(0.0F)), ModelTransform.pivot(-2.0F, 33.0F, 0.0F));
+        ModelPartData jaw_3 = jaw.addChild("jaw_3", ModelPartBuilder.create().uv(120, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(1.875F, -0.5F, -1.5F, 0.0F, 0.2182F, 0.0F));
+        ModelPartData jaw_4 = jaw.addChild("jaw_4", ModelPartBuilder.create().uv(126, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(1.875F, -0.5F, -0.5F, 0.0F, -0.1745F, 0.0F));
+        ModelPartData jaw_5 = jaw.addChild("jaw_5", ModelPartBuilder.create().uv(132, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(1.875F, -0.5F, 0.5F, 0.0F, 0.0436F, 0.0F));
+        ModelPartData jaw_6 = jaw.addChild("jaw_6", ModelPartBuilder.create().uv(138, 0).cuboid(-0.125F, -0.5F, -0.25F, 0.25F, 1.0F, 0.5F, new Dilation(0.0F)), ModelTransform.of(1.875F, -0.5F, 1.5F, 0.0F, -0.2182F, 0.0F));
+        ModelPartData rightupperarm = upperbody.addChild("rightupperarm", ModelPartBuilder.create(), ModelTransform.of(0.0F, -8.0F, 3.0F, 0.0873F, 0.0F, 0.0F));
+        ModelPartData rightupperarm_2 = rightupperarm.addChild("rightupperarm_2", ModelPartBuilder.create().uv(144, 0).cuboid(-1.0F, -29.0F, 3.0F, 2.0F, 12.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 29.0F, -3.0F));
+        ModelPartData rightlowerarm = rightupperarm.addChild("rightlowerarm", ModelPartBuilder.create(), ModelTransform.of(0.0F, 12.0F, 1.0F, -0.0873F, 0.0F, 0.0F));
+        ModelPartData rightlowerarm_2 = rightlowerarm.addChild("rightlowerarm_2", ModelPartBuilder.create().uv(152, 0).cuboid(-1.0F, -17.0F, 3.0F, 2.0F, 12.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 17.0F, -4.0F));
+        ModelPartData righthand = rightlowerarm.addChild("righthand", ModelPartBuilder.create(), ModelTransform.pivot(0.0F, 12.0F, 0.0F));
+        ModelPartData righthand_2 = righthand.addChild("righthand_2", ModelPartBuilder.create().uv(160, 0).cuboid(-1.0F, -5.0F, 3.0F, 2.0F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, -4.0F));
+        ModelPartData righthand_3 = righthand.addChild("righthand_3", ModelPartBuilder.create().uv(168, 0).cuboid(-0.25F, -4.0F, 3.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, -4.0F));
+        ModelPartData righthand_4 = righthand.addChild("righthand_4", ModelPartBuilder.create().uv(174, 0).cuboid(0.5F, -4.0F, 3.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, -4.0F));
+        ModelPartData righthand_5 = righthand.addChild("righthand_5", ModelPartBuilder.create().uv(180, 0).cuboid(-1.0F, -4.0F, 3.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, -4.0F));
+        ModelPartData leftupperarm = upperbody.addChild("leftupperarm", ModelPartBuilder.create(), ModelTransform.of(0.0F, -8.0F, -3.0F, -0.0873F, 0.0F, 0.0F));
+        ModelPartData leftupperarm_2 = leftupperarm.addChild("leftupperarm_2", ModelPartBuilder.create().uv(186, 0).cuboid(-1.0F, -29.0F, -4.0F, 2.0F, 12.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 29.0F, 3.0F));
+        ModelPartData leftlowerarm = leftupperarm.addChild("leftlowerarm", ModelPartBuilder.create(), ModelTransform.of(0.0F, 12.0F, 0.0F, 0.0873F, 0.0F, 0.0F));
+        ModelPartData leftlowerarm_2 = leftlowerarm.addChild("leftlowerarm_2", ModelPartBuilder.create().uv(194, 0).cuboid(-1.0F, -17.0F, -4.0F, 2.0F, 12.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 17.0F, 3.0F));
+        ModelPartData lefthand = leftlowerarm.addChild("lefthand", ModelPartBuilder.create(), ModelTransform.pivot(0.0F, 12.0F, 0.0F));
+        ModelPartData lefthand_2 = lefthand.addChild("lefthand_2", ModelPartBuilder.create().uv(202, 0).cuboid(0.5F, -4.0F, -4.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, 3.0F));
+        ModelPartData lefthand_3 = lefthand.addChild("lefthand_3", ModelPartBuilder.create().uv(208, 0).cuboid(-1.0F, -4.0F, -4.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, 3.0F));
+        ModelPartData lefthand_4 = lefthand.addChild("lefthand_4", ModelPartBuilder.create().uv(214, 0).cuboid(-0.25F, -4.0F, -4.0F, 0.5F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, 3.0F));
+        ModelPartData lefthand_5 = lefthand.addChild("lefthand_5", ModelPartBuilder.create().uv(220, 0).cuboid(-1.0F, -5.0F, -4.0F, 2.0F, 1.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 5.0F, 3.0F));
+        ModelPartData upperleftleg = lowerbody.addChild("upperleftleg", ModelPartBuilder.create(), ModelTransform.of(0.0F, 0.0F, -2.0F, 0.0F, 0.0F, 0.0873F));
+        ModelPartData upperleftleg_2 = upperleftleg.addChild("upperleftleg_2", ModelPartBuilder.create().uv(228, 0).cuboid(-1.0F, -15.0F, -3.0F, 2.0F, 7.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 15.0F, 2.0F));
+        ModelPartData lowerleftleg = upperleftleg.addChild("lowerleftleg", ModelPartBuilder.create(), ModelTransform.of(0.0F, 7.0F, 0.0F, 0.0F, 0.0F, 0.1745F));
+        ModelPartData lowerleftleg_2 = lowerleftleg.addChild("lowerleftleg_2", ModelPartBuilder.create().uv(236, 0).cuboid(-1.0F, -8.0F, -3.0F, 2.0F, 7.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 8.0F, 2.0F));
+        ModelPartData leftfoot = lowerleftleg.addChild("leftfoot", ModelPartBuilder.create(), ModelTransform.of(0.0F, 8.0F, 0.0F, 0.0F, 0.0F, -0.1745F));
+        ModelPartData leftfoot_2 = leftfoot.addChild("leftfoot_2", ModelPartBuilder.create().uv(244, 0).cuboid(0.0F, -1.0F, -3.5F, 3.0F, 1.0F, 1.5F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 0.0F, 2.0F));
+        ModelPartData upperrightleg = lowerbody.addChild("upperrightleg", ModelPartBuilder.create(), ModelTransform.of(0.0F, 0.0F, 2.0F, 0.0F, 0.0F, 0.0873F));
+        ModelPartData upperrightleg_2 = upperrightleg.addChild("upperrightleg_2", ModelPartBuilder.create().uv(256, 0).cuboid(-1.0F, -15.0F, 2.0F, 2.0F, 7.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 15.0F, -2.0F));
+        ModelPartData lowerrightleg = upperrightleg.addChild("lowerrightleg", ModelPartBuilder.create(), ModelTransform.of(0.0F, 7.0F, 0.0F, 0.0F, 0.0F, 0.1309F));
+        ModelPartData lowerrightleg_2 = lowerrightleg.addChild("lowerrightleg_2", ModelPartBuilder.create().uv(264, 0).cuboid(-1.0F, -8.0F, 2.0F, 2.0F, 7.0F, 1.0F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 8.0F, -2.0F));
+        ModelPartData rightfoot = lowerrightleg.addChild("rightfoot", ModelPartBuilder.create(), ModelTransform.of(0.0F, 8.0F, 0.0F, 0.0F, 0.0F, -0.1309F));
+        ModelPartData rightfoot_2 = rightfoot.addChild("rightfoot_2", ModelPartBuilder.create().uv(272, 0).cuboid(0.0F, -1.0F, 2.0F, 3.0F, 1.0F, 1.5F, new Dilation(0.0F)), ModelTransform.pivot(0.0F, 0.0F, -2.0F));
+
+        return TexturedModelData.of(modelData, 512, 16);
+    }
+
+    @Override
+    public void setAngles(Entity entity, float limbAngle, float limbDistance, float animationProgress, float headYaw, float headPitch) {
+    }
+}

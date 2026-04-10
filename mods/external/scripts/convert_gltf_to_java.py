@@ -116,14 +116,14 @@ class GltfReader:
         if material_index is None:
             images = self.root.get("images", [])
             return 0 if images else None
-        
+
         material = self.root.get("materials", [])[material_index]
         pbr = material.get("pbrMetallicRoughness", {})
         base_color_tex = pbr.get("baseColorTexture")
         if not base_color_tex:
             images = self.root.get("images", [])
             return 0 if images else None
-            
+
         texture_index = base_color_tex["index"]
         texture = self.root["textures"][texture_index]
         return texture["source"]
@@ -205,14 +205,14 @@ def regularize_approximate_box(
 ) -> tuple[float, float, float, float, float, float] | None:
     if not approximate:
         return x, y, z, max(0.001, dx), max(0.001, dy), max(0.001, dz)
-    
+
     dims = [dx, dy, dz]
     thin_axes = [index for index, dim in enumerate(dims) if dim < APPROXIMATE_THIN_DIM_THRESHOLD]
-    
+
     # If two or three axes collapsed, this is effectively a line/point artifact.
     if len(thin_axes) >= 2:
         return None
-    
+
     if len(thin_axes) == 1:
         axis = thin_axes[0]
         if axis == 0:
@@ -227,7 +227,7 @@ def regularize_approximate_box(
             center = z + (dz / 2.0)
             dz = APPROXIMATE_MIN_THICKNESS
             z = center - (dz / 2.0)
-            
+
     return x, y, z, max(0.001, dx), max(0.001, dy), max(0.001, dz)
 
 
@@ -281,28 +281,28 @@ def remove_redundant_keyframes(
 ) -> tuple[list[float], list[tuple[float, ...]]]:
     if not times or not values:
         return [], []
-    
+
     count = min(len(times), len(values))
     if count == 1:
         return [times[0]], [values[0]]
-    
+
     keep_indices = [0]
     epsilon_sq = epsilon * epsilon
-    
+
     for index in range(1, count - 1):
         previous_index = keep_indices[-1]
         if vector_delta_sq(values[index], values[previous_index]) > epsilon_sq:
             keep_indices.append(index)
-            
+
     if keep_indices[-1] != count - 1:
         keep_indices.append(count - 1)
-        
+
     reduced_times = [times[index] for index in keep_indices]
     reduced_values = [values[index] for index in keep_indices]
-    
+
     if len(reduced_times) >= 2 and vector_delta_sq(reduced_values[0], reduced_values[-1]) <= epsilon_sq:
         return [reduced_times[0]], [reduced_values[0]]
-    
+
     return reduced_times, reduced_values
 
 
@@ -313,19 +313,19 @@ def evenly_sample_keyframes(
 ) -> tuple[list[float], list[tuple[float, ...]]]:
     if len(times) <= max_keys:
         return times, values
-    
+
     if max_keys <= 1:
         return [times[0]], [values[0]]
-    
+
     last_index = len(times) - 1
     chosen_indices = {
         0,
         last_index,
     }
-    
+
     for slot in range(1, max_keys - 1):
         chosen_indices.add(round((slot * last_index) / (max_keys - 1)))
-        
+
     ordered = sorted(chosen_indices)
     sampled_times = [times[index] for index in ordered]
     sampled_values = [values[index] for index in ordered]
@@ -348,20 +348,20 @@ def simplify_track_keyframes(
 def select_animation_clips(clips: list[AnimationClipDef]) -> list[AnimationClipDef]:
     if len(clips) <= MAX_ANIMATION_CLIPS_PER_MODEL:
         return clips
-    
+
     selected_names: list[str] = []
-    
+
     for keywords in (("idle", "base", "pose", "stand"), ("walk", "run", "move")):
         name = choose_named_clip(clips, keywords)
         if name and name not in selected_names:
             selected_names.append(name)
-            
+
     for clip in clips:
         if clip.name not in selected_names:
             selected_names.append(clip.name)
         if len(selected_names) >= MAX_ANIMATION_CLIPS_PER_MODEL:
             break
-        
+
     selected_set = set(selected_names[:MAX_ANIMATION_CLIPS_PER_MODEL])
     return [clip for clip in clips if clip.name in selected_set]
 
@@ -402,53 +402,53 @@ def find_layered_nodes(
         texture_counts: collections.Counter[int | None] = collections.Counter()
         cube_count = 0
         total_volume = 0.0
-        
+
         for sub_index in subtree_node_indices(nodes, node_index):
             mesh_index = nodes[sub_index].get("mesh", -1)
             for cube in mesh_cache.get(mesh_index, []):
                 cube_count += 1
                 total_volume += cube_volume(cube)
                 texture_counts[cube.texture_source_index] += 1
-                
+
         dominant_texture = texture_counts.most_common(1)[0][0] if texture_counts else None
         return {
             "cube_count": cube_count,
             "total_volume": total_volume,
             "dominant_texture": dominant_texture,
         }
-    
+
     queue = list(top_level)
     while queue:
         node_index = queue.pop(0)
         children = nodes[node_index].get("children", [])
         child_infos = [(child_index, subtree_metrics(child_index)) for child_index in children]
         child_infos = [info for info in child_infos if info[1]["cube_count"] > 0]
-        
+
         if len(child_infos) == 2:
             left_texture = child_infos[0][1]["dominant_texture"]
             right_texture = child_infos[1][1]["dominant_texture"]
             if left_texture is not None and right_texture is not None and left_texture != right_texture:
                 left_name = (nodes[child_infos[0][0]].get("name") or "").lower()
                 right_name = (nodes[child_infos[1][0]].get("name") or "").lower()
-                
+
                 def layer_score(info: tuple[int, dict[str, Any]]) -> tuple[float, float]:
                     child_index, metrics = info
                     node_name = (nodes[child_index].get("name") or "").lower()
                     name_hint = 0.0 if any(token in node_name for token in ("outer", "overlay", "layer", "shell", "coat")) else 1.0
                     return (name_hint, metrics["total_volume"])
-                
+
                 outer_child, _ = min(child_infos, key=layer_score)
                 base_child = child_infos[1][0] if child_infos[0][0] == outer_child else child_infos[0][0]
-                
+
                 result: dict[int, str] = {}
                 for sub_index in subtree_node_indices(nodes, base_child):
                     result[sub_index] = "base"
                 for sub_index in subtree_node_indices(nodes, outer_child):
                     result[sub_index] = "outer"
                 return result
-            
+
         queue.extend(children)
-        
+
     return {}
 
 
@@ -659,30 +659,30 @@ def build_parts_and_atlas(
     used_names: dict[str, int] = {}
     atlas_tiles: list[tuple[MeshCube, CubeDef]] = []
     node_to_part_name: dict[int, str] = {}
-    
+
     def unique_part_name(raw: str) -> str:
         base = raw.strip() or "node"
         base = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in base)
         count = used_names.get(base, 0)
         used_names[base] = count + 1
         return base if count == 0 else f"{base}_{count + 1}"
-    
+
     def visit(node_index: int, parent_name: str) -> None:
         node = nodes[node_index]
         raw_name = node.get("name") or f"node_{node_index}"
         part_name = unique_part_name(raw_name)
         node_to_part_name[node_index] = part_name
-        
+
         translation, rotation, scale = node_trs(node)
         q = quaternion_reflect_y(tuple(map(float, rotation)))
         rx, ry, rz = quaternion_to_euler_xyz(q)
-        
+
         pivot = (
             float(translation[0]) * scale_factor,
             float(-translation[1]) * scale_factor,
             float(translation[2]) * scale_factor,
         )
-        
+
         part = PartDef(
             name=part_name,
             parent=parent_name,
@@ -690,12 +690,12 @@ def build_parts_and_atlas(
             rotation=(rx, ry, rz),
             cubes=[],
         )
-        
+
         include_node = layer_filter is None or layer_assignment.get(node_index, "base") == layer_filter
         for cube in mesh_cache.get(node.get("mesh", -1), []):
             if not include_node:
                 continue
-            
+
             local_min = cube.local_min
             local_max = cube.local_max
             x = local_min[0] * scale_factor
@@ -709,7 +709,7 @@ def build_parts_and_atlas(
             if regularized is None:
                 continue
             x, y, z, dx, dy, dz = regularized
-            
+
             cube_def = CubeDef(
                 u=0,
                 v=0,
@@ -723,58 +723,58 @@ def build_parts_and_atlas(
             )
             part.cubes.append(cube_def)
             atlas_tiles.append((cube, cube_def))
-            
+
         parts.append(part)
         for child_index in node.get("children", []):
             visit(child_index, part_name)
-            
+
     for node_index in top_level:
         visit(node_index, "root")
-        
+
     shelf_u = 0
     shelf_v = 0
     shelf_h = 0
     atlas_w = 512
     provisional_h = 0
-    
+
     for _, cube_def in atlas_tiles:
         dx = max(1, int(round(cube_def.dx)))
         dy = max(1, int(round(cube_def.dy)))
         dz = max(1, int(round(cube_def.dz)))
         tile_w = 2 * (dx + dz)
         tile_h = dy + dz
-        
+
         if shelf_u + tile_w > atlas_w:
             shelf_u = 0
             shelf_v += shelf_h + 2
             shelf_h = 0
-            
+
         cube_def.u = shelf_u
         cube_def.v = shelf_v
         shelf_u += tile_w + 2
         shelf_h = max(shelf_h, tile_h)
         provisional_h = max(provisional_h, shelf_v + tile_h)
-        
+
     atlas_h = 1
     while atlas_h < provisional_h + 2:
         atlas_h *= 2
     atlas = Image.new("RGBA", (atlas_w, max(16, atlas_h)), (0, 0, 0, 0))
-    
+
     approximated = 0
     for cube, cube_def in atlas_tiles:
         dx = max(1, int(round(cube_def.dx)))
         dy = max(1, int(round(cube_def.dy)))
         dz = max(1, int(round(cube_def.dz)))
-        
+
         if cube.approximate:
             approximated += 1
-            
+
         layout = face_layout(cube_def.u, cube_def.v, dx, dy, dz)
         for face_name, (target_u, target_v, target_w, target_h) in layout.items():
             patch = crop_face(cube.material_image, cube.source_faces.get(face_name))
             patch = patch.resize((max(1, target_w), max(1, target_h)), Image.NEAREST)
             atlas.paste(patch, (target_u, target_v))
-            
+
     return parts, atlas, {
         "cubes": len(atlas_tiles),
         "approximated_meshes": approximated,
@@ -788,7 +788,7 @@ def extract_animation_clips(
     scale_factor: float,
 ) -> list[AnimationClipDef]:
     clips: list[AnimationClipDef] = []
-    
+
     for animation_index, animation in enumerate(reader.root.get("animations", [])):
         clip_name = animation.get("name", f"animation_{animation_index}")
         tracks_by_part: dict[str, AnimationTrackDef] = {}
@@ -877,14 +877,14 @@ def extract_animation_clips(
             for track in tracks_by_part.values()
             if track.translation_times or track.rotation_times or track.scale_times
         ]
-        
+
         if filtered_tracks:
             clips.append(AnimationClipDef(
                 name=clip_name,
                 length=max(clip_length, 0.001),
                 tracks=filtered_tracks,
             ))
-    
+
     return clips
 
 
@@ -918,7 +918,7 @@ def pack_texture_and_emit_parts(creature_id: str, reader: GltfReader, mesh_fallb
 
     layer_assignment = find_layered_nodes(nodes, top_level, mesh_cache)
     has_outer_layer = any(value == "outer" for value in layer_assignment.values())
-    
+
     base_parts, base_atlas, base_stats, node_to_part_name = build_parts_and_atlas(
         nodes=nodes,
         top_level=top_level,
@@ -941,7 +941,7 @@ def pack_texture_and_emit_parts(creature_id: str, reader: GltfReader, mesh_fallb
             layer_filter="outer",
             deformation=0.25,
         )
-        
+
     clips = select_animation_clips(
         extract_animation_clips(reader, nodes, node_to_part_name, scale_factor)
     )
@@ -950,12 +950,12 @@ def pack_texture_and_emit_parts(creature_id: str, reader: GltfReader, mesh_fallb
     if animation_names:
         notes.append("GLTF animations detected and wired into the generated model.")
         notes.append("Available clips: " + ", ".join(animation_names))
-        
+
     preferred_idle = choose_named_clip(clips, ("idle", "base", "pose", "stand"))
     preferred_walk = choose_named_clip(clips, ("walk", "run", "move"))
     if preferred_idle is None and clips:
         preferred_idle = clips[0].name
-        
+
     base_model = CreatureModelDef(
         creature_id=creature_id,
         class_name=f"{snake_to_pascal(creature_id)}Model",
@@ -967,7 +967,7 @@ def pack_texture_and_emit_parts(creature_id: str, reader: GltfReader, mesh_fallb
         preferred_idle_clip=preferred_idle,
         preferred_walk_clip=preferred_walk,
     )
-    
+
     outer_model = None
     if outer_parts is not None and outer_atlas is not None and outer_stats is not None and outer_stats["cubes"] > 0:
         outer_model = CreatureModelDef(
@@ -981,7 +981,7 @@ def pack_texture_and_emit_parts(creature_id: str, reader: GltfReader, mesh_fallb
             preferred_idle_clip=preferred_idle,
             preferred_walk_clip=preferred_walk,
         )
-        
+
     report = {
         "creature_id": creature_id,
         "scale_factor": scale_factor,
@@ -1057,7 +1057,7 @@ def main() -> None:
         output_outer_java = Path(args.output_outer_java)
         output_outer_java.parent.mkdir(parents=True, exist_ok=True)
         output_outer_java.write_text(emit_model_java(result.outer_model), encoding="utf-8")
-        
+
         output_outer_texture = Path(args.output_outer_texture)
         output_outer_texture.parent.mkdir(parents=True, exist_ok=True)
         result.outer_atlas.save(output_outer_texture)

@@ -21,6 +21,7 @@ def externalLibsDir = file("../external/libs")
 def generatedStudyCreatureJavaDir = layout.buildDirectory.dir("generated/sources/studyCreatures/java/main")
 def generatedStudyCreatureResourcesDir = layout.buildDirectory.dir("generated/studyCreatures/resources/main")
 def studyPythonCommand = (project.findProperty("studyPythonCommand") ?: "python").toString()
+def studyCreatureSourceMode = (project.findProperty("studyCreatureSourceMode") ?: "blockbenchOnly").toString()
 def worldEditJar = file("${externalLibsDir}/${project.worldedit_jar_name}")
 def studyCreatureCardsSource = file("src/main/java/io/github/u01234567/studycheckpoints/StudyCreatureCards.java")
 
@@ -49,7 +50,7 @@ dependencies {
 }
 
 tasks.register("generateStudyCreatures", Exec) {
-	doNotTrackState("Generates Java-backed study creature code and resources from external Blockbench and GLTF creature folders.")
+	doNotTrackState("Generates Java-backed study creature code and resources from external creature folders.")
 
 	File generatorScript = new File(externalScriptsDir, "generate_study_creatures.py")
 	File gltfConverterScript = new File(externalScriptsDir, "convert_gltf_to_java.py")
@@ -58,19 +59,29 @@ tasks.register("generateStudyCreatures", Exec) {
 	File outputResourcesDir = generatedStudyCreatureResourcesDir.get().asFile
 
 	inputs.dir(externalBlockbenchDir)
-	inputs.dir(externalGltfDir)
 	inputs.file(generatorScript)
-	inputs.file(gltfConverterScript)
 	inputs.file(codegenSupportScript)
 	inputs.file(studyCreatureCardsSource)
+	inputs.property("studyCreatureSourceMode", studyCreatureSourceMode)
+
+	if (studyCreatureSourceMode == "all") {
+		inputs.dir(externalGltfDir)
+		inputs.file(gltfConverterScript)
+	}
+
 	outputs.dir(outputJavaDir)
 	outputs.dir(outputResourcesDir)
 
 	doFirst {
+		if (!(studyCreatureSourceMode in ["blockbenchOnly", "all"])) {
+			throw new GradleException(
+					"Unsupported studyCreatureSourceMode='${studyCreatureSourceMode}'. Use 'blockbenchOnly' or 'all'."
+			)
+		}
 		if (!generatorScript.exists()) {
 			throw new GradleException("Study creature generator script not found: ${generatorScript}")
 		}
-		if (!gltfConverterScript.exists()) {
+		if (studyCreatureSourceMode == "all" && !gltfConverterScript.exists()) {
 			throw new GradleException("GLTF conversion script not found: ${gltfConverterScript}")
 		}
 		if (!codegenSupportScript.exists()) {
@@ -86,13 +97,19 @@ tasks.register("generateStudyCreatures", Exec) {
 		outputResourcesDir.mkdirs()
 	}
 
-	commandLine(
+	def generatorArgs = [
 			studyPythonCommand,
 			generatorScript.absolutePath,
 			"--project-root", projectDir.absolutePath,
 			"--output-java-dir", outputJavaDir.absolutePath,
 			"--output-resources-dir", outputResourcesDir.absolutePath
-	)
+	]
+
+	if (studyCreatureSourceMode == "blockbenchOnly") {
+		generatorArgs += "--skip-gltf"
+	}
+
+	commandLine(generatorArgs)
 }
 
 sourceSets {
