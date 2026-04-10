@@ -37,7 +37,7 @@ public final class StudyFlowController {
     private static final long CLIENT_CHAPTER_READY_STABILITY_MS = 500L;
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
     private static final long CHAPTER_ZERO_COMPLETION_DELAY_MS = 5_000L;
-    private static final double CHAPTER_ZERO_HEIGHT_TARGET_Y = 58.0D;
+    private static final double CHAPTER_ZERO_DEPTH_TARGET_Y = 57.0D;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
     private static final String ESCAPE_RECOVERY_MESSAGE = "Esc pressed: back to chapter start.";
@@ -63,8 +63,7 @@ public final class StudyFlowController {
     private static long questionnaireFirstOpenedAtMs;
     private static StudyChapter pausedCompletedChapter;
     private static long pauseDeadlineMs;
-    private static boolean chapterZeroReachedHeight;
-    private static boolean chapterZeroPressedEscape;
+    private static boolean chapterZeroReachedDepth;
     private static long chapterZeroCompletionDeadlineMs;
 
     private static StudyConditionAllocator.ConditionAssignment conditionAssignment;
@@ -145,10 +144,11 @@ public final class StudyFlowController {
             recoveryMessage = ESCAPE_RECOVERY_MESSAGE;
             recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
 
-            if (chapterToRestore == StudyChapter.CHAPTER_0 && !chapterZeroPressedEscape) {
-                chapterZeroPressedEscape = true;
+            if (chapterToRestore == StudyChapter.CHAPTER_0
+                    && chapterZeroReachedDepth
+                    && chapterZeroCompletionDeadlineMs == 0L) {
                 StudyEventLog.logChapterZeroConditionSatisfied(
-                        "pressed_escape",
+                        "pressed_escape_after_reaching_y_57_or_below",
                         playerName(client),
                         client.player != null ? client.player.getX() : 0.0D,
                         client.player != null ? client.player.getY() : 0.0D,
@@ -367,8 +367,7 @@ public final class StudyFlowController {
         chapterWelcomeDeadlineMs = 0L;
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
-        chapterZeroReachedHeight = false;
-        chapterZeroPressedEscape = false;
+        chapterZeroReachedDepth = false;
         chapterZeroCompletionDeadlineMs = 0L;
 
         StudyChapterHotbarTracker.reset();
@@ -498,9 +497,11 @@ public final class StudyFlowController {
     }
 
     // The two-slide intro transition now happens before Chapter 0.
+    // Chapter 0 -> 1 still uses the normal checkpoint overlay.
     // The remaining manipulated checkpoints are between Ch 1 and 2, and Ch 2 and 3.
     private static boolean shouldShowExperimentalCheckpoint(StudyChapter completedChapter) {
-        return completedChapter == StudyChapter.CHAPTER_1
+        return completedChapter == StudyChapter.CHAPTER_0
+                || completedChapter == StudyChapter.CHAPTER_1
                 || completedChapter == StudyChapter.CHAPTER_2;
     }
 
@@ -509,8 +510,7 @@ public final class StudyFlowController {
 
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
-        chapterZeroReachedHeight = false;
-        chapterZeroPressedEscape = false;
+        chapterZeroReachedDepth = false;
         chapterZeroCompletionDeadlineMs = 0L;
         client.setScreen(null);
 
@@ -586,16 +586,15 @@ public final class StudyFlowController {
             return;
         }
 
-        if (!chapterZeroReachedHeight && client.player.getY() >= CHAPTER_ZERO_HEIGHT_TARGET_Y) {
-            chapterZeroReachedHeight = true;
+        if (!chapterZeroReachedDepth && client.player.getY() <= CHAPTER_ZERO_DEPTH_TARGET_Y) {
+            chapterZeroReachedDepth = true;
             StudyEventLog.logChapterZeroConditionSatisfied(
-                    "reached_y_at_least_58",
+                    "reached_y_57_or_below",
                     playerName(client),
                     client.player.getX(),
                     client.player.getY(),
                     client.player.getZ()
             );
-            armChapterZeroCompletionIfReady(client);
         }
 
         if (chapterZeroCompletionDeadlineMs > 0L && nowMs() >= chapterZeroCompletionDeadlineMs) {
@@ -604,13 +603,11 @@ public final class StudyFlowController {
     }
 
     private static void armChapterZeroCompletionIfReady(Minecraft client) {
-        if (!chapterZeroReachedHeight || !chapterZeroPressedEscape || chapterZeroCompletionDeadlineMs > 0L) {
+        if (!chapterZeroReachedDepth || chapterZeroCompletionDeadlineMs > 0L) {
             return;
         }
 
         chapterZeroCompletionDeadlineMs = nowMs() + CHAPTER_ZERO_COMPLETION_DELAY_MS;
-        chapterWelcomeMessage = CHAPTER_ZERO_COMPLETION_MESSAGE;
-        chapterWelcomeDeadlineMs = chapterZeroCompletionDeadlineMs;
         StudyEventLog.logChapterZeroCompletionArmed(playerName(client), CHAPTER_ZERO_COMPLETION_DELAY_MS);
     }
 

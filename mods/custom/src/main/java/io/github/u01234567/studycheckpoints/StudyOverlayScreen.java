@@ -86,8 +86,8 @@ public class StudyOverlayScreen extends Screen {
         this.clearWidgets();
 
         if (showCloseButton) {
-            int panelWidth = Math.min(440, this.width - 40);
-            int panelHeight = 156;
+            int panelWidth = Math.min(470, this.width - 40);
+            int panelHeight = 212;
             int panelLeft = (this.width - panelWidth) / 2;
             int panelTop = (this.height - panelHeight) / 2;
 
@@ -110,7 +110,7 @@ public class StudyOverlayScreen extends Screen {
         int buttonSpacing = 12;
         int totalButtonsWidth = (buttonWidth * buttonSpecs.size()) + (buttonSpacing * Math.max(0, buttonSpecs.size() - 1));
         int buttonsLeft = (this.width - totalButtonsWidth) / 2;
-        int buttonY = this.height / 2 + 68;
+        int buttonY = this.height / 2 + 62;
 
         for (int i = 0; i < buttonSpecs.size(); i++) {
             ButtonSpec spec = buttonSpecs.get(i);
@@ -134,8 +134,8 @@ public class StudyOverlayScreen extends Screen {
         int panelColour = 0xF5FFFFFF;
         int borderColour = 0xFFDDDDDD;
 
-        int panelWidth = Math.min(440, this.width - 40);
-        int panelHeight = 176;
+        int panelWidth = Math.min(470, this.width - 40);
+        int panelHeight = 212;
         int panelLeft = (this.width - panelWidth) / 2;
         int panelTop = (this.height - panelHeight) / 2;
         int textLeft = panelLeft + 20;
