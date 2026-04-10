@@ -37,7 +37,7 @@ public final class StudyFlowController {
     private static final long CLIENT_CHAPTER_READY_STABILITY_MS = 500L;
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
     private static final long CHAPTER_ZERO_COMPLETION_DELAY_MS = 5_000L;
-    private static final double CHAPTER_ZERO_DEPTH_TARGET_Y = 57.0D;
+    private static final double CHAPTER_ZERO_DEPTH_TARGET_Y = 59.0D;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
     private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
@@ -145,7 +145,7 @@ public final class StudyFlowController {
                     && chapterZeroReachedDepth
                     && chapterZeroCompletionDeadlineMs == 0L) {
                 StudyEventLog.logChapterZeroConditionSatisfied(
-                        "pressed_escape_after_reaching_y_57_or_below",
+                        "pressed_escape_after_reaching_y_59_or_below",
                         playerName(client),
                         client.player != null ? client.player.getX() : 0.0D,
                         client.player != null ? client.player.getY() : 0.0D,
@@ -614,7 +614,7 @@ public final class StudyFlowController {
         if (!chapterZeroReachedDepth && client.player.getY() <= CHAPTER_ZERO_DEPTH_TARGET_Y) {
             chapterZeroReachedDepth = true;
             StudyEventLog.logChapterZeroConditionSatisfied(
-                    "reached_y_57_or_below",
+                    "reached_y_59_or_below",
                     playerName(client),
                     client.player.getX(),
                     client.player.getY(),

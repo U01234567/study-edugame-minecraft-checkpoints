@@ -26,6 +26,10 @@ public final class StudyEventLog {
             GAME_DIR.resolve("../../../analysis/logs").normalize().toAbsolutePath();
     private static final Path MIRROR_LOG_DIR =
             GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
+    private static final Path[] ANALYSIS_DIR_CANDIDATES = new Path[] {
+            GAME_DIR.resolve("../../../analysis").normalize().toAbsolutePath(),
+            GAME_DIR.resolve("analysis").normalize().toAbsolutePath()
+    };
 
     // World directories (repo original and copy)
     private static final Path REPO_WORLD_DIR =
@@ -34,6 +38,7 @@ public final class StudyEventLog {
             GAME_DIR.resolve("saves").resolve(StudyCheckpoints.STUDY_WORLD_SAVE_NAME).normalize().toAbsolutePath();
 
     private static final AtomicBoolean HEADER_WRITTEN = new AtomicBoolean(false);
+    private static final AtomicBoolean SESSION_SUMMARY_TRIGGERED = new AtomicBoolean(false);
 
     private static final AtomicReference<Path> PRIMARY_LOG_FILE = new AtomicReference<>();
     private static final AtomicReference<Path> MIRROR_LOG_FILE = new AtomicReference<>();
@@ -434,6 +439,94 @@ public final class StudyEventLog {
                 "player=" + safe(playerName),
                 "reason=" + safe(reason)
         );
+        triggerSessionSummaryBestEffort();
+    }
+
+    private static void triggerSessionSummaryBestEffort() {
+        if (!SESSION_SUMMARY_TRIGGERED.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            Path analysisMainPy = locateAnalysisMainPy();
+            if (analysisMainPy == null) {
+                StudyCheckpoints.LOGGER.warn("Could not find analysis/main.py. Skipping automatic session summary.");
+                return;
+            }
+
+            Path analysisDir = analysisMainPy.getParent();
+            Path summaryOutput = analysisDir.resolve("output").resolve("last_session_summary.html")
+                    .normalize()
+                    .toAbsolutePath();
+
+            StudyCheckpoints.LOGGER.info("Session summary HTML target: {}", summaryOutput);
+            StudyCheckpoints.LOGGER.info("Session summary HTML link: {}", summaryOutput.toUri());
+
+            Process process = startSummaryProcess(analysisDir);
+            if (process == null) {
+                StudyCheckpoints.LOGGER.warn("Could not start the automatic session summary process.");
+                return;
+            }
+
+            process.onExit().thenAccept(completed ->
+                    StudyCheckpoints.LOGGER.info(
+                            "Automatic session summary process finished with exit code {}.",
+                            completed.exitValue()
+                    )
+            );
+        } catch (Exception e) {
+            StudyCheckpoints.LOGGER.warn("Automatic session summary failed to start.", e);
+        }
+    }
+
+    private static Path locateAnalysisMainPy() {
+        for (Path analysisDir : ANALYSIS_DIR_CANDIDATES) {
+            Path candidate = analysisDir.resolve("main.py");
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static Process startSummaryProcess(Path analysisDir) throws IOException {
+        String[][] commands = isWindows()
+                ? new String[][] {
+                        {"py", "-3", "main.py", "sum_last"},
+                        {"python", "main.py", "sum_last"},
+                        {"python3", "main.py", "sum_last"}
+                }
+                : new String[][] {
+                        {"python3", "main.py", "sum_last"},
+                        {"python", "main.py", "sum_last"}
+                };
+
+        IOException lastException = null;
+
+        for (String[] command : commands) {
+            try {
+                StudyCheckpoints.LOGGER.info("Starting automatic session summary command: {}", String.join(" ", command));
+                return new ProcessBuilder(command)
+                        .directory(analysisDir.toFile())
+                        .inheritIO()
+                        .start();
+            } catch (IOException e) {
+                lastException = e;
+            }
+        }
+
+        if (lastException != null) {
+            throw lastException;
+        }
+
+        return null;
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "")
+                .toLowerCase(Locale.ROOT)
+                .contains("win");
     }
 
     // Generate general log structure (both human-readable and easy to parse)
