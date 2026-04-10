@@ -26,17 +26,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Central registry for custom study creature entity types, produced from
- * ../external/blockbench/* by the Gradle build.
+ * Central registry for packaged custom study creature entity types.
  *
- * Each Java-backed creature folder is assumed to contain at least:
- * - {id}.bbmodel
- * - {id}.java
- * - {id}.png
- * - optional {id}-anim.java
+ * Definitions are loaded from the baked creature manifest under
+ * src/main/resources/assets/study-checkpoints/study-creatures/creatures.json.
+ * Model classes are checked in under the generated creature package in src/main/java.
  */
 public final class StudyEntities {
-    private static final String GENERATED_CREATURE_MANIFEST =
+    private static final String CREATURE_MANIFEST =
             "assets/" + StudyCheckpoints.MOD_ID + "/study-creatures/creatures.json";
 
     private static final float DEFAULT_HITBOX_WIDTH = 2.8F;
@@ -57,7 +54,7 @@ public final class StudyEntities {
             return;
         }
 
-        for (CustomCreatureDefinition definition : loadDefinitionsFromGeneratedManifest()) {
+        for (CustomCreatureDefinition definition : loadDefinitionsFromPackagedManifest()) {
             EntityType<StudyCreatureEntity> entityType = registerCreature(definition);
             FabricDefaultAttributeRegistry.register(entityType, StudyCreatureEntity.createAttributes());
         }
@@ -99,11 +96,11 @@ public final class StudyEntities {
         return entityType;
     }
 
-    private static List<CustomCreatureDefinition> loadDefinitionsFromGeneratedManifest() {
-        InputStream inputStream = StudyEntities.class.getClassLoader().getResourceAsStream(GENERATED_CREATURE_MANIFEST);
+    private static List<CustomCreatureDefinition> loadDefinitionsFromPackagedManifest() {
+        InputStream inputStream = StudyEntities.class.getClassLoader().getResourceAsStream(CREATURE_MANIFEST);
 
         if (inputStream == null) {
-            StudyCheckpoints.LOGGER.warn("No generated study creature manifest found at {}", GENERATED_CREATURE_MANIFEST);
+            StudyCheckpoints.LOGGER.warn("No packaged study creature manifest found at {}", CREATURE_MANIFEST);
             return List.of();
         }
 
@@ -152,7 +149,7 @@ public final class StudyEntities {
 
             return definitions;
         } catch (IOException e) {
-            StudyCheckpoints.LOGGER.error("Failed to read generated study creature manifest: {}", GENERATED_CREATURE_MANIFEST, e);
+            StudyCheckpoints.LOGGER.error("Failed to read packaged study creature manifest: {}", CREATURE_MANIFEST, e);
             return List.of();
         }
     }

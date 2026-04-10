@@ -14,16 +14,8 @@ base {
 def studyWorldSourceDir = file("../../world")
 def studyWorldSaveName = "experiment-world"
 def studyWorldTargetDir = file("run/saves/${studyWorldSaveName}")
-def externalBlockbenchDir = file("../external/blockbench")
-def externalGltfDir = file("../external/gltf")
-def externalScriptsDir = file("../external/scripts")
 def externalLibsDir = file("../external/libs")
-def generatedStudyCreatureJavaDir = layout.buildDirectory.dir("generated/sources/studyCreatures/java/main")
-def generatedStudyCreatureResourcesDir = layout.buildDirectory.dir("generated/studyCreatures/resources/main")
-def studyPythonCommand = (project.findProperty("studyPythonCommand") ?: "python").toString()
-def studyCreatureSourceMode = (project.findProperty("studyCreatureSourceMode") ?: "blockbenchOnly").toString()
 def worldEditJar = file("${externalLibsDir}/${project.worldedit_jar_name}")
-def studyCreatureCardsSource = file("src/main/java/io/github/u01234567/studycheckpoints/StudyCreatureCards.java")
 
 repositories {
 	// Add repositories to retrieve artifacts from in here.
@@ -49,75 +41,14 @@ dependencies {
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
-tasks.register("generateStudyCreatures", Exec) {
-	doNotTrackState("Generates Java-backed study creature code and resources from external creature folders.")
-
-	File generatorScript = new File(externalScriptsDir, "generate_study_creatures.py")
-	File gltfConverterScript = new File(externalScriptsDir, "convert_gltf_to_java.py")
-	File codegenSupportScript = new File(externalScriptsDir, "study_creature_codegen.py")
-	File outputJavaDir = generatedStudyCreatureJavaDir.get().asFile
-	File outputResourcesDir = generatedStudyCreatureResourcesDir.get().asFile
-
-	inputs.dir(externalBlockbenchDir)
-	inputs.file(generatorScript)
-	inputs.file(codegenSupportScript)
-	inputs.file(studyCreatureCardsSource)
-	inputs.property("studyCreatureSourceMode", studyCreatureSourceMode)
-
-	if (studyCreatureSourceMode == "all") {
-		inputs.dir(externalGltfDir)
-		inputs.file(gltfConverterScript)
+def listCreatureDirNames = { File root ->
+	if (!root.exists()) {
+		return [] as Set<String>
 	}
-
-	outputs.dir(outputJavaDir)
-	outputs.dir(outputResourcesDir)
-
-	doFirst {
-		if (!(studyCreatureSourceMode in ["blockbenchOnly", "all"])) {
-			throw new GradleException(
-					"Unsupported studyCreatureSourceMode='${studyCreatureSourceMode}'. Use 'blockbenchOnly' or 'all'."
-			)
-		}
-		if (!generatorScript.exists()) {
-			throw new GradleException("Study creature generator script not found: ${generatorScript}")
-		}
-		if (studyCreatureSourceMode == "all" && !gltfConverterScript.exists()) {
-			throw new GradleException("GLTF conversion script not found: ${gltfConverterScript}")
-		}
-		if (!codegenSupportScript.exists()) {
-			throw new GradleException("Study creature codegen support script not found: ${codegenSupportScript}")
-		}
-		if (!studyCreatureCardsSource.exists()) {
-			throw new GradleException("StudyCreatureCards source not found: ${studyCreatureCardsSource}")
-		}
-
-		delete(outputJavaDir)
-		delete(outputResourcesDir)
-		outputJavaDir.mkdirs()
-		outputResourcesDir.mkdirs()
-	}
-
-	def generatorArgs = [
-			studyPythonCommand,
-			generatorScript.absolutePath,
-			"--project-root", projectDir.absolutePath,
-			"--output-java-dir", outputJavaDir.absolutePath,
-			"--output-resources-dir", outputResourcesDir.absolutePath
-	]
-
-	if (studyCreatureSourceMode == "blockbenchOnly") {
-		generatorArgs += "--skip-gltf"
-	}
-
-	commandLine(generatorArgs)
-}
-
-sourceSets {
-	main {
-		java {
-			srcDir(generatedStudyCreatureJavaDir)
-		}
-	}
+	return root.listFiles()
+			.findAll { it.isDirectory() }
+			.collect { it.name }
+			.toSet()
 }
 
 // Firstly, delete previously copied Minecraft world
@@ -157,7 +88,6 @@ tasks.register("copyStudyWorld", Copy) {
 // and run Minecraft directly from this world
 tasks.named("runClient") {
 	dependsOn tasks.named("copyStudyWorld")
-	dependsOn tasks.named("generateStudyCreatures")
 	dependsOn tasks.named("copyExternalRuntimeMods")
 
 	doFirst {
@@ -170,9 +100,6 @@ tasks.named("runClient") {
 }
 
 processResources {
-	dependsOn tasks.named("generateStudyCreatures")
-	from(generatedStudyCreatureResourcesDir)
-
 	inputs.property "version", project.version
 
 	filesMatching("fabric.mod.json") {
@@ -181,7 +108,6 @@ processResources {
 }
 
 tasks.named("compileJava") {
-	dependsOn tasks.named("generateStudyCreatures")
 }
 
 tasks.withType(JavaCompile).configureEach {

@@ -1,0 +1,279 @@
+{
+  "creatures": [
+    {
+      "id": "abyss_deer",
+      "display_name": "AbyssDeer",
+      "hitbox_width": 0.594,
+      "hitbox_height": 1.734,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.AbyssDeerModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/abyss_deer.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "amethyst_scarab",
+      "display_name": "AmethystScarab",
+      "hitbox_width": 0.625,
+      "hitbox_height": 0.411,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.AmethystScarabModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/amethyst_scarab.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "axolotl_dragon",
+      "display_name": "AxolotlDragon",
+      "hitbox_width": 4.0,
+      "hitbox_height": 1.875,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.AxolotlDragonModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/axolotl_dragon.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "cave_dweller",
+      "display_name": "CaveDweller",
+      "hitbox_width": 0.4,
+      "hitbox_height": 1.25,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.CaveDwellerModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/cave_dweller.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "dragon",
+      "display_name": "Dragon",
+      "hitbox_width": 0.5,
+      "hitbox_height": 1.0,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.DragonModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/dragon.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "ender_ape",
+      "display_name": "EnderApe",
+      "hitbox_width": 0.812,
+      "hitbox_height": 1.562,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.EnderApeModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/ender_ape.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "flying_bunny",
+      "display_name": "FlyingBunny",
+      "hitbox_width": 0.95,
+      "hitbox_height": 1.008,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.FlyingBunnyModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/flying_bunny.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "glare",
+      "display_name": "Glare",
+      "hitbox_width": 0.953,
+      "hitbox_height": 1.337,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GlareModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/glare.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "grand_grassling_father",
+      "display_name": "GrandGrasslingFather",
+      "hitbox_width": 4.0,
+      "hitbox_height": 2.625,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GrandGrasslingFatherModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/grand_grassling_father.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "grassling_spreder",
+      "display_name": "GrasslingSpreder",
+      "hitbox_width": 4.0,
+      "hitbox_height": 3.125,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GrasslingSprederModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/grassling_spreder.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "greater_lurker",
+      "display_name": "GreaterLurker",
+      "hitbox_width": 1.906,
+      "hitbox_height": 4.0,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.GreaterLurkerModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/greater_lurker.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "hell_horse_yitrium",
+      "display_name": "HellHorseYitrium",
+      "hitbox_width": 0.688,
+      "hitbox_height": 2.509,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.HellHorseYitriumModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/hell_horse_yitrium.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "ice_golem",
+      "display_name": "IceGolem",
+      "hitbox_width": 4.0,
+      "hitbox_height": 4.0,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.IceGolemModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/ice_golem.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "killer_crab",
+      "display_name": "KillerCrab",
+      "hitbox_width": 0.618,
+      "hitbox_height": 0.898,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.KillerCrabModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/killer_crab.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "lizard_knight",
+      "display_name": "LizardKnight",
+      "hitbox_width": 0.625,
+      "hitbox_height": 1.75,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.LizardKnightModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/lizard_knight.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "mini_dragon",
+      "display_name": "MiniDragon",
+      "hitbox_width": 0.438,
+      "hitbox_height": 1.438,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.MiniDragonModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/mini_dragon.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "mushroom_bup",
+      "display_name": "MushroomBup",
+      "hitbox_width": 0.875,
+      "hitbox_height": 0.812,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.MushroomBupModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/mushroom_bup.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "orc",
+      "display_name": "Orc",
+      "hitbox_width": 1.156,
+      "hitbox_height": 1.479,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.OrcModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/orc.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "prototype_warden",
+      "display_name": "PrototypeWarden",
+      "hitbox_width": 2.0,
+      "hitbox_height": 2.875,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.PrototypeWardenModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/prototype_warden.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "retro_tv_robot",
+      "display_name": "RetroTvRobot",
+      "hitbox_width": 0.812,
+      "hitbox_height": 1.219,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.RetroTvRobotModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/retro_tv_robot.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "scrambler_king",
+      "display_name": "ScramblerKing",
+      "hitbox_width": 2.375,
+      "hitbox_height": 2.5,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.ScramblerKingModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/scrambler_king.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "soul_lizard",
+      "display_name": "SoulLizard",
+      "hitbox_width": 0.667,
+      "hitbox_height": 0.456,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.SoulLizardModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/soul_lizard.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "tv_man",
+      "display_name": "TvMan",
+      "hitbox_width": 1.0,
+      "hitbox_height": 2.25,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.TvManModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/tv_man.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "walking_robot_guy",
+      "display_name": "WalkingRobotGuy",
+      "hitbox_width": 0.5,
+      "hitbox_height": 1.25,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.WalkingRobotGuyModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/walking_robot_guy.png",
+      "outer_texture_resource_path": null
+    },
+    {
+      "id": "wardigo",
+      "display_name": "Wardigo",
+      "hitbox_width": 4.0,
+      "hitbox_height": 4.0,
+      "model_class_name": "io.github.u01234567.studycheckpoints.creatures.generated.WardigoModel",
+      "outer_model_class_name": null,
+      "animation_class_name": null,
+      "texture_resource_path": "textures/entity/wardigo.png",
+      "outer_texture_resource_path": null
+    }
+  ]
+}
