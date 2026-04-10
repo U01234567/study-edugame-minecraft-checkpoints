@@ -37,21 +37,17 @@ public class StudyOverlayScreen extends Screen {
     public static StudyOverlayScreen createIntroScreen() {
         StudyExperimentCondition assignedCondition = StudyFlowController.getAssignedCondition();
 
-        List<String> lines = List.of(
-                "Please read the study information.",
-                "If you want to continue, click the green button below.",
-                "If you do not want to continue, click the red button and the game will close."
-        );
+        List<String> lines = StudyConfig.getIntroBodyLines();
 
         List<ButtonSpec> buttons = new ArrayList<>();
         buttons.add(new ButtonSpec(
-                "Agree and continue",
+                StudyConfig.getIntroAgreeButtonLabel(),
                 0xFF2E8B57,
                 0xFF3FAF6F,
                 () -> StudyFlowController.acceptConsent(Minecraft.getInstance())
         ));
         buttons.add(new ButtonSpec(
-                "Stop here",
+                StudyConfig.getIntroStopButtonLabel(),
                 0xFFB22222,
                 0xFFD13A3A,
                 () -> StudyFlowController.stopHere(Minecraft.getInstance())
@@ -62,38 +58,34 @@ public class StudyOverlayScreen extends Screen {
                 assignedCondition.indicatorColour()
         );
 
-        return new StudyOverlayScreen("Intro", lines, buttons, indicator, false);
+        return new StudyOverlayScreen(StudyConfig.getIntroHeading(), lines, buttons, indicator, false);
     }
 
     public static StudyOverlayScreen createChapterZeroTransitionScreen(StudyChapter completedChapter) {
-        List<String> messageLines = List.of(
-                "You completed the introduction.",
-                "Next, the real game starts.",
-                "Your task is to find and click as many creatures as possible to learn more about them."
-        );
+        List<String> messageLines = StudyConfig.getChapterZeroTransitionBodyLines();
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
-                "Start the game",
+                StudyConfig.getChapterZeroTransitionStartButtonLabel(),
                 0xFF2F6FED,
                 0xFF4C85F5,
                 () -> StudyFlowController.continueFromChapterZeroTransition(Minecraft.getInstance())
         ));
 
-        return new StudyOverlayScreen("Get Started complete", messageLines, buttons, null, false);
+        return new StudyOverlayScreen(StudyConfig.getChapterZeroTransitionHeading(), messageLines, buttons, null, false);
     }
 
     public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
         int interactedCreatureCount = StudyInteractionController.interactedCreatureTypeCountExcludingChapterZero();
         int totalCreatureCount = StudyCreatureCards.totalTrackedCreatureTypeCountExcludingChapterZero();
-        String heading = "You completed the game";
-        List<String> messageLines = List.of(
-                "With " + completedChapter.displayTitle() + " finished, you completed the game.",
-                "You interacted with " + interactedCreatureCount + " of " + totalCreatureCount + " different creatures.",
-                "For the second part of the study, please answer some follow-up questions."
+        String heading = StudyConfig.getFinalQuestionnaireHeading();
+        List<String> messageLines = StudyConfig.getFinalQuestionnaireBodyLines(
+                completedChapter,
+                interactedCreatureCount,
+                totalCreatureCount
         );
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
-                "Answer follow-up questions",
+                StudyConfig.getFinalQuestionnaireButtonLabel(),
                 0xFF2F6FED,
                 0xFF4C85F5,
                 () -> StudyFlowController.continueFromFinalScreen(Minecraft.getInstance(), completedChapter)

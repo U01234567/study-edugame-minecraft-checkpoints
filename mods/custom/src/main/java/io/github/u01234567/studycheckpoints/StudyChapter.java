@@ -74,12 +74,7 @@ public enum StudyChapter {
 
     // Chapter titles
     public String displayTitle() {
-        return switch (this) {
-            case CHAPTER_0 -> "Chapter 0 (Get Started)";
-            case CHAPTER_1 -> "Chapter 1 (The Museum)";
-            case CHAPTER_2 -> "Chapter 2 (The Farm)";
-            case CHAPTER_3 -> "Chapter 3 (The Jungle)";
-        };
+        return StudyConfig.getChapterDisplayTitle(this);
     }
 
     // Teleport player in center of spawn point

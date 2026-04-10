@@ -40,7 +40,6 @@ public final class StudyFlowController {
     private static final double CHAPTER_ZERO_DEPTH_TARGET_Y = 57.0D;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
-    private static final String ESCAPE_RECOVERY_MESSAGE = "Esc pressed: back to chapter start.";
     private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
     private static final int INITIAL_CHECKPOINT_COMPLETED_CHAPTER_NUMBER = -1;
 
@@ -139,7 +138,7 @@ public final class StudyFlowController {
 
             client.setScreen(null);
             placePlayerForChapter(client, chapterToRestore);
-            recoveryMessage = ESCAPE_RECOVERY_MESSAGE;
+            recoveryMessage = StudyConfig.getEscapeRecoveryMessage();
             recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
 
             if (chapterToRestore == StudyChapter.CHAPTER_0
@@ -389,7 +388,7 @@ public final class StudyFlowController {
         chapterZeroCompletionDeadlineMs = 0L;
 
         StudyChapterHotbarTracker.reset();
-        client.setScreen(new StudyLoadingScreen("Chapter loading..."));
+        client.setScreen(new StudyLoadingScreen(StudyConfig.getChapterLoadingMessage()));
         StudyEventLog.logChapterLoadingStarted(chapter.chapterNumber(), chapter.displayTitle());
 
         StudyInteractionController.prepareChapterForStart(client, chapter, () -> {
@@ -441,7 +440,7 @@ public final class StudyFlowController {
 
         activeChapter = chapter;
         chapterDeadlineMs = chapter == StudyChapter.CHAPTER_0 ? 0L : nowMs() + chapter.durationMs();
-        chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
+        chapterWelcomeMessage = StudyConfig.getChapterWelcomeMessage(chapter);
         chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;

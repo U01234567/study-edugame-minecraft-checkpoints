@@ -40,27 +40,11 @@ public enum StudyExperimentCondition {
     }
 
     public String indicatorLabel() {
-        return id;
+        return StudyConfig.getConditionIndicatorLabel(this);
     }
 
     public List<String> checkpointBodyLines(StudyChapter completedChapter, StudyChapter nextChapter) {
-        return switch (this) {
-            case CONTINUE -> List.of(
-                    "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
-                    "Press continue to start " + nextChapter.displayTitle() + "."
-            );
-            case PAUSE -> List.of(
-                    "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
-                    "This is a good place to take a break.",
-                    "Your progress is saved here, and you will continue from this point",
-                    "after the break."
-            );
-            case CHOICE -> List.of(
-                    "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
-                    "This is a good place to take a break.",
-                    "Your progress is saved here, and you can continue later from this point."
-            );
-        };
+        return StudyConfig.getCheckpointBodyLines(this, completedChapter, nextChapter);
     }
 
     public boolean showsContinueButton() {
@@ -72,9 +56,9 @@ public enum StudyExperimentCondition {
     }
 
     // Buttons
-    public String continueButtonLabel() { return "Continue to the next chapter"; }
+    public String continueButtonLabel() { return StudyConfig.getCheckpointContinueButtonLabel(); }
     public String pauseButtonLabel() {
-        return "Take a two-minute break";
+        return StudyConfig.getCheckpointPauseButtonLabel();
     }
 
     public int continueButtonColour() {
@@ -94,9 +78,7 @@ public enum StudyExperimentCondition {
     }
 
     public String promptText() {
-        return this == CHOICE
-                ? "Please press a button!"
-                : "Please press the button!";
+        return StudyConfig.getCheckpointPromptText(this);
     }
 
     // Parse a configured value into a known condition.

@@ -17,7 +17,7 @@ public class StudyLoadingScreen extends Screen {
 
     public StudyLoadingScreen(String message) {
         super(Component.empty());
-        this.message = message == null || message.isBlank() ? "Chapter loading..." : message;
+        this.message = message == null || message.isBlank() ? StudyConfig.getChapterLoadingMessage() : message;
     }
 
     @Override

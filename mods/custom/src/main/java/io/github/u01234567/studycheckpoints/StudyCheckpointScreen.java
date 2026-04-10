@@ -21,15 +21,6 @@ public class StudyCheckpointScreen extends Screen {
     private static final int INTRO_SLIDE_COUNT = 2;
     private static final int NEXT_BUTTON_COLOUR = 0xFF2F6FED;
     private static final int NEXT_BUTTON_HOVER_COLOUR = 0xFF4C85F5;
-    private static final String INITIAL_TRANSITION_START_BUTTON_LABEL = "Start Chapter 0";
-    private static final List<String> INTRO_TRANSITION_SLIDE_ONE_LINES = List.of(
-            "You completed the introduction.",
-            "Next, the real game starts."
-    );
-    private static final List<String> INTRO_TRANSITION_SLIDE_TWO_LINES = List.of(
-            "Your task is to find and click as many creatures as possible",
-            "to learn more about them."
-    );
 
     private final StudyChapter completedChapter;
     private final StudyChapter nextChapter;
@@ -192,7 +183,7 @@ public class StudyCheckpointScreen extends Screen {
         graphics.fill(panelLeft, panelTop, panelLeft + 1, panelTop + panelHeight, borderColour);
         graphics.fill(panelLeft + panelWidth - 1, panelTop, panelLeft + panelWidth, panelTop + panelHeight, borderColour);
 
-        String heading = "Checkpoint";
+        String heading = StudyConfig.getCheckpointHeading();
         int headingX = (this.width - this.font.width(heading)) / 2;
         graphics.text(this.font, heading, headingX, panelTop + 18, 0xFF111111, false);
 
@@ -250,7 +241,7 @@ public class StudyCheckpointScreen extends Screen {
         if (isIntroTransitionCheckpoint()) {
             if (introSlideIndex == 0) {
                 buttons.add(new ButtonSpec(
-                        "Next",
+                        StudyConfig.getInitialTransitionNextButtonLabel(),
                         NEXT_BUTTON_COLOUR,
                         NEXT_BUTTON_HOVER_COLOUR,
                         () -> runOnce(this::advanceIntroSlide)
@@ -259,7 +250,7 @@ public class StudyCheckpointScreen extends Screen {
             }
 
             buttons.add(new ButtonSpec(
-                    INITIAL_TRANSITION_START_BUTTON_LABEL,
+                    StudyConfig.getInitialTransitionStartButtonLabel(),
                     condition.continueButtonColour(),
                     condition.continueButtonHoverColour(),
                     () -> runOnce(() -> StudyFlowController.continueFromInitialCheckpoint(
@@ -340,7 +331,7 @@ public class StudyCheckpointScreen extends Screen {
 
     private String promptText() {
         return isIntroTransitionCheckpoint()
-                ? "Please press the button!"
+                ? StudyConfig.getInitialTransitionPromptText()
                 : condition.promptText();
     }
 
@@ -349,7 +340,7 @@ public class StudyCheckpointScreen extends Screen {
                                                 StudyExperimentCondition condition,
                                                 StudyChapter nextChapter) {
         if (initialTransitionCheckpoint) {
-            return INTRO_TRANSITION_SLIDE_ONE_LINES;
+            return StudyConfig.getInitialTransitionSlideOneLines();
         }
 
         return condition.checkpointBodyLines(completedChapter, nextChapter);
@@ -375,8 +366,8 @@ public class StudyCheckpointScreen extends Screen {
         }
 
         return introSlideIndex == 0
-                ? INTRO_TRANSITION_SLIDE_ONE_LINES
-                : INTRO_TRANSITION_SLIDE_TWO_LINES;
+                ? StudyConfig.getInitialTransitionSlideOneLines()
+                : StudyConfig.getInitialTransitionSlideTwoLines();
     }
 
     private int completedChapterNumber() {
