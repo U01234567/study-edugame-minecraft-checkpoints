@@ -20,7 +20,7 @@ public final class StudyCreatureCards {
         Map.entry("abyss_deer", new CreatureCard(
                 "Abyss deer",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a dark deer-like fantasy creature.",
                         "It has a calm stance and long legs.",
@@ -42,7 +42,7 @@ public final class StudyCreatureCards {
         Map.entry("amethyst_scarab", new CreatureCard(
                 "Amethyst scarab",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a scarab-like fantasy creature.",
                         "Its theme is based on amethyst.",
@@ -70,7 +70,7 @@ public final class StudyCreatureCards {
         Map.entry("cave_dweller", new CreatureCard(
                 "Cave dweller",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a cave-themed fantasy creature.",
                         "It has a dark and unsettling appearance.",
@@ -85,7 +85,7 @@ public final class StudyCreatureCards {
         Map.entry("ender_ape", new CreatureCard(
                 "Ender ape",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is an ape-like fantasy creature with an end-themed design.",
                         "It looks agile, strong, and unusual.",
@@ -100,7 +100,7 @@ public final class StudyCreatureCards {
         Map.entry("flying_bunny", new CreatureCard(
                 "Flying bunny",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This creature looks like a rabbit with unusual flying features.",
                         "It has a light and whimsical shape.",
@@ -114,7 +114,7 @@ public final class StudyCreatureCards {
         Map.entry("glare", new CreatureCard(
                 "Glare",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a small flying fantasy creature.",
                         "It has a plant-like and watchful appearance.",
@@ -155,7 +155,7 @@ public final class StudyCreatureCards {
         Map.entry("killer_crab", new CreatureCard(
                 "Killer crab",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a crab-like fantasy creature.",
                         "It has a low body and large claws.",
@@ -170,7 +170,7 @@ public final class StudyCreatureCards {
         Map.entry("lizard_knight", new CreatureCard(
                 "Lizard knight",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This creature combines reptile features with a knightly shape.",
                         "It looks armored and alert.",
@@ -185,7 +185,7 @@ public final class StudyCreatureCards {
         Map.entry("mushroom_bup", new CreatureCard(
                 "Mushroom bup",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a mushroom-themed fantasy creature.",
                         "It has a rounded shape and a soft woodland feel.",
@@ -201,7 +201,7 @@ public final class StudyCreatureCards {
         Map.entry("orc", new CreatureCard(
                 "Orc",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a broad humanoid fantasy creature.",
                         "It has a rough and battle-ready look.",
@@ -216,7 +216,7 @@ public final class StudyCreatureCards {
         Map.entry("prototype_warden", new CreatureCard(
                 "Prototype warden",
                 StudyChapter.CHAPTER_3,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a warden-like fantasy creature in an experimental form.",
                         "It looks heavy, imposing, and unnatural.",
@@ -231,7 +231,7 @@ public final class StudyCreatureCards {
         Map.entry("retro_tv_robot", new CreatureCard(
                 "Retro TV robot",
                 StudyChapter.CHAPTER_2,
-                CreatureMovementMode.FIXED,
+                CreatureMovementMode.FREE,
                 List.of(
                         "This is a robot-like creature with a retro television theme.",
                         "It has a mechanical and comic appearance.",
@@ -360,6 +360,58 @@ public final class StudyCreatureCards {
         }
 
         return chapterCards;
+    }
+
+    public static int totalTrackedCreatureTypeCount() {
+        Set<String> creatureIds = new LinkedHashSet<>();
+
+        for (StudyChapter chapter : StudyChapter.values()) {
+            for (CreatureCardReference cardReference : creatureCardsForChapter(chapter)) {
+                if (cardReference.creatureId() != null && !cardReference.creatureId().isBlank()) {
+                    creatureIds.add(cardReference.creatureId());
+                }
+            }
+        }
+
+        return creatureIds.size();
+    }
+
+    public static int totalTrackedCreatureTypeCountExcludingChapterZero() {
+        Set<String> creatureIds = new LinkedHashSet<>();
+
+        for (StudyChapter chapter : StudyChapter.values()) {
+            if (chapter == StudyChapter.CHAPTER_0) {
+                continue;
+            }
+
+            for (CreatureCardReference cardReference : creatureCardsForChapter(chapter)) {
+                if (cardReference.creatureId() != null && !cardReference.creatureId().isBlank()) {
+                    creatureIds.add(cardReference.creatureId());
+                }
+            }
+        }
+
+        return creatureIds.size();
+    }
+
+    public static boolean isTrackedOutsideChapterZero(String creatureId) {
+        if (creatureId == null || creatureId.isBlank()) {
+            return false;
+        }
+
+        for (StudyChapter chapter : StudyChapter.values()) {
+            if (chapter == StudyChapter.CHAPTER_0) {
+                continue;
+            }
+
+            for (CreatureCardReference cardReference : creatureCardsForChapter(chapter)) {
+                if (creatureId.equals(cardReference.creatureId())) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public static String creatureIdForEntityType(EntityType<?> entityType) {

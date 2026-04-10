@@ -50,6 +50,7 @@ public final class StudyInteractionController {
 
     // To log which uniquely named creatures the participant has already clicked at least once.
     private static final Set<String> INTERACTED_CREATURE_NAMES = new HashSet<>();
+    private static final Set<String> INTERACTED_CREATURE_IDS = new HashSet<>();
 
     private static long serverTickCounter;
 
@@ -86,6 +87,12 @@ public final class StudyInteractionController {
 
             boolean interactedBefore = INTERACTED_CREATURE_NAMES.contains(spawnedStudyCreature.creatureName());
             INTERACTED_CREATURE_NAMES.add(spawnedStudyCreature.creatureName());
+            String creatureId = StudyCreatureCards.creatureIdForEntityType(entity.getType());
+            if (creatureId != null && !creatureId.isBlank()) {
+                synchronized (INTERACTED_CREATURE_IDS) {
+                    INTERACTED_CREATURE_IDS.add(creatureId);
+                }
+            }
 
             StudyEventLog.logCreatureCardOpened(
                     player.getName().getString(),
@@ -171,6 +178,31 @@ public final class StudyInteractionController {
             client.execute(() -> client.setScreen(new StudyCreatureInfoScreen(card)));
             return InteractionResult.SUCCESS;
         });
+    }
+
+    public static void resetInteractionProgress() {
+        synchronized (INTERACTED_CREATURE_IDS) {
+            INTERACTED_CREATURE_IDS.clear();
+        }
+        INTERACTED_CREATURE_NAMES.clear();
+    }
+
+    public static int interactedCreatureTypeCount() {
+        synchronized (INTERACTED_CREATURE_IDS) {
+            return INTERACTED_CREATURE_IDS.size();
+        }
+    }
+
+    public static int interactedCreatureTypeCountExcludingChapterZero() {
+        synchronized (INTERACTED_CREATURE_IDS) {
+            int count = 0;
+            for (String creatureId : INTERACTED_CREATURE_IDS) {
+                if (StudyCreatureCards.isTrackedOutsideChapterZero(creatureId)) {
+                    count++;
+                }
+            }
+            return count;
+        }
     }
 
     private static void onEndServerTick(MinecraftServer server) {

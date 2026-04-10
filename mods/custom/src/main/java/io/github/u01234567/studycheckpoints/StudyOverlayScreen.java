@@ -65,14 +65,35 @@ public class StudyOverlayScreen extends Screen {
         return new StudyOverlayScreen("Intro", lines, buttons, indicator, false);
     }
 
-    public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
-        String heading = completedChapter.displayTitle() + " complete";
+    public static StudyOverlayScreen createChapterZeroTransitionScreen(StudyChapter completedChapter) {
         List<String> messageLines = List.of(
-                "Click below to answer the questionnaire in your browser."
+                "You completed the introduction.",
+                "Next, the real game starts.",
+                "Your task is to find and click as many creatures as possible to learn more about them."
         );
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
-                "Answer questionnaire",
+                "Start the game",
+                0xFF2F6FED,
+                0xFF4C85F5,
+                () -> StudyFlowController.continueFromChapterZeroTransition(Minecraft.getInstance())
+        ));
+
+        return new StudyOverlayScreen("Get Started complete", messageLines, buttons, null, false);
+    }
+
+    public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
+        int interactedCreatureCount = StudyInteractionController.interactedCreatureTypeCountExcludingChapterZero();
+        int totalCreatureCount = StudyCreatureCards.totalTrackedCreatureTypeCountExcludingChapterZero();
+        String heading = "You completed the game";
+        List<String> messageLines = List.of(
+                "With " + completedChapter.displayTitle() + " finished, you completed the game.",
+                "You interacted with " + interactedCreatureCount + " of " + totalCreatureCount + " different creatures.",
+                "For the second part of the study, please answer some follow-up questions."
+        );
+
+        List<ButtonSpec> buttons = List.of(new ButtonSpec(
+                "Answer follow-up questions",
                 0xFF2F6FED,
                 0xFF4C85F5,
                 () -> StudyFlowController.continueFromFinalScreen(Minecraft.getInstance(), completedChapter)

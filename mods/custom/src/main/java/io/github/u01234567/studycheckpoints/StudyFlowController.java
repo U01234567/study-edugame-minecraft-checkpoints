@@ -41,8 +41,6 @@ public final class StudyFlowController {
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
     private static final String ESCAPE_RECOVERY_MESSAGE = "Esc pressed: back to chapter start.";
-    private static final String CHAPTER_ZERO_WAITING_MESSAGE = "Press Esc to return to the start once you are ready.";
-    private static final String CHAPTER_ZERO_COMPLETION_MESSAGE = "Get Started complete. Moving on in 5 seconds...";
     private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
     private static final int INITIAL_CHECKPOINT_COMPLETED_CHAPTER_NUMBER = -1;
 
@@ -97,9 +95,9 @@ public final class StudyFlowController {
 
     public static void acceptConsent(Minecraft client) {
         StudyEventLog.logConsentChoice("agree_and_continue");
+        StudyInteractionController.resetInteractionProgress();
 
         client.execute(() -> {
-            client.setScreen(null);
             openInitialCheckpoint(client);
         });
     }
@@ -182,6 +180,26 @@ public final class StudyFlowController {
         client.execute(() -> {
             client.setScreen(null);
             startChapter(client, firstChapter);
+        });
+    }
+
+    public static void continueFromChapterZeroTransition(Minecraft client) {
+        StudyChapter completedChapter = StudyChapter.CHAPTER_0;
+        StudyChapter nextChapter = completedChapter.next();
+        if (nextChapter == null) {
+            return;
+        }
+
+        StudyEventLog.logCheckpointChoice(
+                completedChapter.chapterNumber(),
+                nextChapter.chapterNumber(),
+                getAssignedCondition().id(),
+                "continue"
+        );
+
+        client.execute(() -> {
+            client.setScreen(null);
+            startChapter(client, nextChapter);
         });
     }
 
@@ -423,9 +441,7 @@ public final class StudyFlowController {
 
         activeChapter = chapter;
         chapterDeadlineMs = chapter == StudyChapter.CHAPTER_0 ? 0L : nowMs() + chapter.durationMs();
-        chapterWelcomeMessage = chapter == StudyChapter.CHAPTER_0
-                ? CHAPTER_ZERO_WAITING_MESSAGE
-                : "Welcome to " + chapter.displayTitle() + "!";
+        chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
         chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
@@ -482,6 +498,17 @@ public final class StudyFlowController {
             return;
         }
 
+        if (completedChapter == StudyChapter.CHAPTER_0) {
+            StudyEventLog.logCheckpointDisplayed(
+                    completedChapter.chapterNumber(),
+                    completedChapter.next().chapterNumber(),
+                    getAssignedCondition().id()
+            );
+            StudyInteractionController.prewarmChapterArea(client, completedChapter.next());
+            client.setScreen(StudyOverlayScreen.createChapterZeroTransitionScreen(completedChapter));
+            return;
+        }
+
         if (shouldShowExperimentalCheckpoint(completedChapter)) {
             StudyEventLog.logCheckpointDisplayed(
                     completedChapter.chapterNumber(),
@@ -496,12 +523,11 @@ public final class StudyFlowController {
         advanceFromCompletedChapter(client, completedChapter);
     }
 
-    // The two-slide intro transition now happens before Chapter 0.
-    // Chapter 0 -> 1 still uses the normal checkpoint overlay.
+    // The two-slide intro transition happens before Chapter 0.
+    // Chapter 0 -> 1 uses a standard non-manipulated transition overlay.
     // The remaining manipulated checkpoints are between Ch 1 and 2, and Ch 2 and 3.
     private static boolean shouldShowExperimentalCheckpoint(StudyChapter completedChapter) {
-        return completedChapter == StudyChapter.CHAPTER_0
-                || completedChapter == StudyChapter.CHAPTER_1
+        return completedChapter == StudyChapter.CHAPTER_1
                 || completedChapter == StudyChapter.CHAPTER_2;
     }
 
