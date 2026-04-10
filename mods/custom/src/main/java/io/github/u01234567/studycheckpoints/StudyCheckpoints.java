@@ -34,7 +34,6 @@ public class StudyCheckpoints implements ModInitializer {
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			suppressAdvancementNotifications(server);
 			StudyInteractionController.applyConfiguredPlayerMode(handler.player);
-			StudyEventLog.logSessionHeader();
 			StudyEventLog.logPlayerJoined(handler.player.getName().getString());
 		});
 

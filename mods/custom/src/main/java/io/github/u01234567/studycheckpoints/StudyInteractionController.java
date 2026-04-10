@@ -19,6 +19,9 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -61,6 +64,7 @@ public final class StudyInteractionController {
     private static boolean previousOnGround;
     private static StudyChapter trackedChapter;
     private static StudyChapter prewarmedChapter;
+    private static long lastMouseWheelBlockLogMs;
 
     private StudyInteractionController() {
     }
@@ -177,6 +181,8 @@ public final class StudyInteractionController {
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             enforceServerPlayerState(player);
+            enforceEmptyInventory(player);
+            purgeNearbyGroundItems(player);
 
             if (serverTickCounter % 10L == 0L) {
                 clearNearbyMobTargets(player);
@@ -193,6 +199,44 @@ public final class StudyInteractionController {
         blockForbiddenScreens(client);
         logBlockedKeyAttempts(client);
         sampleMovement(client.player);
+    }
+
+    public static boolean shouldBlockMouseWheel(Minecraft client) {
+        if (client == null || client.player == null) {
+            return false;
+        }
+
+        Screen screen = client.screen;
+        return StudyFlowController.isChapterActive()
+                || screen instanceof StudyOverlayScreen
+                || screen instanceof StudyCheckpointScreen
+                || screen instanceof StudyPauseScreen
+                || screen instanceof StudyLoadingScreen
+                || screen instanceof StudyCreatureInfoScreen;
+    }
+
+    public static void logMouseWheelBlocked(Minecraft client, double verticalScrollAmount) {
+        if (client == null || client.player == null) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastMouseWheelBlockLogMs < 2_000L) {
+            return;
+        }
+
+        lastMouseWheelBlockLogMs = now;
+        String screenName = client.screen == null ? "none" : client.screen.getClass().getSimpleName();
+        String chapterTitle = StudyFlowController.getActiveChapter() != null
+                ? StudyFlowController.getActiveChapter().displayTitle()
+                : "none";
+        StudyEventLog.logBlockedAction(
+                client.player.getName().getString(),
+                "mouse_wheel_blocked",
+                "vertical_scroll=" + String.format(Locale.ROOT, "%.3f", verticalScrollAmount)
+                        + ",screen=" + screenName
+                        + ",chapter=" + chapterTitle
+        );
     }
 
     public static void applyConfiguredPlayerMode(ServerPlayer player) {
@@ -213,6 +257,62 @@ public final class StudyInteractionController {
         player.setHealth(player.getMaxHealth());
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(20.0F);
+    }
+
+    private static void enforceEmptyInventory(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+
+        Inventory inventory = player.getInventory();
+        int removedSlotCount = 0;
+        int removedItemCount = 0;
+
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+
+            removedSlotCount++;
+            removedItemCount += stack.getCount();
+            inventory.setItem(slot, ItemStack.EMPTY);
+        }
+
+        if (inventory.getSelectedSlot() != 0) {
+            inventory.setSelectedSlot(0);
+        }
+
+        if (removedSlotCount > 0) {
+            inventory.setChanged();
+            player.containerMenu.broadcastChanges();
+            StudyEventLog.logInventoryCleared(player.getName().getString(), removedSlotCount, removedItemCount);
+        }
+    }
+
+    private static void purgeNearbyGroundItems(ServerPlayer player) {
+        if (player == null || player.level() == null) {
+            return;
+        }
+
+        List<ItemEntity> itemEntities = player.level().getEntitiesOfClass(
+                ItemEntity.class,
+                player.getBoundingBox().inflate(16.0D)
+        );
+
+        int purgedCount = 0;
+        for (ItemEntity itemEntity : itemEntities) {
+            if (itemEntity == null || !itemEntity.isAlive()) {
+                continue;
+            }
+
+            itemEntity.discard();
+            purgedCount++;
+        }
+
+        if (purgedCount > 0) {
+            StudyEventLog.logGroundItemsPurged(player.getName().getString(), purgedCount);
+        }
     }
 
     /**

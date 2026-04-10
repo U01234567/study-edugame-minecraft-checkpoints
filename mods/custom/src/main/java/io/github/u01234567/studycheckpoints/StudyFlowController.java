@@ -10,13 +10,13 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import org.lwjgl.glfw.GLFW;
 
 import java.awt.Desktop;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collection;
 import java.net.URI;
 import java.util.Locale;
 import java.util.UUID;
@@ -26,7 +26,7 @@ import java.util.UUID;
  * 1. show intro once
  * 2. wait for explicit consent
  * 3. run exactly one chapter at a time
- * 4. show manipulated checkpoint screens between chapters 1→2 and 2→3
+ * 4. show the two-slide intro transition before Chapter 0, then manipulated checkpoints between chapters 1→2 and 2→3
  * 5. hand off to Qualtrics at the very end
  */
 public final class StudyFlowController {
@@ -36,10 +36,15 @@ public final class StudyFlowController {
     private static final long RECOVERY_MESSAGE_DURATION_MS = 3_000L;
     private static final long CLIENT_CHAPTER_READY_STABILITY_MS = 500L;
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
+    private static final long CHAPTER_ZERO_COMPLETION_DELAY_MS = 5_000L;
+    private static final double CHAPTER_ZERO_HEIGHT_TARGET_Y = 58.0D;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
     private static final String ESCAPE_RECOVERY_MESSAGE = "Esc pressed: back to chapter start.";
+    private static final String CHAPTER_ZERO_WAITING_MESSAGE = "Press Esc to return to the start once you are ready.";
+    private static final String CHAPTER_ZERO_COMPLETION_MESSAGE = "Get Started complete. Moving on in 5 seconds...";
     private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
+    private static final int INITIAL_CHECKPOINT_COMPLETED_CHAPTER_NUMBER = -1;
 
     private static boolean introShown;
     private static boolean windowPrepared;
@@ -58,6 +63,9 @@ public final class StudyFlowController {
     private static long questionnaireFirstOpenedAtMs;
     private static StudyChapter pausedCompletedChapter;
     private static long pauseDeadlineMs;
+    private static boolean chapterZeroReachedHeight;
+    private static boolean chapterZeroPressedEscape;
+    private static long chapterZeroCompletionDeadlineMs;
 
     private static StudyConditionAllocator.ConditionAssignment conditionAssignment;
 
@@ -93,7 +101,7 @@ public final class StudyFlowController {
 
         client.execute(() -> {
             client.setScreen(null);
-            startChapter(client, StudyChapter.first());
+            openInitialCheckpoint(client);
         });
     }
 
@@ -137,6 +145,18 @@ public final class StudyFlowController {
             recoveryMessage = ESCAPE_RECOVERY_MESSAGE;
             recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
 
+            if (chapterToRestore == StudyChapter.CHAPTER_0 && !chapterZeroPressedEscape) {
+                chapterZeroPressedEscape = true;
+                StudyEventLog.logChapterZeroConditionSatisfied(
+                        "pressed_escape",
+                        playerName(client),
+                        client.player != null ? client.player.getX() : 0.0D,
+                        client.player != null ? client.player.getY() : 0.0D,
+                        client.player != null ? client.player.getZ() : 0.0D
+                );
+                armChapterZeroCompletionIfReady(client);
+            }
+
             StudyEventLog.logBlockedAction(
                     playerName(client),
                     "chapter_recovery_teleport",
@@ -144,6 +164,25 @@ public final class StudyFlowController {
             );
         });
         return true;
+    }
+
+    public static void continueFromInitialCheckpoint(Minecraft client) {
+        StudyChapter firstChapter = StudyChapter.first();
+        if (firstChapter == null) {
+            return;
+        }
+
+        StudyEventLog.logCheckpointChoice(
+                INITIAL_CHECKPOINT_COMPLETED_CHAPTER_NUMBER,
+                firstChapter.chapterNumber(),
+                getAssignedCondition().id(),
+                "continue"
+        );
+
+        client.execute(() -> {
+            client.setScreen(null);
+            startChapter(client, firstChapter);
+        });
     }
 
     public static void continueFromFinalScreen(Minecraft client, StudyChapter completedChapter) {
@@ -203,7 +242,7 @@ public final class StudyFlowController {
                 completedChapter.chapterNumber(),
                 nextChapter.chapterNumber(),
                 condition.id(),
-                "pause"
+                "break"
         );
         StudyEventLog.logCheckpointPauseStarted(
                 completedChapter.chapterNumber(),
@@ -224,7 +263,7 @@ public final class StudyFlowController {
             return;
         }
 
-        if (activeChapter != null) {
+        if (activeChapter != null && activeChapter != StudyChapter.CHAPTER_0) {
             long remainingMs = Math.max(0L, chapterDeadlineMs - nowMs());
             int totalSeconds = (int) Math.ceil(remainingMs / 1000.0D);
             int minutes = totalSeconds / 60;
@@ -261,7 +300,6 @@ public final class StudyFlowController {
 
         ensureFullscreenAndFocus(client);
         ensureConditionAssigned();
-        suppressAdvancementToasts(client);
 
         if (!introShown) {
             StudyInteractionController.prewarmChapterArea(client, StudyChapter.first());
@@ -274,7 +312,9 @@ public final class StudyFlowController {
             tickChapterLoading(client);
         }
 
-        if (activeChapter != null && nowMs() >= chapterDeadlineMs) {
+        if (activeChapter == StudyChapter.CHAPTER_0) {
+            tickChapterZeroProgress(client);
+        } else if (activeChapter != null && nowMs() >= chapterDeadlineMs) {
             finishActiveChapter(client);
         }
     }
@@ -296,6 +336,21 @@ public final class StudyFlowController {
         );
     }
 
+    private static void openInitialCheckpoint(Minecraft client) {
+        StudyChapter firstChapter = StudyChapter.first();
+        if (firstChapter == null) {
+            return;
+        }
+
+        StudyInteractionController.prewarmChapterArea(client, firstChapter);
+        StudyEventLog.logCheckpointDisplayed(
+                INITIAL_CHECKPOINT_COMPLETED_CHAPTER_NUMBER,
+                firstChapter.chapterNumber(),
+                getAssignedCondition().id()
+        );
+        client.setScreen(StudyCheckpointScreen.createInitialIntroCheckpoint(getAssignedCondition()));
+    }
+
     private static void startChapter(Minecraft client, StudyChapter chapter) {
         if (chapter == null) {
             return;
@@ -312,6 +367,9 @@ public final class StudyFlowController {
         chapterWelcomeDeadlineMs = 0L;
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
+        chapterZeroReachedHeight = false;
+        chapterZeroPressedEscape = false;
+        chapterZeroCompletionDeadlineMs = 0L;
 
         StudyChapterHotbarTracker.reset();
         client.setScreen(new StudyLoadingScreen("Chapter loading..."));
@@ -365,8 +423,10 @@ public final class StudyFlowController {
         loadingPreparationComplete = false;
 
         activeChapter = chapter;
-        chapterDeadlineMs = nowMs() + chapter.durationMs();
-        chapterWelcomeMessage = "Welcome to " + chapter.displayTitle() + "!";
+        chapterDeadlineMs = chapter == StudyChapter.CHAPTER_0 ? 0L : nowMs() + chapter.durationMs();
+        chapterWelcomeMessage = chapter == StudyChapter.CHAPTER_0
+                ? CHAPTER_ZERO_WAITING_MESSAGE
+                : "Welcome to " + chapter.displayTitle() + "!";
         chapterWelcomeDeadlineMs = nowMs() + CHAPTER_WELCOME_DURATION_MS;
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
@@ -379,7 +439,7 @@ public final class StudyFlowController {
                 chapter.chapterNumber(),
                 chapter.x() + "," + chapter.y() + "," + chapter.z(),
                 chapter.facingLabel(),
-                chapter.durationMs()
+                chapter == StudyChapter.CHAPTER_0 ? 0L : chapter.durationMs()
         );
 
         StudyInteractionController.prewarmChapterArea(client, chapter.next());
@@ -437,11 +497,10 @@ public final class StudyFlowController {
         advanceFromCompletedChapter(client, completedChapter);
     }
 
-    // There is a shared checkpoint between Ch 0 and 1, and manipulated
-    // checkpoints between Ch 1 and 2, and Ch 2 and 3.
+    // The two-slide intro transition now happens before Chapter 0.
+    // The remaining manipulated checkpoints are between Ch 1 and 2, and Ch 2 and 3.
     private static boolean shouldShowExperimentalCheckpoint(StudyChapter completedChapter) {
-        return completedChapter == StudyChapter.CHAPTER_0
-                || completedChapter == StudyChapter.CHAPTER_1
+        return completedChapter == StudyChapter.CHAPTER_1
                 || completedChapter == StudyChapter.CHAPTER_2;
     }
 
@@ -450,6 +509,9 @@ public final class StudyFlowController {
 
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
+        chapterZeroReachedHeight = false;
+        chapterZeroPressedEscape = false;
+        chapterZeroCompletionDeadlineMs = 0L;
         client.setScreen(null);
 
         if (nextChapter == null) {
@@ -519,60 +581,37 @@ public final class StudyFlowController {
         StudyEventLog.logTestingTimeSkip(playerName, phase, remainingBeforeMs, remainingAfterMs);
     }
 
-    // Best-effort client-side suppression of advancement toast pop-ups.
-    // The study already suppresses advancement chat announcements on the server side.
-    private static void suppressAdvancementToasts(Minecraft client) {
-        Object toastManager = client.getToastManager();
-        if (toastManager == null) {
+    private static void tickChapterZeroProgress(Minecraft client) {
+        if (client == null || client.player == null || activeChapter != StudyChapter.CHAPTER_0) {
             return;
         }
 
-        for (Field field : toastManager.getClass().getDeclaredFields()) {
-            try {
-                field.setAccessible(true);
-                Object value = field.get(toastManager);
+        if (!chapterZeroReachedHeight && client.player.getY() >= CHAPTER_ZERO_HEIGHT_TARGET_Y) {
+            chapterZeroReachedHeight = true;
+            StudyEventLog.logChapterZeroConditionSatisfied(
+                    "reached_y_at_least_58",
+                    playerName(client),
+                    client.player.getX(),
+                    client.player.getY(),
+                    client.player.getZ()
+            );
+            armChapterZeroCompletionIfReady(client);
+        }
 
-                if (value == null) {
-                    continue;
-                }
-
-                if (value instanceof Collection<?> collection) {
-                    collection.removeIf(StudyFlowController::containsAdvancementToast);
-                    continue;
-                }
-
-                if (containsAdvancementToast(value) && !field.getType().isPrimitive()) {
-                    field.set(toastManager, null);
-                }
-            } catch (Exception ignored) {
-                // Best effort only; do nothing if the internal toast structure changes.
-            }
+        if (chapterZeroCompletionDeadlineMs > 0L && nowMs() >= chapterZeroCompletionDeadlineMs) {
+            finishActiveChapter(client);
         }
     }
 
-    private static boolean containsAdvancementToast(Object value) {
-        if (value == null) {
-            return false;
+    private static void armChapterZeroCompletionIfReady(Minecraft client) {
+        if (!chapterZeroReachedHeight || !chapterZeroPressedEscape || chapterZeroCompletionDeadlineMs > 0L) {
+            return;
         }
 
-        String className = value.getClass().getSimpleName();
-        if (className.contains("AdvancementToast")) {
-            return true;
-        }
-
-        for (Field field : value.getClass().getDeclaredFields()) {
-            try {
-                field.setAccessible(true);
-                Object nestedValue = field.get(value);
-                if (nestedValue != null && nestedValue.getClass().getSimpleName().contains("AdvancementToast")) {
-                    return true;
-                }
-            } catch (Exception ignored) {
-                // Ignore internal reflection failures here.
-            }
-        }
-
-        return false;
+        chapterZeroCompletionDeadlineMs = nowMs() + CHAPTER_ZERO_COMPLETION_DELAY_MS;
+        chapterWelcomeMessage = CHAPTER_ZERO_COMPLETION_MESSAGE;
+        chapterWelcomeDeadlineMs = chapterZeroCompletionDeadlineMs;
+        StudyEventLog.logChapterZeroCompletionArmed(playerName(client), CHAPTER_ZERO_COMPLETION_DELAY_MS);
     }
 
     // Place the participant in the correct chapter location.
@@ -611,7 +650,23 @@ public final class StudyFlowController {
                     CHAPTER_LOOK_PITCH_DEGREES
             );
             serverPlayer.setDeltaMovement(0.0D, 0.0D, 0.0D);
+            applySilentInfiniteNightVision(serverPlayer);
         });
+    }
+
+    private static void applySilentInfiniteNightVision(ServerPlayer serverPlayer) {
+        if (serverPlayer == null) {
+            return;
+        }
+
+        serverPlayer.addEffect(new MobEffectInstance(
+                MobEffects.NIGHT_VISION,
+                MobEffectInstance.INFINITE_DURATION,
+                0,
+                false,
+                false,
+                false
+        ));
     }
 
     //Try to open in fullscreen + focused on this program.

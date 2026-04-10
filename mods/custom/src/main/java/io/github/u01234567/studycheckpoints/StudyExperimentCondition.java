@@ -51,13 +51,13 @@ public enum StudyExperimentCondition {
             );
             case PAUSE -> List.of(
                     "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
-                    "This is a good place to pause.",
+                    "This is a good place to take a break.",
                     "Your progress is saved here, and you will continue from this point",
                     "after the break."
             );
             case CHOICE -> List.of(
                     "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
-                    "This is a good place to pause.",
+                    "This is a good place to take a break.",
                     "Your progress is saved here, and you can continue later from this point."
             );
         };
@@ -74,7 +74,7 @@ public enum StudyExperimentCondition {
     // Buttons
     public String continueButtonLabel() { return "Continue to the next chapter"; }
     public String pauseButtonLabel() {
-        return "Take a two-minute pause";
+        return "Take a two-minute break";
     }
 
     public int continueButtonColour() {

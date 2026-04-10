@@ -4,6 +4,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -11,16 +14,18 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Helper: writes the main study log.
  */
 public final class StudyEventLog {
-    // Game directory (at custom/run)
     private static final Path GAME_DIR = FabricLoader.getInstance().getGameDir();
 
-    // Log file (at custom/run/logs/study-checkpoints.log)
-    private static final Path LOG_FILE = GAME_DIR.resolve("logs").resolve("study-checkpoints.log");
+    private static final Path PRIMARY_LOG_DIR =
+            GAME_DIR.resolve("../../../analysis/logs").normalize().toAbsolutePath();
+    private static final Path MIRROR_LOG_DIR =
+            GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
 
     // World directories (repo original and copy)
     private static final Path REPO_WORLD_DIR =
@@ -28,13 +33,19 @@ public final class StudyEventLog {
     private static final Path RUNTIME_WORLD_DIR =
             GAME_DIR.resolve("saves").resolve(StudyCheckpoints.STUDY_WORLD_SAVE_NAME).normalize().toAbsolutePath();
 
-    // ONE metadata header
     private static final AtomicBoolean HEADER_WRITTEN = new AtomicBoolean(false);
 
-    // Per-session ID (to group events in data analysis)
+    private static final AtomicReference<Path> PRIMARY_LOG_FILE = new AtomicReference<>();
+    private static final AtomicReference<Path> MIRROR_LOG_FILE = new AtomicReference<>();
+    private static final AtomicReference<String> SESSION_PLAYER_NAME = new AtomicReference<>("unknown");
+
     private static final String SESSION_ID = UUID.randomUUID().toString();
 
-    // Timestamp
+    private static final String SESSION_STARTED_AT_FILE_SAFE =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
+                    .withZone(ZoneId.systemDefault())
+                    .format(Instant.now());
+
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
             DateTimeFormatter.ofPattern("'['yyyy-MM-dd'] ['HH:mm:ss:SSS']'")
                     .withZone(ZoneId.systemDefault());
@@ -46,6 +57,85 @@ public final class StudyEventLog {
     // MCID
     public static String getSessionId() {
         return SESSION_ID;
+    }
+
+    public static void registerSessionParticipant(String playerName) {
+        String resolvedPlayerName = sanitiseFileNameSegment(safe(playerName));
+        SESSION_PLAYER_NAME.compareAndSet("unknown", resolvedPlayerName);
+    }
+
+    public static void logCheckpointSlideDisplayed(int completedChapterNumber,
+                                                   int nextChapterNumber,
+                                                   int slideIndex,
+                                                   int slideCount,
+                                                   String slideKey) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_slide_displayed",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "slide_index=" + slideIndex,
+                "slide_count=" + slideCount,
+                "slide_key=" + safe(slideKey)
+        );
+    }
+
+    public static void logCheckpointSlideAdvanced(int completedChapterNumber,
+                                                  int nextChapterNumber,
+                                                  int fromSlideIndex,
+                                                  int toSlideIndex) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_slide_advanced",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "from_slide_index=" + fromSlideIndex,
+                "to_slide_index=" + toSlideIndex
+        );
+    }
+
+    public static void logChapterZeroConditionSatisfied(String conditionKey,
+                                                        String playerName,
+                                                        double x,
+                                                        double y,
+                                                        double z) {
+        logSessionHeader();
+        logEvent(
+                "chapter_zero_condition_satisfied",
+                "condition=" + safe(conditionKey),
+                "player=" + safe(playerName),
+                "x=" + formatDouble(x),
+                "y=" + formatDouble(y),
+                "z=" + formatDouble(z)
+        );
+    }
+
+    public static void logChapterZeroCompletionArmed(String playerName, long delayMs) {
+        logSessionHeader();
+        logEvent(
+                "chapter_zero_completion_armed",
+                "player=" + safe(playerName),
+                "delay_ms=" + delayMs
+        );
+    }
+
+    public static void logInventoryCleared(String playerName, int removedSlotCount, int removedItemCount) {
+        logSessionHeader();
+        logEvent(
+                "inventory_cleared",
+                "player=" + safe(playerName),
+                "removed_slot_count=" + removedSlotCount,
+                "removed_item_count=" + removedItemCount
+        );
+    }
+
+    public static void logGroundItemsPurged(String playerName, int purgedItemEntityCount) {
+        logSessionHeader();
+        logEvent(
+                "ground_items_purged",
+                "player=" + safe(playerName),
+                "purged_item_entity_count=" + purgedItemEntityCount
+        );
     }
 
     // Generate metadata header. Includes:
@@ -69,6 +159,9 @@ public final class StudyEventLog {
         appendLine("minecraft_version=" + getModVersion("minecraft"));
         appendLine("fabric_loader_version=" + getModVersion("fabricloader"));
         appendLine("fabric_api_version=" + getModVersion("fabric-api"));
+        appendLine("session_player=" + SESSION_PLAYER_NAME.get());
+        appendLine("analysis_log_file=" + ensurePrimaryLogFile());
+        appendLine("runtime_log_mirror=" + ensureMirrorLogFile());
         appendLine("repo_world_source=" + REPO_WORLD_DIR);
         appendLine("repo_world_source_last_modified=" + getWorldLastModified(REPO_WORLD_DIR));
         appendLine("runtime_world_copy=" + RUNTIME_WORLD_DIR);
@@ -77,6 +170,7 @@ public final class StudyEventLog {
     }
 
     public static void logPlayerJoined(String playerName) {
+        registerSessionParticipant(playerName);
         logSessionHeader();
         logEvent(
                 "player_joined",
@@ -360,20 +454,60 @@ public final class StudyEventLog {
         appendLine(line.toString());
     }
 
-    // Log ONE event at a time
     private static synchronized void appendLine(String line) {
         try {
-            Files.createDirectories(LOG_FILE.getParent());
-            Files.writeString(
-                    LOG_FILE,
-                    line + System.lineSeparator(),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.APPEND
-            );
+            appendLineToFile(ensurePrimaryLogFile(), line);
+            appendLineToFile(ensureMirrorLogFile(), line);
         } catch (IOException e) {
-            StudyCheckpoints.LOGGER.error("Failed to write study log file: {}", LOG_FILE, e);
+            StudyCheckpoints.LOGGER.error("Failed to write study log file for session {}.", SESSION_ID, e);
         }
+    }
+
+    private static void appendLineToFile(Path logFile, String line) throws IOException {
+        Files.createDirectories(logFile.getParent());
+
+        byte[] encodedLine = (line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
+        try (FileChannel channel = FileChannel.open(
+                logFile,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.APPEND
+        )) {
+            channel.write(ByteBuffer.wrap(encodedLine));
+            channel.force(true);
+        }
+    }
+
+    private static Path ensurePrimaryLogFile() {
+        Path existing = PRIMARY_LOG_FILE.get();
+        if (existing != null) {
+            return existing;
+        }
+
+        Path created = PRIMARY_LOG_DIR.resolve(sessionLogFileName());
+        PRIMARY_LOG_FILE.compareAndSet(null, created);
+        return PRIMARY_LOG_FILE.get();
+    }
+
+    private static Path ensureMirrorLogFile() {
+        Path existing = MIRROR_LOG_FILE.get();
+        if (existing != null) {
+            return existing;
+        }
+
+        Path created = MIRROR_LOG_DIR.resolve(sessionLogFileName());
+        MIRROR_LOG_FILE.compareAndSet(null, created);
+        return MIRROR_LOG_FILE.get();
+    }
+
+    private static String sessionLogFileName() {
+        return "study-"
+                + SESSION_STARTED_AT_FILE_SAFE
+                + "-"
+                + SESSION_PLAYER_NAME.get()
+                + "-"
+                + SESSION_ID
+                + ".log";
     }
 
     // Metadata: mod version?
@@ -408,12 +542,15 @@ public final class StudyEventLog {
         return String.format(Locale.ROOT, "%.3f", value);
     }
 
-    // Avoid blank / null text
     private static String safe(String value) {
         if (value == null || value.isBlank()) {
             return "unknown";
         }
 
         return value;
+    }
+
+    private static String sanitiseFileNameSegment(String value) {
+        return safe(value).replaceAll("[^a-zA-Z0-9._-]+", "_");
     }
 }

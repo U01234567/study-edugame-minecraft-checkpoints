@@ -18,15 +18,22 @@ public class StudyCheckpointScreen extends Screen {
     private static final int PROMPT_COLOUR = 0xFFD46A6A;
     private static final int PROMPT_BACKGROUND_COLOUR = 0xFFFBE3E3;
     private static final int PROMPT_BORDER_COLOUR = 0xFFE5A0A0;
-    private static final List<String> INTRO_TRANSITION_LINES = List.of(
+    private static final int INTRO_SLIDE_COUNT = 2;
+    private static final int NEXT_BUTTON_COLOUR = 0xFF2F6FED;
+    private static final int NEXT_BUTTON_HOVER_COLOUR = 0xFF4C85F5;
+    private static final String INITIAL_TRANSITION_START_BUTTON_LABEL = "Start Chapter 0";
+    private static final List<String> INTRO_TRANSITION_SLIDE_ONE_LINES = List.of(
             "You completed the introduction.",
-            "Next, the real game starts.",
+            "Next, the real game starts."
+    );
+    private static final List<String> INTRO_TRANSITION_SLIDE_TWO_LINES = List.of(
             "Your task is to find and click as many creatures as possible",
             "to learn more about them."
     );
 
     private final StudyChapter completedChapter;
     private final StudyChapter nextChapter;
+    private final boolean initialTransitionCheckpoint;
     private final StudyExperimentCondition condition;
     private final List<String> bodyLines;
     private final long promptDelayMs;
@@ -36,14 +43,27 @@ public class StudyCheckpointScreen extends Screen {
     private boolean promptLogged;
     private boolean promptDismissed;
     private boolean actionTaken;
+    private int introSlideIndex;
     private StudyColourButton promptCloseButton;
 
     public StudyCheckpointScreen(StudyChapter completedChapter, StudyExperimentCondition condition) {
+        this(completedChapter, completedChapter != null ? completedChapter.next() : null, condition, false);
+    }
+
+    public static StudyCheckpointScreen createInitialIntroCheckpoint(StudyExperimentCondition condition) {
+        return new StudyCheckpointScreen(null, StudyChapter.first(), condition, true);
+    }
+
+    private StudyCheckpointScreen(StudyChapter completedChapter,
+                                  StudyChapter nextChapter,
+                                  StudyExperimentCondition condition,
+                                  boolean initialTransitionCheckpoint) {
         super(Component.empty());
         this.completedChapter = completedChapter;
-        this.nextChapter = completedChapter.next();
+        this.nextChapter = nextChapter;
         this.condition = condition;
-        this.bodyLines = createBodyLines(completedChapter, condition, nextChapter);
+        this.initialTransitionCheckpoint = initialTransitionCheckpoint;
+        this.bodyLines = createBodyLines(initialTransitionCheckpoint, completedChapter, condition, nextChapter);
         this.promptDelayMs = StudyConfig.getCheckpointPromptDelayMs();
     }
 
@@ -71,6 +91,8 @@ public class StudyCheckpointScreen extends Screen {
         if (this.openedAtMs == 0L) {
             this.openedAtMs = System.currentTimeMillis();
         }
+
+        logCurrentSlideDisplayed();
 
         List<ButtonSpec> buttons = buildButtonSpecs();
 
@@ -121,7 +143,7 @@ public class StudyCheckpointScreen extends Screen {
                         promptCloseButton.active = false;
                     }
                 }
-                ));
+        ));
         promptCloseButton.visible = false;
         promptCloseButton.active = false;
     }
@@ -134,7 +156,7 @@ public class StudyCheckpointScreen extends Screen {
             if (!promptLogged && nextChapter != null) {
                 promptLogged = true;
                 StudyEventLog.logCheckpointPromptDisplayed(
-                        completedChapter.chapterNumber(),
+                        completedChapterNumber(),
                         nextChapter.chapterNumber(),
                         condition.id(),
                         promptText()
@@ -175,7 +197,7 @@ public class StudyCheckpointScreen extends Screen {
         graphics.text(this.font, heading, headingX, panelTop + 18, 0xFF111111, false);
 
         int y = panelTop + 48;
-        for (String line : bodyLines) {
+        for (String line : currentBodyLines()) {
             for (String wrappedLine : wrapLine(line, maxTextWidth)) {
                 graphics.text(this.font, wrappedLine, textLeft, y, 0xFF222222, false);
                 y += 14;
@@ -226,14 +248,22 @@ public class StudyCheckpointScreen extends Screen {
         List<ButtonSpec> buttons = new ArrayList<>();
 
         if (isIntroTransitionCheckpoint()) {
+            if (introSlideIndex == 0) {
+                buttons.add(new ButtonSpec(
+                        "Next",
+                        NEXT_BUTTON_COLOUR,
+                        NEXT_BUTTON_HOVER_COLOUR,
+                        () -> runOnce(this::advanceIntroSlide)
+                ));
+                return buttons;
+            }
+
             buttons.add(new ButtonSpec(
-                    condition.continueButtonLabel(),
+                    INITIAL_TRANSITION_START_BUTTON_LABEL,
                     condition.continueButtonColour(),
                     condition.continueButtonHoverColour(),
-                    () -> runOnce(() -> StudyFlowController.continueFromCheckpoint(
-                            Minecraft.getInstance(),
-                            completedChapter,
-                            condition
+                    () -> runOnce(() -> StudyFlowController.continueFromInitialCheckpoint(
+                            Minecraft.getInstance()
                     ))
             ));
             return buttons;
@@ -278,7 +308,34 @@ public class StudyCheckpointScreen extends Screen {
     }
 
     private boolean isIntroTransitionCheckpoint() {
-        return completedChapter == StudyChapter.CHAPTER_0;
+        return initialTransitionCheckpoint;
+    }
+
+    private void advanceIntroSlide() {
+        if (!isIntroTransitionCheckpoint() || introSlideIndex >= INTRO_SLIDE_COUNT - 1) {
+            return;
+        }
+
+        int previousSlideIndex = introSlideIndex;
+        introSlideIndex++;
+        actionTaken = false;
+        promptVisible = false;
+        promptDismissed = false;
+        promptLogged = false;
+        openedAtMs = System.currentTimeMillis();
+
+        if (nextChapter != null) {
+            StudyEventLog.logCheckpointSlideAdvanced(
+                    completedChapterNumber(),
+                    nextChapter.chapterNumber(),
+                    previousSlideIndex + 1,
+                    introSlideIndex + 1
+            );
+        }
+
+        if (this.minecraft != null) {
+            this.init(this.width, this.height);
+        }
     }
 
     private String promptText() {
@@ -287,14 +344,43 @@ public class StudyCheckpointScreen extends Screen {
                 : condition.promptText();
     }
 
-    private static List<String> createBodyLines(StudyChapter completedChapter,
+    private static List<String> createBodyLines(boolean initialTransitionCheckpoint,
+                                                StudyChapter completedChapter,
                                                 StudyExperimentCondition condition,
                                                 StudyChapter nextChapter) {
-        if (completedChapter == StudyChapter.CHAPTER_0) {
-            return INTRO_TRANSITION_LINES;
+        if (initialTransitionCheckpoint) {
+            return INTRO_TRANSITION_SLIDE_ONE_LINES;
         }
 
         return condition.checkpointBodyLines(completedChapter, nextChapter);
+    }
+
+    private void logCurrentSlideDisplayed() {
+        if (!isIntroTransitionCheckpoint() || nextChapter == null) {
+            return;
+        }
+
+        StudyEventLog.logCheckpointSlideDisplayed(
+                completedChapterNumber(),
+                nextChapter.chapterNumber(),
+                introSlideIndex + 1,
+                INTRO_SLIDE_COUNT,
+                introSlideIndex == 0 ? "pre_chapter_zero_overview" : "pre_chapter_zero_start_button"
+        );
+    }
+
+    private List<String> currentBodyLines() {
+        if (!isIntroTransitionCheckpoint()) {
+            return bodyLines;
+        }
+
+        return introSlideIndex == 0
+                ? INTRO_TRANSITION_SLIDE_ONE_LINES
+                : INTRO_TRANSITION_SLIDE_TWO_LINES;
+    }
+
+    private int completedChapterNumber() {
+        return completedChapter != null ? completedChapter.chapterNumber() : -1;
     }
 
     private record ButtonSpec(String label, int baseColour, int hoverColour, Runnable onPress) {
@@ -314,14 +400,14 @@ public class StudyCheckpointScreen extends Screen {
         for (String word : words) {
             String candidate = currentLine.isEmpty() ? word : currentLine + " " + word;
 
-                if (!currentLine.isEmpty() && this.font.width(candidate) > maxWidth) {
+            if (!currentLine.isEmpty() && this.font.width(candidate) > maxWidth) {
                 wrappedLines.add(currentLine.toString());
                 currentLine.setLength(0);
                 currentLine.append(word);
             } else {
                 if (!currentLine.isEmpty()) {
-                        currentLine.append(' ');
-                    }
+                    currentLine.append(' ');
+                }
                 currentLine.append(word);
             }
         }
