@@ -856,7 +856,7 @@ public final class StudyFlowController {
         Process process;
 
         if (isWindows()) {
-            process = new ProcessBuilder("cmd", "/c", "start", "", url).start();
+            process = new ProcessBuilder("cmd", "/c", "start", "\"\"", "\"" + url + "\"").start();
         } else if (isMac()) {
             process = new ProcessBuilder("open", url).start();
         } else {
