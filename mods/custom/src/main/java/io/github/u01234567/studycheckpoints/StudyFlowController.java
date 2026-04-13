@@ -40,6 +40,7 @@ public final class StudyFlowController {
     private static final long CHAPTER_WELCOME_DURATION_MS = 5_000L;
     private static final long CHAPTER_ZERO_COMPLETION_DELAY_MS = 5_000L;
     private static final double CHAPTER_ZERO_DEPTH_TARGET_Y = 59.0D;
+    private static final long CHAPTER_ZERO_VALIDATION_MESSAGE_DURATION_MS = 10_000L;
     private static final long QUESTIONNAIRE_CLOSE_DELAY_MS = 10_000L;
     private static final float CHAPTER_LOOK_PITCH_DEGREES = 45.0F;
     private static final int RECOVERY_MESSAGE_COLOUR = 0xFFFFFFFF;
@@ -59,6 +60,8 @@ public final class StudyFlowController {
     private static long chapterWelcomeDeadlineMs;
     private static String recoveryMessage;
     private static long recoveryMessageDeadlineMs;
+    private static java.util.List<String> chapterZeroValidationMessages;
+    private static long chapterZeroValidationMessageDeadlineMs;
     private static long questionnaireFirstOpenedAtMs;
     private static StudyChapter pausedCompletedChapter;
     private static long pauseDeadlineMs;
@@ -143,17 +146,26 @@ public final class StudyFlowController {
             recoveryMessage = StudyConfig.getEscapeRecoveryMessage();
             recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
 
-            if (chapterToRestore == StudyChapter.CHAPTER_0
-                    && chapterZeroReachedDepth
-                    && chapterZeroCompletionDeadlineMs == 0L) {
-                StudyEventLog.logChapterZeroConditionSatisfied(
-                        "pressed_escape_after_reaching_y_59_or_below",
-                        playerName(client),
-                        client.player != null ? client.player.getX() : 0.0D,
-                        client.player != null ? client.player.getY() : 0.0D,
-                        client.player != null ? client.player.getZ() : 0.0D
-                );
-                armChapterZeroCompletionIfReady(client);
+            if (chapterToRestore == StudyChapter.CHAPTER_0) {
+                clearChapterZeroValidationMessage();
+
+                if (chapterZeroReachedDepth) {
+                    StudyEventLog.logChapterZeroConditionSatisfied(
+                            "pressed_escape_after_reaching_y_59_or_below",
+                            playerName(client),
+                            client.player != null ? client.player.getX() : 0.0D,
+                            client.player != null ? client.player.getY() : 0.0D,
+                            client.player != null ? client.player.getZ() : 0.0D
+                    );
+                }
+
+                if (chapterZeroCompletionDeadlineMs == 0L) {
+                    if (armChapterZeroCompletionIfReady(client)) {
+                        clearChapterZeroValidationMessage();
+                    } else {
+                        showChapterZeroValidationMessage(buildChapterZeroMissingRequirementLines());
+                    }
+                }
             }
 
             StudyEventLog.logBlockedAction(
@@ -310,6 +322,17 @@ public final class StudyFlowController {
         } else {
             recoveryMessage = null;
         }
+
+        if (chapterZeroValidationMessages != null && nowMs() < chapterZeroValidationMessageDeadlineMs) {
+            int messageY = 38;
+            for (String line : chapterZeroValidationMessages) {
+                int messageX = (client.getWindow().getGuiScaledWidth() - client.font.width(line)) / 2;
+                graphics.text(client.font, line, messageX, messageY, RECOVERY_MESSAGE_COLOUR, true);
+                messageY += 12;
+            }
+        } else {
+            chapterZeroValidationMessages = null;
+        }
     }
 
     private static void onEndClientTick(Minecraft client) {
@@ -384,6 +407,7 @@ public final class StudyFlowController {
         chapterDeadlineMs = 0L;
         chapterWelcomeMessage = null;
         chapterWelcomeDeadlineMs = 0L;
+        clearChapterZeroValidationMessage();
         pausedCompletedChapter = null;
         pauseDeadlineMs = 0L;
         chapterZeroReachedDepth = false;
@@ -539,6 +563,7 @@ public final class StudyFlowController {
         pauseDeadlineMs = 0L;
         chapterZeroReachedDepth = false;
         chapterZeroCompletionDeadlineMs = 0L;
+        clearChapterZeroValidationMessage();
         client.setScreen(null);
 
         if (nextChapter == null) {
@@ -629,13 +654,56 @@ public final class StudyFlowController {
         }
     }
 
-    private static void armChapterZeroCompletionIfReady(Minecraft client) {
-        if (!chapterZeroReachedDepth || chapterZeroCompletionDeadlineMs > 0L) {
-            return;
+    private static boolean armChapterZeroCompletionIfReady(Minecraft client) {
+        if (!chapterZeroReachedDepth
+                || !StudyInteractionController.hasInteractedWithAnyCreature()
+                || chapterZeroCompletionDeadlineMs > 0L) {
+            return false;
         }
 
         chapterZeroCompletionDeadlineMs = nowMs() + CHAPTER_ZERO_COMPLETION_DELAY_MS;
         StudyEventLog.logChapterZeroCompletionArmed(playerName(client), CHAPTER_ZERO_COMPLETION_DELAY_MS);
+        return true;
+    }
+
+    private static java.util.List<String> buildChapterZeroMissingRequirementLines() {
+        java.util.List<String> missingRequirements = new java.util.ArrayList<>();
+
+        if (!StudyInteractionController.hasInteractedWithAnyCreature()) {
+            missingRequirements.add("- Interact with a creature");
+        }
+
+        if (!chapterZeroReachedDepth) {
+            missingRequirements.add("- Jump in the hole");
+        }
+
+        if (missingRequirements.isEmpty()) {
+            return java.util.List.of();
+        }
+
+        String summaryLine = missingRequirements.size() == 1
+                ? "Make sure to pass this requirement (and then press ESC again) to finish:"
+                : "Make sure to pass these requirements (and then press ESC again) to finish:";
+
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        lines.add(summaryLine);
+        lines.addAll(missingRequirements);
+        return java.util.List.copyOf(lines);
+    }
+
+    private static void showChapterZeroValidationMessage(java.util.List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            clearChapterZeroValidationMessage();
+            return;
+        }
+
+        chapterZeroValidationMessages = java.util.List.copyOf(lines);
+        chapterZeroValidationMessageDeadlineMs = nowMs() + CHAPTER_ZERO_VALIDATION_MESSAGE_DURATION_MS;
+    }
+
+    private static void clearChapterZeroValidationMessage() {
+        chapterZeroValidationMessages = null;
+        chapterZeroValidationMessageDeadlineMs = 0L;
     }
 
     // Place the participant in the correct chapter location.

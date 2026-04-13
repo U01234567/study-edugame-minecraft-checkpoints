@@ -193,6 +193,12 @@ public final class StudyInteractionController {
         INTERACTED_CREATURE_NAMES.clear();
     }
 
+    public static boolean hasInteractedWithAnyCreature() {
+        synchronized (INTERACTED_CREATURE_IDS) {
+            return !INTERACTED_CREATURE_IDS.isEmpty();
+        }
+    }
+
     public static int interactedCreatureTypeCount() {
         synchronized (INTERACTED_CREATURE_IDS) {
             return INTERACTED_CREATURE_IDS.size();
