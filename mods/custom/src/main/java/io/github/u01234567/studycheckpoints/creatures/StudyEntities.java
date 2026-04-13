@@ -38,6 +38,10 @@ public final class StudyEntities {
 
     private static final float DEFAULT_HITBOX_WIDTH = 2.8F;
     private static final float DEFAULT_HITBOX_HEIGHT = 1.8F;
+    private static final float INTERACTION_HITBOX_WIDTH_PADDING = 0.35F;
+    private static final float INTERACTION_HITBOX_HEIGHT_PADDING = 0.40F;
+    private static final float MINIMUM_INTERACTION_HITBOX_WIDTH = 1.35F;
+    private static final float MINIMUM_INTERACTION_HITBOX_HEIGHT = 1.25F;
 
     private static final Map<String, EntityType<StudyCreatureEntity>> REGISTERED_CREATURES =
             new LinkedHashMap<>();
@@ -87,13 +91,27 @@ public final class StudyEntities {
                 BuiltInRegistries.ENTITY_TYPE,
                 key,
                 EntityType.Builder.<StudyCreatureEntity>of(StudyCreatureEntity::new, MobCategory.CREATURE)
-                        .sized(definition.hitboxWidth(), definition.hitboxHeight())
+                        .sized(expandedHitboxWidth(definition), expandedHitboxHeight(definition))
                         .build(key)
         );
 
         REGISTERED_CREATURES.put(definition.id(), entityType);
         DEFINITIONS_BY_TYPE.put(entityType, definition);
         return entityType;
+    }
+
+    private static float expandedHitboxWidth(CustomCreatureDefinition definition) {
+        return Math.max(
+                definition.hitboxWidth() + INTERACTION_HITBOX_WIDTH_PADDING,
+                MINIMUM_INTERACTION_HITBOX_WIDTH
+        );
+    }
+
+    private static float expandedHitboxHeight(CustomCreatureDefinition definition) {
+        return Math.max(
+                definition.hitboxHeight() + INTERACTION_HITBOX_HEIGHT_PADDING,
+                MINIMUM_INTERACTION_HITBOX_HEIGHT
+        );
     }
 
     private static List<CustomCreatureDefinition> loadDefinitionsFromPackagedManifest() {
