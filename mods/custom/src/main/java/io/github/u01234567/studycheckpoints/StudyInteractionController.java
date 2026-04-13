@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -144,6 +145,11 @@ public final class StudyInteractionController {
                 return InteractionResult.PASS;
             }
             if (StudyConfig.isTestingPhase()) {
+                return InteractionResult.PASS;
+            }
+
+            if (world.getBlockState(hitResult.getBlockPos()).is(BlockTags.DOORS)
+                    || world.getBlockState(hitResult.getBlockPos()).is(BlockTags.FENCE_GATES)) {
                 return InteractionResult.PASS;
             }
 
