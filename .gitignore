@@ -11,8 +11,9 @@
 **/export/
 **/exports/
 
-# Tree dumps
+# Tree and dir dumps
 **/tree.txt
+**/*.zip
 
 # Minecraft runtime / backup files
 world/session.lock
