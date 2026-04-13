@@ -43,18 +43,19 @@ That file should be treated as the source of truth for:
 
 The table below documents the main software and versions used during development of this repository.
 
-| Component | Version / value | Notes |
-|---|---|---|
-| Operating system during development | Windows 11 | Primary development environment |
-| Java (JDK) | Eclipse Temurin JDK 25.0.2+10-LTS | Used for Gradle and mod development |
-| IntelliJ IDEA | 2026.1 | Main IDE for mod development |
-| Minecraft Launcher | v3.29.53-2.5.2 | Used for local development and testing |
-| Minecraft | 26.1 | Project target version |
-| Fabric Loader | 0.18.5 | Project dependency |
-| Fabric API | 0.144.3+26.1 | Project dependency |
-| Fabric Loom | 1.15.5 | Build tooling configured in the project |
+| Component | Version / value                                | Notes |
+|---|------------------------------------------------|---|
+| Operating system during development | Windows 11                                     | Primary development environment |
+| Java (JDK) | Eclipse Temurin JDK 25.0.2+10-LTS              | Used for Gradle and mod development |
+| IntelliJ IDEA | 2026.1                                         | Main IDE for mod development |
+| Minecraft Launcher | v3.29.53-2.5.2                                 | Used for local development and testing |
+| Minecraft | 26.1                                           | Project target version |
+| Fabric Loader | 0.18.5                                         | Project dependency |
+| Fabric API | 0.144.3+26.1                                   | Project dependency |
+| Fabric Loom | 1.15.5                                         | Build tooling configured in the project |
 | WorldEdit (Fabric) | `worldedit-fabric-mc26.1-7.4.2-SNAPSHOT-dist.jar` | Local development dependency |
-| Blockbench | 5.1.1 | Used to inspect and prepare creature source assets |
+| Python | Python 3                                       | Required for automatic and manual local session summary generation |
+| Blockbench | 5.1.1                                          | Used to inspect and prepare creature source assets |
 
 ## Get started for developers
 
@@ -165,13 +166,34 @@ From `mods/custom/`, run the Fabric development client with:
 .\gradlew.bat runClient
 ```
 
+For normal development runs, `runClient` on its own is sufficient. You can also use `clean runClient` when you explicitly want a fresh Gradle build state first. 
+
+At the end of a study session, the mod also tries to generate the latest local HTML session summary automatically by running:
+
+```text
+analysis/main.py sum_last
+```
+
+That automatic summary step requires Python 3 to be available on your machine. The code currently tries these launcher commands in order:
+
+* on Windows: `py -3`, then `python`, then `python3`
+* on non-Windows systems: `python3`, then `python`
+
+If you use a virtual environment, activate it before starting Gradle so that the intended Python interpreter is the one those commands resolve to. Or use:
+
+```powershell
+.\gradlew.bat runClient -PstudyPythonCommand="<path-to-your-python.exe>"
+```
+
 On the first run after cloning the repository, when no `mods/custom/run/` folder exists yet, Minecraft may still show its normal opening screen once so that local client settings such as sound and narrator can be adjusted. This should not happen again on later runs, because the generated runtime files will then already exist.
 
 If `gradlew.bat` reports that Gradle is using the wrong Java version, verify that your terminal environment, `JAVA_HOME`, Project SDK, and Gradle JVM all point to the installed JDK version above.
 
 ## Local analysis
 
-To generate the latest local session summary, run from `analysis/`:
+The latest local session summary is generated automatically when a study session ends, provided that Python 3 is available as described above.
+
+To regenerate the latest local session summary manually, run from `analysis/`:
 
 ```bash
 python main.py sum_last
