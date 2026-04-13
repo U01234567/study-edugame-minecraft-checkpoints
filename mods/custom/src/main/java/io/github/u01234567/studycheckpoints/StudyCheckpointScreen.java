@@ -21,6 +21,7 @@ public class StudyCheckpointScreen extends Screen {
     private static final int INTRO_SLIDE_COUNT = 2;
     private static final int NEXT_BUTTON_COLOUR = 0xFF2F6FED;
     private static final int NEXT_BUTTON_HOVER_COLOUR = 0xFF4C85F5;
+    private static final long INTRO_BUTTON_ENABLE_DELAY_MS = 2_000L;
 
     private final StudyChapter completedChapter;
     private final StudyChapter nextChapter;
@@ -35,6 +36,7 @@ public class StudyCheckpointScreen extends Screen {
     private boolean promptDismissed;
     private boolean actionTaken;
     private int introSlideIndex;
+    private final List<StudyColourButton> introDelayedButtons = new ArrayList<>();
     private StudyColourButton promptCloseButton;
 
     public StudyCheckpointScreen(StudyChapter completedChapter, StudyExperimentCondition condition) {
@@ -78,6 +80,7 @@ public class StudyCheckpointScreen extends Screen {
     @Override
     protected void init() {
         this.clearWidgets();
+        this.introDelayedButtons.clear();
 
         if (this.openedAtMs == 0L) {
             this.openedAtMs = System.currentTimeMillis();
@@ -94,10 +97,12 @@ public class StudyCheckpointScreen extends Screen {
         int buttonsLeft = (this.width - totalButtonsWidth) / 2;
         int buttonY = this.height / 2 + 62;
 
+        boolean introButtonsEnabled = shouldEnableIntroButtons();
+
         for (int i = 0; i < buttons.size(); i++) {
             ButtonSpec spec = buttons.get(i);
             int x = buttonsLeft + (i * (buttonWidth + buttonSpacing));
-            this.addRenderableWidget(new StudyColourButton(
+            StudyColourButton button = this.addRenderableWidget(new StudyColourButton(
                     x,
                     buttonY,
                     buttonWidth,
@@ -107,6 +112,10 @@ public class StudyCheckpointScreen extends Screen {
                     spec.hoverColour(),
                     spec.onPress()
             ));
+            if (isIntroTransitionCheckpoint()) {
+                button.active = introButtonsEnabled;
+                introDelayedButtons.add(button);
+            }
         }
 
         int panelWidth = Math.min(470, this.width - 40);
@@ -141,6 +150,13 @@ public class StudyCheckpointScreen extends Screen {
 
     @Override
     public void tick() {
+        if (isIntroTransitionCheckpoint()) {
+            boolean introButtonsEnabled = shouldEnableIntroButtons();
+            for (StudyColourButton button : introDelayedButtons) {
+                button.active = introButtonsEnabled;
+            }
+        }
+
         if (!promptVisible && !promptDismissed && System.currentTimeMillis() - openedAtMs >= promptDelayMs) {
             promptVisible = true;
 
@@ -300,6 +316,12 @@ public class StudyCheckpointScreen extends Screen {
 
     private boolean isIntroTransitionCheckpoint() {
         return initialTransitionCheckpoint;
+    }
+
+    private boolean shouldEnableIntroButtons() {
+        return !isIntroTransitionCheckpoint()
+                || openedAtMs == 0L
+                || System.currentTimeMillis() >= openedAtMs + INTRO_BUTTON_ENABLE_DELAY_MS;
     }
 
     private void advanceIntroSlide() {

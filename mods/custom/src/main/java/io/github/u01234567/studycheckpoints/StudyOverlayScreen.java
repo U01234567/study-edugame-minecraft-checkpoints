@@ -14,24 +14,31 @@ import java.util.List;
  * - the final questionnaire hand-off screen
  */
 public class StudyOverlayScreen extends Screen {
+    private static final long INTRO_BUTTON_ENABLE_DELAY_MS = 2_000L;
+
     private final String heading;
     private final List<String> bodyLines;
     private final List<ButtonSpec> buttonSpecs;
     private final IndicatorSpec indicatorSpec;
     private final boolean showCloseButton;
+    private final long buttonEnableDelayMs;
     private StudyColourButton closeButton;
+    private final List<StudyColourButton> delayedButtons = new ArrayList<>();
+    private long openedAtMs;
 
     private StudyOverlayScreen(String heading,
                                List<String> bodyLines,
                                List<ButtonSpec> buttonSpecs,
                                IndicatorSpec indicatorSpec,
-                               boolean showCloseButton) {
+                               boolean showCloseButton,
+                               long buttonEnableDelayMs) {
         super(Component.empty());
         this.heading = heading;
         this.bodyLines = bodyLines;
         this.buttonSpecs = buttonSpecs;
         this.indicatorSpec = indicatorSpec;
         this.showCloseButton = showCloseButton;
+        this.buttonEnableDelayMs = Math.max(0L, buttonEnableDelayMs);
     }
 
     public static StudyOverlayScreen createIntroScreen() {
@@ -58,7 +65,7 @@ public class StudyOverlayScreen extends Screen {
                 assignedCondition.indicatorColour()
         );
 
-        return new StudyOverlayScreen(StudyConfig.getIntroHeading(), lines, buttons, indicator, false);
+        return new StudyOverlayScreen(StudyConfig.getIntroHeading(), lines, buttons, indicator, false, INTRO_BUTTON_ENABLE_DELAY_MS);
     }
 
     public static StudyOverlayScreen createChapterZeroTransitionScreen(StudyChapter completedChapter) {
@@ -71,7 +78,7 @@ public class StudyOverlayScreen extends Screen {
                 () -> StudyFlowController.continueFromChapterZeroTransition(Minecraft.getInstance())
         ));
 
-        return new StudyOverlayScreen(StudyConfig.getChapterZeroTransitionHeading(), messageLines, buttons, null, false);
+        return new StudyOverlayScreen(StudyConfig.getChapterZeroTransitionHeading(), messageLines, buttons, null, false, 0L);
     }
 
     public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
@@ -91,12 +98,17 @@ public class StudyOverlayScreen extends Screen {
                 () -> StudyFlowController.continueFromFinalScreen(Minecraft.getInstance(), completedChapter)
         ));
 
-        return new StudyOverlayScreen(heading, messageLines, buttons, null, true);
+        return new StudyOverlayScreen(heading, messageLines, buttons, null, true, 0L);
     }
 
     @Override
     protected void init() {
         this.clearWidgets();
+        this.delayedButtons.clear();
+
+        if (this.openedAtMs == 0L) {
+            this.openedAtMs = System.currentTimeMillis();
+        }
 
         if (showCloseButton) {
             int panelWidth = Math.min(470, this.width - 40);
@@ -125,10 +137,12 @@ public class StudyOverlayScreen extends Screen {
         int buttonsLeft = (this.width - totalButtonsWidth) / 2;
         int buttonY = this.height / 2 + 62;
 
+        boolean buttonsEnabled = shouldEnableButtons();
+
         for (int i = 0; i < buttonSpecs.size(); i++) {
             ButtonSpec spec = buttonSpecs.get(i);
             int x = buttonsLeft + (i * (buttonWidth + buttonSpacing));
-            this.addRenderableWidget(new StudyColourButton(
+            StudyColourButton button = this.addRenderableWidget(new StudyColourButton(
                     x,
                     buttonY,
                     buttonWidth,
@@ -138,6 +152,10 @@ public class StudyOverlayScreen extends Screen {
                     spec.hoverColour(),
                     spec.onPress()
             ));
+            button.active = buttonsEnabled;
+            if (buttonEnableDelayMs > 0L) {
+                delayedButtons.add(button);
+            }
         }
     }
 
@@ -190,6 +208,13 @@ public class StudyOverlayScreen extends Screen {
 
     @Override
     public void tick() {
+        if (buttonEnableDelayMs > 0L) {
+            boolean buttonsEnabled = shouldEnableButtons();
+            for (StudyColourButton button : delayedButtons) {
+                button.active = buttonsEnabled;
+            }
+        }
+
         if (showCloseButton && closeButton != null) {
             closeButton.visible = StudyFlowController.canCloseQuestionnaireScreen();
             closeButton.active = closeButton.visible;
@@ -204,6 +229,12 @@ public class StudyOverlayScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return true;
+    }
+
+    private boolean shouldEnableButtons() {
+        return buttonEnableDelayMs <= 0L
+                || openedAtMs == 0L
+                || System.currentTimeMillis() >= openedAtMs + buttonEnableDelayMs;
     }
 
     private record ButtonSpec(String label, int baseColour, int hoverColour, Runnable onPress) {
