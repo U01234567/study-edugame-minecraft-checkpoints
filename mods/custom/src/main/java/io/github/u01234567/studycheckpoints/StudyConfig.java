@@ -59,7 +59,7 @@ public final class StudyConfig {
     // - shortened testing hotbar layouts stay allowed
     // The alternate menu key still uses the player-list binding, which is Tab by default.
     // Escape itself is still reserved for returning the participant to the current chapter start.
-    private static final boolean TESTING_PHASE = true;
+    private static final boolean TESTING_PHASE = false;
 
     // -------------------------------------------------------------------------
     // Participant-facing flow/UI text
@@ -70,9 +70,9 @@ public final class StudyConfig {
 
     // Body text shown on the very first consent overlay.
     private static final List<String> INTRO_BODY_LINES = List.of(
-            "Please read the study information.",
+            "Please read the printed study information.",
             "If you want to continue, click the green button below.",
-            "If you do not want to continue, click the red button and the game will close."
+            "If you do not want to continue, click the red button and this study will end for you."
     );
 
     // Green consent button on the intro overlay.
@@ -102,14 +102,16 @@ public final class StudyConfig {
 
     // First slide shown before Chapter 0 starts.
     private static final List<String> INITIAL_TRANSITION_SLIDE_ONE_LINES = List.of(
-            "You completed the introduction.",
-            "Next, the real game starts."
+            "Welcome to our custom-built world full of fantasy creatures.",
+            "You have one task: find as many different creatures as you can to learn more about them.",
+            "At the end, your obtained knowledge of these creatures will be quizzed.",
+            "Want to know how many creatures are left to find? Look at the circles below (gray = to be found, green = found)."
     );
 
     // Second slide shown before Chapter 0 starts.
     private static final List<String> INITIAL_TRANSITION_SLIDE_TWO_LINES = List.of(
-            "Your task is to find and click as many creatures as possible",
-            "to learn more about them."
+            "You will start with an introduction (Chapter 0) to learn about the game (Minecraft) and its controls.",
+            "After that, we will explain more."
     );
 
     // Heading shown for the standard Chapter 0 -> 1 transition overlay.
@@ -119,7 +121,7 @@ public final class StudyConfig {
     private static final List<String> CHAPTER_ZERO_TRANSITION_BODY_LINES = List.of(
             "You completed the introduction.",
             "Next, the real game starts.",
-            "Your task is to find and click as many creatures as possible to learn more about them."
+            "The world consists of three chapters (1. The Museum, 2. The Farm, 3. The Jungle). Each chapter has its own creatures. You get 8 minutes per chapter to find as many as possible. No need to go off the islands!"
     );
 
     // Button label shown on the Chapter 0 -> 1 transition overlay.
