@@ -13,10 +13,16 @@ import java.util.List;
  */
 public class StudyCreatureInfoScreen extends Screen {
     private final StudyCreatureCards.CreatureCard creatureCard;
+    private final long openedAtMs;
+    private final String activeChapterTitleAtOpen;
+    private boolean closedLogged;
 
     public StudyCreatureInfoScreen(StudyCreatureCards.CreatureCard creatureCard) {
         super(Component.empty());
         this.creatureCard = creatureCard;
+        this.openedAtMs = System.currentTimeMillis();
+        StudyChapter activeChapter = StudyFlowController.getActiveChapter();
+        this.activeChapterTitleAtOpen = activeChapter != null ? activeChapter.displayTitle() : "none";
     }
 
     @Override
@@ -36,7 +42,7 @@ public class StudyCreatureInfoScreen extends Screen {
                 Component.literal("X"),
                 0xFF999999,
                 0xFFBBBBBB,
-                () -> Minecraft.getInstance().setScreen(null)
+                this::closeCard
         ));
     }
 
@@ -79,6 +85,12 @@ public class StudyCreatureInfoScreen extends Screen {
     }
 
     @Override
+    public void removed() {
+        super.removed();
+        logClosedIfNeeded();
+    }
+
+    @Override
     public boolean shouldCloseOnEsc() {
         return false;
     }
@@ -86,6 +98,27 @@ public class StudyCreatureInfoScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return true;
+    }
+
+    private void closeCard() {
+        Minecraft.getInstance().setScreen(null);
+    }
+
+    private void logClosedIfNeeded() {
+        if (closedLogged) {
+            return;
+        }
+
+        closedLogged = true;
+        Minecraft client = Minecraft.getInstance();
+        String playerName = client.player != null ? client.player.getName().getString() : "unknown";
+        StudyEventLog.logCreatureCardClosed(
+                playerName,
+                creatureCard.displayName(),
+                creatureCard.chapter().displayTitle(),
+                activeChapterTitleAtOpen,
+                Math.max(0L, System.currentTimeMillis() - openedAtMs)
+        );
     }
 
     private List<String> wrapLine(String line, int maxWidth) {

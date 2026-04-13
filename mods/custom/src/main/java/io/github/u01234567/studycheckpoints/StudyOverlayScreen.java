@@ -2,6 +2,7 @@ package io.github.u01234567.studycheckpoints;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -21,16 +22,21 @@ public class StudyOverlayScreen extends Screen {
     private final List<ButtonSpec> buttonSpecs;
     private final IndicatorSpec indicatorSpec;
     private final boolean showCloseButton;
+    private final String screenKey;
+    private final String stepKey;
     private final long buttonEnableDelayMs;
     private StudyColourButton closeButton;
-    private final List<StudyColourButton> delayedButtons = new ArrayList<>();
+    private final List<TrackedButton> delayedButtons = new ArrayList<>();
     private long openedAtMs;
+    private boolean instructionDisplayLogged;
 
     private StudyOverlayScreen(String heading,
                                List<String> bodyLines,
                                List<ButtonSpec> buttonSpecs,
                                IndicatorSpec indicatorSpec,
                                boolean showCloseButton,
+                               String screenKey,
+                               String stepKey,
                                long buttonEnableDelayMs) {
         super(Component.empty());
         this.heading = heading;
@@ -38,6 +44,8 @@ public class StudyOverlayScreen extends Screen {
         this.buttonSpecs = buttonSpecs;
         this.indicatorSpec = indicatorSpec;
         this.showCloseButton = showCloseButton;
+        this.screenKey = screenKey;
+        this.stepKey = stepKey;
         this.buttonEnableDelayMs = Math.max(0L, buttonEnableDelayMs);
     }
 
@@ -48,12 +56,14 @@ public class StudyOverlayScreen extends Screen {
 
         List<ButtonSpec> buttons = new ArrayList<>();
         buttons.add(new ButtonSpec(
+                "agree_and_continue",
                 StudyConfig.getIntroAgreeButtonLabel(),
                 0xFF2E8B57,
                 0xFF3FAF6F,
                 () -> StudyFlowController.acceptConsent(Minecraft.getInstance())
         ));
         buttons.add(new ButtonSpec(
+                "stop_here",
                 StudyConfig.getIntroStopButtonLabel(),
                 0xFFB22222,
                 0xFFD13A3A,
@@ -65,20 +75,30 @@ public class StudyOverlayScreen extends Screen {
                 assignedCondition.indicatorColour()
         );
 
-        return new StudyOverlayScreen(StudyConfig.getIntroHeading(), lines, buttons, indicator, false, INTRO_BUTTON_ENABLE_DELAY_MS);
+        return new StudyOverlayScreen(StudyConfig.getIntroHeading(), lines, buttons, indicator, false, "intro_overlay", "consent", INTRO_BUTTON_ENABLE_DELAY_MS);
     }
 
     public static StudyOverlayScreen createChapterZeroTransitionScreen(StudyChapter completedChapter) {
         List<String> messageLines = StudyConfig.getChapterZeroTransitionBodyLines();
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
+                "start_game",
                 StudyConfig.getChapterZeroTransitionStartButtonLabel(),
                 0xFF2F6FED,
                 0xFF4C85F5,
                 () -> StudyFlowController.continueFromChapterZeroTransition(Minecraft.getInstance())
         ));
 
-        return new StudyOverlayScreen(StudyConfig.getChapterZeroTransitionHeading(), messageLines, buttons, null, false, 0L);
+        return new StudyOverlayScreen(
+                StudyConfig.getChapterZeroTransitionHeading(),
+                messageLines,
+                buttons,
+                null,
+                false,
+                "intro_overlay",
+                "chapter_zero_transition",
+                INTRO_BUTTON_ENABLE_DELAY_MS
+        );
     }
 
     public static StudyOverlayScreen createFinalQuestionnaireScreen(StudyChapter completedChapter) {
@@ -92,13 +112,14 @@ public class StudyOverlayScreen extends Screen {
         );
 
         List<ButtonSpec> buttons = List.of(new ButtonSpec(
+                "open_questionnaire",
                 StudyConfig.getFinalQuestionnaireButtonLabel(),
                 0xFF2F6FED,
                 0xFF4C85F5,
                 () -> StudyFlowController.continueFromFinalScreen(Minecraft.getInstance(), completedChapter)
         ));
 
-        return new StudyOverlayScreen(heading, messageLines, buttons, null, true, 0L);
+        return new StudyOverlayScreen(heading, messageLines, buttons, null, true, "questionnaire_overlay", null, 0L);
     }
 
     @Override
@@ -109,6 +130,8 @@ public class StudyOverlayScreen extends Screen {
         if (this.openedAtMs == 0L) {
             this.openedAtMs = System.currentTimeMillis();
         }
+
+        logInstructionScreenDisplayedOnce();
 
         if (showCloseButton) {
             int panelWidth = Math.min(470, this.width - 40);
@@ -150,11 +173,14 @@ public class StudyOverlayScreen extends Screen {
                     Component.literal(spec.label()),
                     spec.baseColour(),
                     spec.hoverColour(),
-                    spec.onPress()
+                    () -> {
+                        logInstructionButtonPressed(spec);
+                        spec.onPress().run();
+                    }
             ));
             button.active = buttonsEnabled;
             if (buttonEnableDelayMs > 0L) {
-                delayedButtons.add(button);
+                delayedButtons.add(new TrackedButton(button, spec, x, buttonY, buttonWidth, buttonHeight));
             }
         }
     }
@@ -210,8 +236,8 @@ public class StudyOverlayScreen extends Screen {
     public void tick() {
         if (buttonEnableDelayMs > 0L) {
             boolean buttonsEnabled = shouldEnableButtons();
-            for (StudyColourButton button : delayedButtons) {
-                button.active = buttonsEnabled;
+            for (TrackedButton trackedButton : delayedButtons) {
+                trackedButton.button().active = buttonsEnabled;
             }
         }
 
@@ -219,6 +245,23 @@ public class StudyOverlayScreen extends Screen {
             closeButton.visible = StudyFlowController.canCloseQuestionnaireScreen();
             closeButton.active = closeButton.visible;
         }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (buttonEnableDelayMs > 0L && !shouldEnableButtons()) {
+            double mouseX = event.x();
+            double mouseY = event.y();
+
+            for (TrackedButton trackedButton : delayedButtons) {
+                if (trackedButton.contains(mouseX, mouseY)) {
+                    logInstructionButtonClickedWhileDisabled(trackedButton.spec());
+                    return true;
+                }
+            }
+        }
+
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -237,7 +280,70 @@ public class StudyOverlayScreen extends Screen {
                 || System.currentTimeMillis() >= openedAtMs + buttonEnableDelayMs;
     }
 
-    private record ButtonSpec(String label, int baseColour, int hoverColour, Runnable onPress) {
+    private void logInstructionScreenDisplayedOnce() {
+        if (instructionDisplayLogged || stepKey == null || stepKey.isBlank()) {
+            return;
+        }
+
+        instructionDisplayLogged = true;
+        StudyEventLog.logInstructionScreenDisplayed(
+                screenKey,
+                stepKey
+        );
+    }
+
+    private void logInstructionButtonPressed(ButtonSpec spec) {
+        if (stepKey == null || stepKey.isBlank()) {
+            return;
+        }
+
+        StudyEventLog.logInstructionButtonPressed(
+                screenKey,
+                stepKey,
+                spec.analyticsKey(),
+                spec.label(),
+                elapsedSinceOpenedMs()
+        );
+    }
+
+    private void logInstructionButtonClickedWhileDisabled(ButtonSpec spec) {
+        if (stepKey == null || stepKey.isBlank()) {
+            return;
+        }
+
+        StudyEventLog.logInstructionButtonClickedWhileDisabled(
+                screenKey,
+                stepKey,
+                spec.analyticsKey(),
+                spec.label(),
+                elapsedSinceOpenedMs(),
+                remainingButtonEnableDelayMs()
+        );
+    }
+
+    private long elapsedSinceOpenedMs() {
+        return openedAtMs == 0L ? 0L : Math.max(0L, System.currentTimeMillis() - openedAtMs);
+    }
+
+    private long remainingButtonEnableDelayMs() {
+        return Math.max(0L, (openedAtMs + buttonEnableDelayMs) - System.currentTimeMillis());
+    }
+
+    private record ButtonSpec(String analyticsKey, String label, int baseColour, int hoverColour, Runnable onPress) {
+    }
+
+    private record TrackedButton(StudyColourButton button,
+                                 ButtonSpec spec,
+                                 int x,
+                                 int y,
+                                 int width,
+                                 int height) {
+        private boolean contains(double mouseX, double mouseY) {
+            return mouseX >= x
+                    && mouseX < x + width
+                    && mouseY >= y
+                    && mouseY < y + height;
+        }
     }
 
     private record IndicatorSpec(String label, int colour) {

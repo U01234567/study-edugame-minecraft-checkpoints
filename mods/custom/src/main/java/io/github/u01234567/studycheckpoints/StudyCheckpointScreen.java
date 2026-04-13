@@ -2,11 +2,14 @@ package io.github.u01234567.studycheckpoints;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Condition-specific checkpoint screen shown between manipulated chapters. Shows:
@@ -29,14 +32,16 @@ public class StudyCheckpointScreen extends Screen {
     private final StudyExperimentCondition condition;
     private final List<String> bodyLines;
     private final long promptDelayMs;
+    private final List<TrackedButton> introDelayedButtons = new ArrayList<>();
+    private final Set<String> loggedInstructionSteps = new HashSet<>();
 
     private long openedAtMs;
     private boolean promptVisible;
     private boolean promptLogged;
     private boolean promptDismissed;
     private boolean actionTaken;
+    private long promptShownAtMs;
     private int introSlideIndex;
-    private final List<StudyColourButton> introDelayedButtons = new ArrayList<>();
     private StudyColourButton promptCloseButton;
 
     public StudyCheckpointScreen(StudyChapter completedChapter, StudyExperimentCondition condition) {
@@ -87,6 +92,7 @@ public class StudyCheckpointScreen extends Screen {
         }
 
         logCurrentSlideDisplayed();
+        logInstructionScreenDisplayedIfNeeded();
 
         List<ButtonSpec> buttons = buildButtonSpecs();
 
@@ -110,11 +116,15 @@ public class StudyCheckpointScreen extends Screen {
                     Component.literal(spec.label()),
                     spec.baseColour(),
                     spec.hoverColour(),
-                    spec.onPress()
+                    () -> {
+                        logInstructionButtonPressed(spec);
+                        logCheckpointChoiceContext(spec);
+                        spec.onPress().run();
+                    }
             ));
             if (isIntroTransitionCheckpoint()) {
                 button.active = introButtonsEnabled;
-                introDelayedButtons.add(button);
+                introDelayedButtons.add(new TrackedButton(button, spec, x, buttonY, buttonWidth, buttonHeight));
             }
         }
 
@@ -136,6 +146,15 @@ public class StudyCheckpointScreen extends Screen {
                 0xFFCC8B8B,
                 0xFFD89A9A,
                 () -> {
+                    if (promptVisible && nextChapter != null) {
+                        StudyEventLog.logCheckpointPromptDismissed(
+                                completedChapterNumber(),
+                                nextChapter.chapterNumber(),
+                                condition.id(),
+                                promptText(),
+                                promptVisibleForMs()
+                        );
+                    }
                     promptVisible = false;
                     promptDismissed = true;
                     if (promptCloseButton != null) {
@@ -152,13 +171,14 @@ public class StudyCheckpointScreen extends Screen {
     public void tick() {
         if (isIntroTransitionCheckpoint()) {
             boolean introButtonsEnabled = shouldEnableIntroButtons();
-            for (StudyColourButton button : introDelayedButtons) {
-                button.active = introButtonsEnabled;
+            for (TrackedButton trackedButton : introDelayedButtons) {
+                trackedButton.button().active = introButtonsEnabled;
             }
         }
 
         if (!promptVisible && !promptDismissed && System.currentTimeMillis() - openedAtMs >= promptDelayMs) {
             promptVisible = true;
+            promptShownAtMs = System.currentTimeMillis();
 
             if (!promptLogged && nextChapter != null) {
                 promptLogged = true;
@@ -242,6 +262,23 @@ public class StudyCheckpointScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (isIntroTransitionCheckpoint() && !shouldEnableIntroButtons()) {
+            double mouseX = event.x();
+            double mouseY = event.y();
+
+            for (TrackedButton trackedButton : introDelayedButtons) {
+                if (trackedButton.contains(mouseX, mouseY)) {
+                    logInstructionButtonClickedWhileDisabled(trackedButton.spec());
+                    return true;
+                }
+            }
+        }
+
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
     public boolean shouldCloseOnEsc() {
         return false;
     }
@@ -257,18 +294,22 @@ public class StudyCheckpointScreen extends Screen {
         if (isIntroTransitionCheckpoint()) {
             if (introSlideIndex == 0) {
                 buttons.add(new ButtonSpec(
+                        "next",
                         StudyConfig.getInitialTransitionNextButtonLabel(),
                         NEXT_BUTTON_COLOUR,
                         NEXT_BUTTON_HOVER_COLOUR,
+                        null,
                         () -> runOnce(this::advanceIntroSlide)
                 ));
                 return buttons;
             }
 
             buttons.add(new ButtonSpec(
+                    "start_game",
                     StudyConfig.getInitialTransitionStartButtonLabel(),
                     condition.continueButtonColour(),
                     condition.continueButtonHoverColour(),
+                    "continue",
                     () -> runOnce(() -> StudyFlowController.continueFromInitialCheckpoint(
                             Minecraft.getInstance()
                     ))
@@ -278,9 +319,11 @@ public class StudyCheckpointScreen extends Screen {
 
         if (condition.showsPauseButton()) {
             buttons.add(new ButtonSpec(
+                    "break",
                     condition.pauseButtonLabel(),
                     condition.pauseButtonColour(),
                     condition.pauseButtonHoverColour(),
+                    "pause",
                     () -> runOnce(() -> StudyFlowController.startPauseFromCheckpoint(
                             Minecraft.getInstance(),
                             completedChapter,
@@ -291,9 +334,11 @@ public class StudyCheckpointScreen extends Screen {
 
         if (condition.showsContinueButton()) {
             buttons.add(new ButtonSpec(
+                    "continue",
                     condition.continueButtonLabel(),
                     condition.continueButtonColour(),
                     condition.continueButtonHoverColour(),
+                    "continue",
                     () -> runOnce(() -> StudyFlowController.continueFromCheckpoint(
                             Minecraft.getInstance(),
                             completedChapter,
@@ -324,6 +369,22 @@ public class StudyCheckpointScreen extends Screen {
                 || System.currentTimeMillis() >= openedAtMs + INTRO_BUTTON_ENABLE_DELAY_MS;
     }
 
+    private long elapsedSinceOpenedMs() {
+        return openedAtMs == 0L ? 0L : Math.max(0L, System.currentTimeMillis() - openedAtMs);
+    }
+
+    private long remainingIntroButtonEnableDelayMs() {
+        return Math.max(0L, (openedAtMs + INTRO_BUTTON_ENABLE_DELAY_MS) - System.currentTimeMillis());
+    }
+
+    private long promptVisibleForMs() {
+        return promptShownAtMs == 0L ? 0L : Math.max(0L, System.currentTimeMillis() - promptShownAtMs);
+    }
+
+    private String currentInstructionStepKey() {
+        return introSlideIndex == 0 ? "pre_chapter_zero_overview" : "pre_chapter_zero_start_button";
+    }
+
     private void advanceIntroSlide() {
         if (!isIntroTransitionCheckpoint() || introSlideIndex >= INTRO_SLIDE_COUNT - 1) {
             return;
@@ -335,6 +396,7 @@ public class StudyCheckpointScreen extends Screen {
         promptVisible = false;
         promptDismissed = false;
         promptLogged = false;
+        promptShownAtMs = 0L;
         openedAtMs = System.currentTimeMillis();
 
         if (nextChapter != null) {
@@ -378,7 +440,64 @@ public class StudyCheckpointScreen extends Screen {
                 nextChapter.chapterNumber(),
                 introSlideIndex + 1,
                 INTRO_SLIDE_COUNT,
-                introSlideIndex == 0 ? "pre_chapter_zero_overview" : "pre_chapter_zero_start_button"
+                currentInstructionStepKey()
+        );
+    }
+
+    private void logInstructionScreenDisplayedIfNeeded() {
+        if (!isIntroTransitionCheckpoint()) {
+            return;
+        }
+
+        String stepKey = currentInstructionStepKey();
+        if (!loggedInstructionSteps.add(stepKey)) {
+            return;
+        }
+
+        StudyEventLog.logInstructionScreenDisplayed(
+                "initial_transition_checkpoint",
+                stepKey
+        );
+    }
+
+    private void logInstructionButtonPressed(ButtonSpec spec) {
+        if (!isIntroTransitionCheckpoint()) {
+            return;
+        }
+
+        StudyEventLog.logInstructionButtonPressed(
+                "initial_transition_checkpoint",
+                currentInstructionStepKey(),
+                spec.analyticsKey(),
+                spec.label(),
+                elapsedSinceOpenedMs()
+        );
+    }
+
+    private void logInstructionButtonClickedWhileDisabled(ButtonSpec spec) {
+        StudyEventLog.logInstructionButtonClickedWhileDisabled(
+                "initial_transition_checkpoint",
+                currentInstructionStepKey(),
+                spec.analyticsKey(),
+                spec.label(),
+                elapsedSinceOpenedMs(),
+                remainingIntroButtonEnableDelayMs()
+        );
+    }
+
+    private void logCheckpointChoiceContext(ButtonSpec spec) {
+        if (spec.choiceKey() == null || nextChapter == null) {
+            return;
+        }
+
+        StudyEventLog.logCheckpointChoiceContext(
+                completedChapterNumber(),
+                nextChapter.chapterNumber(),
+                condition.id(),
+                spec.choiceKey(),
+                promptVisible,
+                promptDismissed,
+                elapsedSinceOpenedMs()
         );
     }
 
@@ -396,7 +515,26 @@ public class StudyCheckpointScreen extends Screen {
         return completedChapter != null ? completedChapter.chapterNumber() : -1;
     }
 
-    private record ButtonSpec(String label, int baseColour, int hoverColour, Runnable onPress) {
+    private record ButtonSpec(String analyticsKey,
+                              String label,
+                              int baseColour,
+                              int hoverColour,
+                              String choiceKey,
+                              Runnable onPress) {
+    }
+
+    private record TrackedButton(StudyColourButton button,
+                                 ButtonSpec spec,
+                                 int x,
+                                 int y,
+                                 int width,
+                                 int height) {
+        private boolean contains(double mouseX, double mouseY) {
+            return mouseX >= x
+                    && mouseX < x + width
+                    && mouseY >= y
+                    && mouseY < y + height;
+        }
     }
 
     private List<String> wrapLine(String line, int maxWidth) {

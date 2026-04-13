@@ -48,6 +48,9 @@ CLICK_LIKE_BLOCKED_ACTIONS = {
     "use_block_blocked",
 }
 
+MOVEMENT_SAMPLE_SECONDS = 1.0
+MOVEMENT_DISTANCE_EPSILON = 0.05
+
 
 @dataclasses.dataclass(slots=True)
 class ParsedEvent:
@@ -96,12 +99,53 @@ class ClickRecord:
 
 
 @dataclasses.dataclass(slots=True)
+class CreatureReadRecord:
+    timestamp: dt.datetime
+    active_chapter: int
+    species_key: str
+    display_name: str
+    configured_chapter: int | None
+    read_duration_seconds: float
+
+
+@dataclasses.dataclass(slots=True)
+class InstructionRecord:
+    screen_key: str
+    step_key: str
+    displayed_at: dt.datetime | None = None
+    button_pressed_at: dt.datetime | None = None
+    button_key: str | None = None
+    button_label: str | None = None
+    time_on_screen_ms: int | None = None
+    disabled_click_attempts: int = 0
+
+    def reading_seconds(self) -> float | None:
+        if self.time_on_screen_ms is None:
+            return None
+        return self.time_on_screen_ms / 1000.0
+
+
+@dataclasses.dataclass(slots=True)
+class ChapterZeroValidationRecord:
+    timestamp: dt.datetime
+    trigger: str
+    reached_depth: bool
+    interacted_with_creature: bool
+    missing_depth_requirement: bool
+    missing_creature_interaction: bool
+
+
+@dataclasses.dataclass(slots=True)
 class CheckpointRecord:
     completed_chapter: int
     next_chapter: int
     displayed_at: dt.datetime | None = None
     choice_at: dt.datetime | None = None
     prompt_displayed: bool = False
+    prompt_dismissed: bool = False
+    prompt_visible_at_choice: bool | None = None
+    prompt_dismissed_before_choice: bool | None = None
+    choice_time_on_screen_ms: int | None = None
     condition: str | None = None
     choice: str | None = None
     pause_started_at: dt.datetime | None = None
@@ -112,6 +156,11 @@ class CheckpointRecord:
         if self.displayed_at is None or self.choice_at is None:
             return None
         return (self.choice_at - self.displayed_at).total_seconds()
+
+    def choice_time_on_screen_seconds(self) -> float | None:
+        if self.choice_time_on_screen_ms is None:
+            return None
+        return self.choice_time_on_screen_ms / 1000.0
 
     def label(self) -> str:
         if self.completed_chapter < 0:
@@ -126,13 +175,17 @@ class ChapterSummary:
     started_at: dt.datetime | None = None
     completed_at: dt.datetime | None = None
     clicks: list[ClickRecord] = dataclasses.field(default_factory=list)
+    creature_reads: list[CreatureReadRecord] = dataclasses.field(default_factory=list)
     blocked_actions: collections.Counter[str] = dataclasses.field(default_factory=collections.Counter)
     movement_samples: int = 0
     latest_total_distance: float = 0.0
     latest_total_sprint_distance: float = 0.0
     summed_sample_distance: float = 0.0
+    walking_seconds_estimate: float = 0.0
+    sprinting_seconds_estimate: float = 0.0
     jumps: int = 0
     chapter_zero_conditions: list[str] = dataclasses.field(default_factory=list)
+    chapter_zero_validation_failures: list[ChapterZeroValidationRecord] = dataclasses.field(default_factory=list)
 
     def duration_seconds(self) -> float | None:
         if self.started_at is None or self.completed_at is None:
@@ -154,6 +207,22 @@ class ChapterSummary:
     def blocked_click_like_actions(self) -> int:
         return sum(self.blocked_actions.get(name, 0) for name in CLICK_LIKE_BLOCKED_ACTIONS)
 
+    def creature_read_seconds(self) -> float:
+        return sum(record.read_duration_seconds for record in self.creature_reads)
+
+    def activity_breakdown_seconds(self) -> dict[str, float]:
+        duration = self.duration_seconds() or 0.0
+        walking = min(self.walking_seconds_estimate, duration)
+        sprinting = min(self.sprinting_seconds_estimate, max(0.0, duration - walking))
+        interacting = min(self.creature_read_seconds(), max(0.0, duration - walking - sprinting))
+        other = max(0.0, duration - walking - sprinting - interacting)
+        return {
+            "walking": walking,
+            "sprinting": sprinting,
+            "interacting": interacting,
+            "other": other,
+        }
+
 
 @dataclasses.dataclass(slots=True)
 class Metadata:
@@ -171,6 +240,7 @@ class SessionSummary:
     creatures: list[CreatureDefinition]
     chapters: dict[int, ChapterSummary]
     checkpoints: list[CheckpointRecord]
+    instructions: list[InstructionRecord]
     condition: str | None
     condition_source: str | None
     player_name: str | None
@@ -201,6 +271,12 @@ class SessionSummary:
 
     def total_blocked_actions(self) -> int:
         return sum(chapter.total_blocked_actions() for chapter in self.chapters.values())
+
+    def total_instruction_read_seconds(self) -> float:
+        return sum((record.time_on_screen_ms or 0) / 1000.0 for record in self.instructions)
+
+    def total_instruction_disabled_clicks(self) -> int:
+        return sum(record.disabled_click_attempts for record in self.instructions)
 
     def final_score_interacted_species(self) -> int:
         return len(
@@ -314,126 +390,142 @@ def parse_spawn_list(list_expression: str) -> list[CreatureSpawnDefinition]:
     if not inner:
         return []
 
-    return [parse_creature_spawn(part) for part in split_top_level_commas(inner)]
+    blocks: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    while i < len(inner):
+        char = inner[i]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            blocks.append(inner[start:i].strip())
+            start = i + 1
+        i += 1
+    final = inner[start:].strip()
+    if final:
+        blocks.append(final)
 
-
-def parse_creature_spawn(text: str) -> CreatureSpawnDefinition:
-    text = text.strip()
-    prefix = "new CreatureSpawn("
-    if not text.startswith(prefix) or not text.endswith(")"):
-        raise ValueError(f"Could not parse CreatureSpawn: {text}")
-
-    inner = text[len(prefix):-1]
-    args = split_top_level_commas(inner)
-    if len(args) != 5:
-        raise ValueError(f"Expected 5 CreatureSpawn args, found {len(args)}: {text}")
-
-    return CreatureSpawnDefinition(
-        unique_name=strip_java_string(args[0]),
-        x=int(args[1].strip()),
-        y=int(args[2].strip()),
-        z=int(args[3].strip()),
-        facing=args[4].strip().split(".")[-1],
-    )
+    spawns: list[CreatureSpawnDefinition] = []
+    for block in blocks:
+        if "new CreatureSpawn" not in block:
+            continue
+        args_open = block.find("(")
+        args_close = block.rfind(")")
+        if args_open < 0 or args_close <= args_open:
+            continue
+        args = split_top_level_commas(block[args_open + 1:args_close])
+        if len(args) != 5:
+            continue
+        unique_name = strip_java_string(args[0])
+        x = safe_int(strip_numeric_text(args[1]))
+        y = safe_int(strip_numeric_text(args[2]))
+        z = safe_int(strip_numeric_text(args[3]))
+        facing = args[4].strip().split(".")[-1]
+        if None in (x, y, z):
+            continue
+        spawns.append(
+            CreatureSpawnDefinition(
+                unique_name=unique_name,
+                x=x,
+                y=y,
+                z=z,
+                facing=facing,
+            )
+        )
+    return spawns
 
 
 def extract_map_entry_blocks(text: str) -> list[str]:
+    marker = "Map.entry("
     blocks: list[str] = []
-    search_start = 0
-    needle = "Map.entry("
+    cursor = 0
 
     while True:
-        start = text.find(needle, search_start)
-        if start < 0:
+        start = text.find(marker, cursor)
+        if start == -1:
             break
-        open_index = text.find("(", start)
-        end = find_matching_parenthesis(text, open_index)
-        blocks.append(text[start:end + 1])
-        search_start = end + 1
+
+        i = start
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        while i < len(text):
+            char = text[i]
+            if in_string:
+                if escape_next:
+                    escape_next = False
+                elif char == "\\":
+                    escape_next = True
+                elif char == '"':
+                    in_string = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == "(":
+                    depth += 1
+                elif char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        blocks.append(text[start:i + 1].strip())
+                        cursor = i + 1
+                        break
+            i += 1
+        else:
+            break
 
     return blocks
 
 
-def find_matching_parenthesis(text: str, open_index: int) -> int:
-    depth = 0
-    in_string = False
-    escape_next = False
-
-    for index in range(open_index, len(text)):
-        character = text[index]
-
-        if in_string:
-            if escape_next:
-                escape_next = False
-            elif character == "\\":
-                escape_next = True
-            elif character == '"':
-                in_string = False
-            continue
-
-        if character == '"':
-            in_string = True
-            continue
-
-        if character == "(":
-            depth += 1
-        elif character == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-
-    raise ValueError("Unbalanced parentheses while parsing StudyCreatureCards.java")
-
-
 def split_top_level_commas(text: str) -> list[str]:
     parts: list[str] = []
-    start = 0
     depth = 0
     in_string = False
     escape_next = False
+    start = 0
 
-    for index, character in enumerate(text):
+    for i, char in enumerate(text):
         if in_string:
             if escape_next:
                 escape_next = False
-            elif character == "\\":
+            elif char == "\\":
                 escape_next = True
-            elif character == '"':
+            elif char == '"':
                 in_string = False
             continue
 
-        if character == '"':
+        if char == '"':
             in_string = True
-            continue
-
-        if character in "([{":
+        elif char in "([{":
             depth += 1
-            continue
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            parts.append(text[start:i].strip())
+            start = i + 1
 
-        if character in ")]}":
-            depth -= 1
-            continue
-
-        if character == "," and depth == 0:
-            parts.append(text[start:index].strip())
-            start = index + 1
-
-    trailing = text[start:].strip()
-    if trailing:
-        parts.append(trailing)
-
+    final = text[start:].strip()
+    if final:
+        parts.append(final)
     return parts
 
 
 def strip_java_string(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith('"') and stripped.endswith('"'):
-        return stripped[1:-1]
-    return stripped
+    text = text.strip()
+    if text.startswith('"') and text.endswith('"'):
+        text = text[1:-1]
+    return clean_java_string(text)
 
 
 def clean_java_string(text: str) -> str:
-    return text.encode("utf-8").decode("unicode_escape")
+    return bytes(text, "utf-8").decode("unicode_escape").strip()
+
+
+def strip_numeric_text(text: str) -> str:
+    return re.sub(r"[dDfFlL_]", "", text.strip())
 
 
 def latest_session_log_path(log_dir: Path) -> Path | None:
@@ -502,6 +594,7 @@ def build_session_summary(
     }
 
     checkpoint_by_key: dict[tuple[int, int], CheckpointRecord] = {}
+    instruction_by_key: dict[tuple[str, str], InstructionRecord] = {}
     raw_event_counts: collections.Counter[str] = collections.Counter()
     player_name: str | None = None
     condition: str | None = None
@@ -511,7 +604,9 @@ def build_session_summary(
     current_active_chapter: int | None = None
 
     creature_by_spawn_name: dict[str, CreatureDefinition] = {}
+    creature_by_display_name: dict[str, CreatureDefinition] = {}
     for creature in creatures:
+        creature_by_display_name[normalise_label(creature.display_name)] = creature
         for spawn in creature.spawns:
             creature_by_spawn_name[spawn.unique_name] = creature
 
@@ -544,7 +639,12 @@ def build_session_summary(
                 chapter.movement_samples += 1
                 chapter.latest_total_distance = safe_float(event.fields.get("total_distance")) or chapter.latest_total_distance
                 chapter.latest_total_sprint_distance = safe_float(event.fields.get("total_sprint_distance")) or chapter.latest_total_sprint_distance
-                chapter.summed_sample_distance += safe_float(event.fields.get("sample_distance")) or 0.0
+                sample_distance = safe_float(event.fields.get("sample_distance")) or 0.0
+                chapter.summed_sample_distance += sample_distance
+                if safe_bool(event.fields.get("sprinting")):
+                    chapter.sprinting_seconds_estimate += MOVEMENT_SAMPLE_SECONDS
+                elif sample_distance > MOVEMENT_DISTANCE_EPSILON:
+                    chapter.walking_seconds_estimate += MOVEMENT_SAMPLE_SECONDS
 
         elif event.event_type == "jump_started":
             chapter_number = chapter_number_from_title(event.fields.get("chapter_title"))
@@ -585,6 +685,30 @@ def build_session_summary(
                 )
             )
 
+        elif event.event_type == "creature_card_closed":
+            active_chapter = chapter_number_from_title(event.fields.get("active_chapter_title"))
+            if active_chapter not in chapters:
+                continue
+            creature_label = event.fields.get("creature_label", "unknown")
+            configured = creature_by_display_name.get(normalise_label(creature_label))
+            configured_chapter = (
+                configured.chapter_number
+                if configured is not None
+                else chapter_number_from_title(event.fields.get("chapter_title"))
+            )
+            species_key = configured.species_key if configured is not None else fallback_species_key(None, creature_label)
+            display_name = configured.display_name if configured is not None else creature_label
+            chapters[active_chapter].creature_reads.append(
+                CreatureReadRecord(
+                    timestamp=event.timestamp,
+                    active_chapter=active_chapter,
+                    species_key=species_key,
+                    display_name=display_name,
+                    configured_chapter=configured_chapter,
+                    read_duration_seconds=(safe_float(event.fields.get("read_duration_ms")) or 0.0) / 1000.0,
+                )
+            )
+
         elif event.event_type == "blocked_action":
             if current_active_chapter in chapters:
                 chapters[current_active_chapter].blocked_actions[event.fields.get("action", "unknown")] += 1
@@ -592,10 +716,24 @@ def build_session_summary(
         elif event.event_type == "chapter_zero_condition_satisfied":
             chapters[0].chapter_zero_conditions.append(event.fields.get("condition", "unknown"))
 
+        elif event.event_type == "chapter_zero_validation_failed":
+            chapters[0].chapter_zero_validation_failures.append(
+                ChapterZeroValidationRecord(
+                    timestamp=event.timestamp,
+                    trigger=event.fields.get("trigger", "unknown"),
+                    reached_depth=safe_bool(event.fields.get("reached_depth")),
+                    interacted_with_creature=safe_bool(event.fields.get("interacted_with_creature")),
+                    missing_depth_requirement=safe_bool(event.fields.get("missing_depth_requirement")),
+                    missing_creature_interaction=safe_bool(event.fields.get("missing_creature_interaction")),
+                )
+            )
+
         elif event.event_type in {
             "checkpoint_displayed",
             "checkpoint_choice_made",
             "checkpoint_prompt_displayed",
+            "checkpoint_prompt_dismissed",
+            "checkpoint_choice_context",
             "checkpoint_pause_started",
             "checkpoint_pause_finished",
             "checkpoint_slide_displayed",
@@ -621,6 +759,19 @@ def build_session_summary(
             elif event.event_type == "checkpoint_prompt_displayed":
                 record.prompt_displayed = True
                 record.condition = record.condition or event.fields.get("condition")
+            elif event.event_type == "checkpoint_prompt_dismissed":
+                record.prompt_dismissed = True
+                record.condition = record.condition or event.fields.get("condition")
+            elif event.event_type == "checkpoint_choice_context":
+                record.condition = record.condition or event.fields.get("condition")
+                record.choice = record.choice or event.fields.get("choice")
+                prompt_visible_at_choice = event.fields.get("prompt_visible_at_choice")
+                if prompt_visible_at_choice is not None:
+                    record.prompt_visible_at_choice = safe_bool(prompt_visible_at_choice)
+                prompt_dismissed_before_choice = event.fields.get("prompt_dismissed_before_choice")
+                if prompt_dismissed_before_choice is not None:
+                    record.prompt_dismissed_before_choice = safe_bool(prompt_dismissed_before_choice)
+                record.choice_time_on_screen_ms = safe_int(event.fields.get("time_on_screen_ms"))
             elif event.event_type == "checkpoint_pause_started":
                 record.pause_started_at = event.timestamp
             elif event.event_type == "checkpoint_pause_finished":
@@ -629,6 +780,27 @@ def build_session_summary(
                 slide_key = event.fields.get("slide_key")
                 if slide_key:
                     record.slide_keys.append(slide_key)
+
+        elif event.event_type in {
+            "instruction_screen_displayed",
+            "instruction_button_pressed",
+            "instruction_button_clicked_while_disabled",
+        }:
+            screen_key = event.fields.get("screen_key", "unknown")
+            step_key = event.fields.get("step_key", "unknown")
+            record = instruction_by_key.setdefault(
+                (screen_key, step_key),
+                InstructionRecord(screen_key=screen_key, step_key=step_key),
+            )
+            if event.event_type == "instruction_screen_displayed":
+                record.displayed_at = record.displayed_at or event.timestamp
+            elif event.event_type == "instruction_button_pressed":
+                record.button_pressed_at = event.timestamp
+                record.button_key = event.fields.get("button_key")
+                record.button_label = event.fields.get("button_label")
+                record.time_on_screen_ms = safe_int(event.fields.get("time_on_screen_ms"))
+            elif event.event_type == "instruction_button_clicked_while_disabled":
+                record.disabled_click_attempts += 1
 
         elif event.event_type == "questionnaire_button_pressed":
             questionnaire_clicks += 1
@@ -642,6 +814,14 @@ def build_session_summary(
         checkpoint_by_key.values(),
         key=lambda record: (record.completed_chapter, record.next_chapter),
     )
+    instructions = sorted(
+        instruction_by_key.values(),
+        key=lambda record: (
+            record.displayed_at or dt.datetime.min,
+            record.screen_key,
+            record.step_key,
+        ),
+    )
 
     return SessionSummary(
         log_path=log_path,
@@ -650,6 +830,7 @@ def build_session_summary(
         creatures=creatures,
         chapters=chapters,
         checkpoints=checkpoints,
+        instructions=instructions,
         condition=condition,
         condition_source=condition_source,
         player_name=player_name or metadata.get("session_player") or None,
@@ -671,6 +852,8 @@ def render_session_html(session: SessionSummary) -> str:
             f"{session.coverage_percent():.0f}% coverage",
         ),
         metric_card("Total clicks", str(session.total_clicks()), f"repeat clicks: {session.total_repeat_clicks()}"),
+        metric_card("Instruction reading", format_seconds(session.total_instruction_read_seconds()), "consent + intro screens"),
+        metric_card("Disabled intro clicks", str(session.total_instruction_disabled_clicks()), "attempts while button inactive"),
         metric_card("Questionnaire", str(session.questionnaire_clicks), "button press(es)"),
         metric_card("End reason", ", ".join(session.game_end_reasons) or "unknown"),
     ]
@@ -678,6 +861,7 @@ def render_session_html(session: SessionSummary) -> str:
     chapter_overview_rows = "\n".join(
         render_chapter_overview_row(session.chapters[n], session.creatures) for n in sorted(session.chapters)
     )
+    instruction_rows = "\n".join(render_instruction_row(record) for record in session.instructions)
     creature_rows = "\n".join(
         render_creature_matrix_row(session, creature)
         for creature in sorted(session.creatures, key=lambda item: (item.chapter_number, item.display_name.lower()))
@@ -693,6 +877,7 @@ def render_session_html(session: SessionSummary) -> str:
         render_spawn_integrity_row(creature)
         for creature in sorted(session.creatures, key=lambda item: (item.chapter_number, item.display_name.lower()))
     )
+    chapter_zero_failure_rows = "\n".join(render_chapter_zero_failure_row(record) for record in session.chapters[0].chapter_zero_validation_failures)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -711,7 +896,7 @@ def render_session_html(session: SessionSummary) -> str:
 }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--bg); color: var(--text); font-family: Arial, sans-serif; }}
-main {{ max-width: 1700px; margin: 0 auto; padding: 18px; }}
+main {{ max-width: 1800px; margin: 0 auto; padding: 18px; }}
 h1, h2, h3 {{ margin: 0 0 10px 0; }}
 p {{ margin: 0; }}
 .small {{ font-size: 12px; color: var(--muted); }}
@@ -719,7 +904,7 @@ p {{ margin: 0; }}
 .wrap {{ white-space: normal; }}
 .card {{ background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.04); }}
 .grid {{ display: grid; gap: 12px; }}
-.metric-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+.metric-grid {{ grid-template-columns: repeat(5, minmax(0, 1fr)); }}
 .metric {{ border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fbfcfd; }}
 .metric .label {{ font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }}
 .metric .value {{ font-size: 21px; font-weight: 700; margin-top: 4px; }}
@@ -732,7 +917,7 @@ p {{ margin: 0; }}
 table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
 th, td {{ border: 1px solid var(--line); padding: 7px 8px; vertical-align: top; }}
 th {{ background: #f2f5f7; text-align: left; }}
-.two-col {{ display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }}
+.two-col {{ display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }}
 .three-col {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }}
 @media (max-width: 1200px) {{
   .metric-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -768,42 +953,64 @@ th {{ background: #f2f5f7; text-align: left; }}
             <th class="num">Time</th>
             <th class="num">Score</th>
             <th class="num">Clicks</th>
-            <th class="num">Repeat</th>
-            <th class="num">Steps*</th>
+            <th class="num">Read cards</th>
+            <th class="num">Walking</th>
+            <th class="num">Sprinting</th>
+            <th class="num">Other</th>
             <th class="num">Distance</th>
-            <th class="num">Sprint</th>
             <th class="num">Jumps</th>
           </tr>
           {chapter_overview_rows}
         </table>
       </div>
       <div class="card">
-        <h2>Checkpoint / choice timeline</h2>
+        <h2>Instruction screens</h2>
         <table>
           <tr>
-            <th>Transition</th>
-            <th>Condition</th>
-            <th>Choice</th>
-            <th class="num">Response</th>
-            <th>Prompt</th>
-            <th>Slides</th>
+            <th>Screen</th>
+            <th>Step</th>
+            <th>Button</th>
+            <th class="num">Read time</th>
+            <th class="num">Disabled click attempts</th>
           </tr>
-          {checkpoint_rows}
+          {instruction_rows}
         </table>
       </div>
     </div>
 
     <div class="card">
-      <h2>Clicks per creature per chapter</h2>
+      <h2>Checkpoint / choice timeline</h2>
+      <table>
+        <tr>
+          <th>Transition</th>
+          <th>Condition</th>
+          <th>Choice</th>
+          <th class="num">Response</th>
+          <th>Prompt shown</th>
+          <th>Prompt dismissed</th>
+          <th>Prompt visible at choice</th>
+          <th>Slides</th>
+        </tr>
+        {checkpoint_rows}
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Clicks and creature-card reading per species</h2>
       <table>
         <tr>
           <th>Creature</th>
           <th>Configured chapter</th>
-          <th class="num">Ch0</th>
-          <th class="num">Ch1</th>
-          <th class="num">Ch2</th>
-          <th class="num">Ch3</th>
-          <th class="num">Total</th>
+          <th class="num">Ch0 clicks</th>
+          <th class="num">Ch1 clicks</th>
+          <th class="num">Ch2 clicks</th>
+          <th class="num">Ch3 clicks</th>
+          <th class="num">Total clicks</th>
+          <th class="num">Ch0 read</th>
+          <th class="num">Ch1 read</th>
+          <th class="num">Ch2 read</th>
+          <th class="num">Ch3 read</th>
+          <th class="num">Total read</th>
           <th class="num">Unique entities</th>
           <th class="num">Repeat clicks</th>
           <th>Notes</th>
@@ -814,7 +1021,7 @@ th {{ background: #f2f5f7; text-align: left; }}
 
     <div class="card">
       <h2>Chapter details</h2>
-      <p class="small">* Steps are a rounded interview shorthand based on logged movement distance.</p>
+      <p class="small">Movement times are estimated from one-second movement samples. “Other” is the remainder of the chapter after walking, sprinting, and reading creature cards.</p>
       {detail_sections}
     </div>
   </section>
@@ -847,6 +1054,21 @@ th {{ background: #f2f5f7; text-align: left; }}
           {raw_event_rows}
         </table>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Chapter 0 validation failures</h2>
+      <table>
+        <tr>
+          <th>Time</th>
+          <th>Trigger</th>
+          <th>Reached depth</th>
+          <th>Interacted with creature</th>
+          <th>Missing depth</th>
+          <th>Missing creature interaction</th>
+        </tr>
+        {chapter_zero_failure_rows or '<tr><td colspan="6">No logged failures</td></tr>'}
+      </table>
     </div>
 
     <div class="card">
@@ -893,17 +1115,32 @@ def metric_card(label: str, value: str, sub: str = "") -> str:
 def render_chapter_overview_row(chapter: ChapterSummary, creatures: list[CreatureDefinition]) -> str:
     configured_total = sum(1 for creature in creatures if creature.chapter_number == chapter.chapter_number)
     score_text = f"{chapter.unique_species_clicked()} / {configured_total}" if configured_total else str(chapter.unique_species_clicked())
+    activity = chapter.activity_breakdown_seconds()
+    duration = chapter.duration_seconds() or 0.0
     return (
         "<tr>"
         f"<td>{escape(chapter.title)}</td>"
         f"<td class='num'>{escape(format_seconds(chapter.duration_seconds()))}</td>"
         f"<td class='num'>{escape(score_text)}</td>"
         f"<td class='num'>{len(chapter.clicks)}</td>"
-        f"<td class='num'>{chapter.repeat_clicks()}</td>"
-        f"<td class='num'>{round(chapter.latest_total_distance)}</td>"
+        f"<td class='num'>{escape(activity_with_percent(activity['interacting'], duration))}</td>"
+        f"<td class='num'>{escape(activity_with_percent(activity['walking'], duration))}</td>"
+        f"<td class='num'>{escape(activity_with_percent(activity['sprinting'], duration))}</td>"
+        f"<td class='num'>{escape(activity_with_percent(activity['other'], duration))}</td>"
         f"<td class='num'>{chapter.latest_total_distance:.1f}</td>"
-        f"<td class='num'>{chapter.latest_total_sprint_distance:.1f}</td>"
         f"<td class='num'>{chapter.jumps}</td>"
+        "</tr>"
+    )
+
+
+def render_instruction_row(record: InstructionRecord) -> str:
+    return (
+        "<tr>"
+        f"<td>{escape(humanize_key(record.screen_key))}</td>"
+        f"<td>{escape(humanize_key(record.step_key))}</td>"
+        f"<td>{escape(record.button_label or record.button_key or '-')}</td>"
+        f"<td class='num'>{escape(format_seconds(record.reading_seconds()))}</td>"
+        f"<td class='num'>{record.disabled_click_attempts}</td>"
         "</tr>"
     )
 
@@ -912,6 +1149,8 @@ def render_checkpoint_row(record: CheckpointRecord) -> str:
     response = record.response_seconds()
     slide_text = ", ".join(record.slide_keys) if record.slide_keys else "-"
     prompt = "Yes" if record.prompt_displayed else "No"
+    prompt_dismissed = "Yes" if record.prompt_dismissed else "No"
+    prompt_visible_at_choice = format_optional_bool(record.prompt_visible_at_choice)
     return (
         "<tr>"
         f"<td>{escape(record.label())}</td>"
@@ -919,6 +1158,8 @@ def render_checkpoint_row(record: CheckpointRecord) -> str:
         f"<td>{escape(record.choice or '-')}</td>"
         f"<td class='num'>{escape(format_seconds(response))}</td>"
         f"<td>{prompt}</td>"
+        f"<td>{prompt_dismissed}</td>"
+        f"<td>{prompt_visible_at_choice}</td>"
         f"<td>{escape(slide_text)}</td>"
         "</tr>"
     )
@@ -926,6 +1167,7 @@ def render_checkpoint_row(record: CheckpointRecord) -> str:
 
 def render_creature_matrix_row(session: SessionSummary, creature: CreatureDefinition) -> str:
     chapter_clicks = {0: 0, 1: 0, 2: 0, 3: 0}
+    chapter_read_seconds = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0}
     repeat_clicks = 0
     uuids: set[str] = set()
     wrong_chapter_targets: list[str] = []
@@ -939,8 +1181,13 @@ def render_creature_matrix_row(session: SessionSummary, creature: CreatureDefini
             uuids.add(click.entity_uuid)
             if click.wrong_chapter:
                 wrong_chapter_targets.append(f"clicked in Ch{click.active_chapter}")
+        for read in chapter.creature_reads:
+            if read.species_key != creature.species_key:
+                continue
+            chapter_read_seconds[read.active_chapter] += read.read_duration_seconds
 
-    total = sum(chapter_clicks.values())
+    total_clicks = sum(chapter_clicks.values())
+    total_read_seconds = sum(chapter_read_seconds.values())
     notes = "; ".join(sorted(set(wrong_chapter_targets))) if wrong_chapter_targets else ""
     return (
         "<tr>"
@@ -950,7 +1197,12 @@ def render_creature_matrix_row(session: SessionSummary, creature: CreatureDefini
         f"<td class='num'>{chapter_clicks[1]}</td>"
         f"<td class='num'>{chapter_clicks[2]}</td>"
         f"<td class='num'>{chapter_clicks[3]}</td>"
-        f"<td class='num'>{total}</td>"
+        f"<td class='num'>{total_clicks}</td>"
+        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[0]))}</td>"
+        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[1]))}</td>"
+        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[2]))}</td>"
+        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[3]))}</td>"
+        f"<td class='num'>{escape(format_seconds(total_read_seconds))}</td>"
         f"<td class='num'>{len(uuids)}</td>"
         f"<td class='num'>{repeat_clicks}</td>"
         f"<td>{escape(notes or '-')}</td>"
@@ -965,6 +1217,10 @@ def render_chapter_detail(chapter: ChapterSummary) -> str:
         f"{name} ({count})" for name, count in chapter.blocked_actions.most_common()
     ) or "None"
     chapter_zero_notes = ", ".join(chapter.chapter_zero_conditions) if chapter.chapter_zero_conditions else "-"
+    activity = chapter.activity_breakdown_seconds()
+    duration = chapter.duration_seconds() or 0.0
+    read_rows = "\n".join(render_chapter_creature_read_row(read) for read in top_creature_reads(chapter))
+    validation_notes = "<br>".join(render_validation_note_html(item) for item in chapter.chapter_zero_validation_failures) or "-"
 
     return f"""
     <div class="card">
@@ -974,14 +1230,28 @@ def render_chapter_detail(chapter: ChapterSummary) -> str:
         <tr><th>Duration</th><td>{escape(format_seconds(chapter.duration_seconds()))}</td><th>Unique species clicked</th><td>{chapter.unique_species_clicked()}</td></tr>
         <tr><th>Total clicks</th><td>{len(chapter.clicks)}</td><th>Repeat clicks</th><td>{chapter.repeat_clicks()}</td></tr>
         <tr><th>Allowed clicks</th><td>{chapter.allowed_clicks()}</td><th>Blocked click-like actions</th><td>{chapter.blocked_click_like_actions()}</td></tr>
-        <tr><th>Approx steps</th><td>{round(chapter.latest_total_distance)}</td><th>Distance</th><td>{chapter.latest_total_distance:.1f}</td></tr>
-        <tr><th>Sprint distance</th><td>{chapter.latest_total_sprint_distance:.1f}</td><th>Movement samples</th><td>{chapter.movement_samples}</td></tr>
-        <tr><th>Jumps</th><td>{chapter.jumps}</td><th>Chapter 0 conditions</th><td>{escape(chapter_zero_notes)}</td></tr>
+        <tr><th>Walking</th><td>{escape(activity_with_percent(activity['walking'], duration))}</td><th>Sprinting</th><td>{escape(activity_with_percent(activity['sprinting'], duration))}</td></tr>
+        <tr><th>Interacting</th><td>{escape(activity_with_percent(activity['interacting'], duration))}</td><th>Other / stationary</th><td>{escape(activity_with_percent(activity['other'], duration))}</td></tr>
+        <tr><th>Distance</th><td>{chapter.latest_total_distance:.1f}</td><th>Sprint distance</th><td>{chapter.latest_total_sprint_distance:.1f}</td></tr>
+        <tr><th>Jumps</th><td>{chapter.jumps}</td><th>Movement samples</th><td>{chapter.movement_samples}</td></tr>
+        <tr><th>Chapter 0 conditions</th><td colspan="3">{escape(chapter_zero_notes)}</td></tr>
+        <tr><th>Chapter 0 validation failures</th><td colspan="3">{validation_notes}</td></tr>
         <tr><th>Top clicked creatures</th><td colspan="3">{escape(top_clicks)}</td></tr>
         <tr><th>Blocked actions</th><td colspan="3">{escape(blocked_summary)}</td></tr>
       </table>
+      <div style="margin-top:10px;">
+        <table>
+          <tr><th>Creature card reading in this chapter</th><th class="num">Seconds</th></tr>
+          {read_rows or '<tr><td colspan="2">No creature-card reads</td></tr>'}
+        </table>
+      </div>
     </div>
     """
+
+
+def render_chapter_creature_read_row(item: tuple[str, float]) -> str:
+    display_name, seconds = item
+    return f"<tr><td>{escape(display_name)}</td><td class='num'>{escape(format_seconds(seconds))}</td></tr>"
 
 
 def render_blocked_row(chapter: ChapterSummary) -> str:
@@ -989,6 +1259,19 @@ def render_blocked_row(chapter: ChapterSummary) -> str:
         return f"<tr><td>{escape(chapter.title)}</td><td>-</td><td class='num'>0</td></tr>"
     lines = ", ".join(f"{name} ({count})" for name, count in chapter.blocked_actions.most_common())
     return f"<tr><td>{escape(chapter.title)}</td><td>{escape(lines)}</td><td class='num'>{chapter.total_blocked_actions()}</td></tr>"
+
+
+def render_chapter_zero_failure_row(record: ChapterZeroValidationRecord) -> str:
+    return (
+        "<tr>"
+        f"<td>{escape(format_datetime(record.timestamp))}</td>"
+        f"<td>{escape(record.trigger)}</td>"
+        f"<td>{format_optional_bool(record.reached_depth)}</td>"
+        f"<td>{format_optional_bool(record.interacted_with_creature)}</td>"
+        f"<td>{format_optional_bool(record.missing_depth_requirement)}</td>"
+        f"<td>{format_optional_bool(record.missing_creature_interaction)}</td>"
+        "</tr>"
+    )
 
 
 def render_spawn_integrity_row(creature: CreatureDefinition) -> str:
@@ -1004,6 +1287,40 @@ def render_spawn_integrity_row(creature: CreatureDefinition) -> str:
         f"<td>{escape(facts)}</td>"
         "</tr>"
     )
+
+
+def top_creature_reads(chapter: ChapterSummary) -> list[tuple[str, float]]:
+    counter: collections.Counter[str] = collections.Counter()
+    for record in chapter.creature_reads:
+        counter[record.display_name] += record.read_duration_seconds
+    return counter.most_common()
+
+
+def render_validation_note_html(record: ChapterZeroValidationRecord) -> str:
+    parts: list[str] = []
+    if record.missing_depth_requirement:
+        parts.append("missing depth requirement")
+    if record.missing_creature_interaction:
+        parts.append("missing creature interaction")
+    if not parts:
+        parts.append("validation failed without a flagged missing requirement")
+    return escape(f"{format_datetime(record.timestamp)} — {record.trigger} — " + ", ".join(parts))
+
+
+def activity_with_percent(seconds: float, duration: float) -> str:
+    if duration <= 0:
+        return format_seconds(seconds)
+    return f"{format_seconds(seconds)} ({(100.0 * seconds / duration):.0f}%)"
+
+
+def format_optional_bool(value: bool | None) -> str:
+    if value is None:
+        return "-"
+    return "Yes" if value else "No"
+
+
+def humanize_key(value: str) -> str:
+    return value.replace("_", " ").strip().title()
 
 
 def chapter_number_from_title(title: str | None) -> int | None:
@@ -1028,6 +1345,14 @@ def fallback_species_key(entity_type: str | None, creature_name: str | None) -> 
 
 def humanize_species_key(species_key: str) -> str:
     return species_key.replace("_", " ").title()
+
+
+def normalise_label(value: str | None) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip().lower())
+
+
+def safe_bool(value: str | None) -> bool:
+    return str(value or "").strip().lower() == "true"
 
 
 def safe_int(value: str | None) -> int | None:

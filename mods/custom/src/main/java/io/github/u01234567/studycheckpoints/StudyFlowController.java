@@ -146,25 +146,39 @@ public final class StudyFlowController {
             recoveryMessage = StudyConfig.getEscapeRecoveryMessage();
             recoveryMessageDeadlineMs = nowMs() + RECOVERY_MESSAGE_DURATION_MS;
 
-            if (chapterToRestore == StudyChapter.CHAPTER_0) {
+            if (chapterToRestore == StudyChapter.CHAPTER_0 && chapterZeroCompletionDeadlineMs == 0L) {
                 clearChapterZeroValidationMessage();
+
+                boolean interactedWithCreature = StudyInteractionController.hasInteractedWithAnyCreature();
+                double playerX = client.player != null ? client.player.getX() : 0.0D;
+                double playerY = client.player != null ? client.player.getY() : 0.0D;
+                double playerZ = client.player != null ? client.player.getZ() : 0.0D;
 
                 if (chapterZeroReachedDepth) {
                     StudyEventLog.logChapterZeroConditionSatisfied(
                             "pressed_escape_after_reaching_y_59_or_below",
                             playerName(client),
-                            client.player != null ? client.player.getX() : 0.0D,
-                            client.player != null ? client.player.getY() : 0.0D,
-                            client.player != null ? client.player.getZ() : 0.0D
+                            playerX,
+                            playerY,
+                            playerZ
                     );
                 }
 
-                if (chapterZeroCompletionDeadlineMs == 0L) {
-                    if (armChapterZeroCompletionIfReady(client)) {
-                        clearChapterZeroValidationMessage();
-                    } else {
-                        showChapterZeroValidationMessage(buildChapterZeroMissingRequirementLines());
-                    }
+                if (armChapterZeroCompletionIfReady(client)) {
+                    clearChapterZeroValidationMessage();
+                } else {
+                    StudyEventLog.logChapterZeroValidationFailed(
+                            playerName(client),
+                            triggerLabel,
+                            chapterZeroReachedDepth,
+                            interactedWithCreature,
+                            !chapterZeroReachedDepth,
+                            !interactedWithCreature,
+                            playerX,
+                            playerY,
+                            playerZ
+                    );
+                    showChapterZeroValidationMessage(buildChapterZeroMissingRequirementLines());
                 }
             }
 

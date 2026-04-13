@@ -191,6 +191,50 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logInstructionScreenDisplayed(String screenKey,
+                                                     String stepKey) {
+        logSessionHeader();
+        logEvent(
+                "instruction_screen_displayed",
+                "screen_key=" + safe(screenKey),
+                "step_key=" + safe(stepKey)
+        );
+    }
+
+    public static void logInstructionButtonPressed(String screenKey,
+                                                   String stepKey,
+                                                   String buttonKey,
+                                                   String buttonLabel,
+                                                   long timeOnScreenMs) {
+        logSessionHeader();
+        logEvent(
+                "instruction_button_pressed",
+                "screen_key=" + safe(screenKey),
+                "step_key=" + safe(stepKey),
+                "button_key=" + safe(buttonKey),
+                "button_label=" + safe(buttonLabel),
+                "time_on_screen_ms=" + timeOnScreenMs
+        );
+    }
+
+    public static void logInstructionButtonClickedWhileDisabled(String screenKey,
+                                                                String stepKey,
+                                                                String buttonKey,
+                                                                String buttonLabel,
+                                                                long timeSinceDisplayedMs,
+                                                                long remainingDelayMs) {
+        logSessionHeader();
+        logEvent(
+                "instruction_button_clicked_while_disabled",
+                "screen_key=" + safe(screenKey),
+                "step_key=" + safe(stepKey),
+                "button_key=" + safe(buttonKey),
+                "button_label=" + safe(buttonLabel),
+                "time_since_displayed_ms=" + timeSinceDisplayedMs,
+                "remaining_delay_ms=" + remainingDelayMs
+        );
+    }
+
     public static void logExperimentConditionAssigned(String conditionId,
                                                       String source,
                                                       String indicatorColourName,
@@ -268,6 +312,22 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logCheckpointPromptDismissed(int completedChapterNumber,
+                                                    int nextChapterNumber,
+                                                    String conditionId,
+                                                    String promptText,
+                                                    long promptVisibleForMs) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_prompt_dismissed",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "condition=" + safe(conditionId),
+                "prompt=" + safe(promptText),
+                "prompt_visible_for_ms=" + promptVisibleForMs
+        );
+    }
+
     public static void logCheckpointChoice(int completedChapterNumber,
                                            int nextChapterNumber,
                                            String conditionId,
@@ -279,6 +339,26 @@ public final class StudyEventLog {
                 "next_chapter=" + nextChapterNumber,
                 "condition=" + safe(conditionId),
                 "choice=" + safe(choice)
+        );
+    }
+
+    public static void logCheckpointChoiceContext(int completedChapterNumber,
+                                                  int nextChapterNumber,
+                                                  String conditionId,
+                                                  String choice,
+                                                  boolean promptVisibleAtChoice,
+                                                  boolean promptDismissedBeforeChoice,
+                                                  long timeOnScreenMs) {
+        logSessionHeader();
+        logEvent(
+                "checkpoint_choice_context",
+                "completed_chapter=" + completedChapterNumber,
+                "next_chapter=" + nextChapterNumber,
+                "condition=" + safe(conditionId),
+                "choice=" + safe(choice),
+                "prompt_visible_at_choice=" + promptVisibleAtChoice,
+                "prompt_dismissed_before_choice=" + promptDismissedBeforeChoice,
+                "time_on_screen_ms=" + timeOnScreenMs
         );
     }
 
@@ -331,6 +411,22 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logCreatureCardClosed(String playerName,
+                                             String creatureLabel,
+                                             String chapterTitle,
+                                             String activeChapterTitle,
+                                             long readDurationMs) {
+        logSessionHeader();
+        logEvent(
+                "creature_card_closed",
+                "player=" + safe(playerName),
+                "creature_label=" + safe(creatureLabel),
+                "chapter_title=" + safe(chapterTitle),
+                "active_chapter_title=" + safe(activeChapterTitle),
+                "read_duration_ms=" + readDurationMs
+        );
+    }
+
     public static void logStudyCreatureSpawned(String entityType,
                                                String creatureLabel,
                                                String creatureName,
@@ -362,6 +458,30 @@ public final class StudyEventLog {
                 "player=" + safe(playerName),
                 "action=" + safe(action),
                 "detail=" + safe(detail)
+        );
+    }
+
+    public static void logChapterZeroValidationFailed(String playerName,
+                                                      String trigger,
+                                                      boolean reachedDepth,
+                                                      boolean interactedWithCreature,
+                                                      boolean missingDepthRequirement,
+                                                      boolean missingCreatureInteraction,
+                                                      double x,
+                                                      double y,
+                                                      double z) {
+        logSessionHeader();
+        logEvent(
+                "chapter_zero_validation_failed",
+                "player=" + safe(playerName),
+                "trigger=" + safe(trigger),
+                "reached_depth=" + reachedDepth,
+                "interacted_with_creature=" + interactedWithCreature,
+                "missing_depth_requirement=" + missingDepthRequirement,
+                "missing_creature_interaction=" + missingCreatureInteraction,
+                "x=" + formatDouble(x),
+                "y=" + formatDouble(y),
+                "z=" + formatDouble(z)
         );
     }
 
