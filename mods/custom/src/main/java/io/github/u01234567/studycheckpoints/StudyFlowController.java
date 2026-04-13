@@ -18,6 +18,8 @@ import java.awt.Desktop;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -727,7 +729,9 @@ public final class StudyFlowController {
             }
 
             String template = StudyConfig.getQualtricsUrlTemplate();
-            String url = template.replace("{MCID}", StudyEventLog.getSessionId());
+            String url = template
+                    .replace("{MCID}", urlEncode(StudyEventLog.getSessionId()))
+                    .replace("{CREATURES_SEEN}", urlEncode(buildCreaturesSeenPayload()));
             StudyEventLog.logQuestionnaireButtonPressed(url);
 
             if (openUrlInBrowser(url)) {
@@ -738,6 +742,14 @@ public final class StudyFlowController {
         } catch (IOException e) {
             StudyCheckpoints.LOGGER.error("Failed to open questionnaire URL.", e);
         }
+    }
+
+    private static String buildCreaturesSeenPayload() {
+        return String.join(",", StudyInteractionController.interactedCreatureIdsSorted());
+    }
+
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     private static boolean openUrlInBrowser(String url) throws IOException {

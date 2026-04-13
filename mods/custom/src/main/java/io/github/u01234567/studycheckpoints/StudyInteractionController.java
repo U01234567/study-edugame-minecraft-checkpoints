@@ -205,6 +205,14 @@ public final class StudyInteractionController {
         }
     }
 
+    public static List<String> interactedCreatureIdsSorted() {
+        synchronized (INTERACTED_CREATURE_IDS) {
+            List<String> ids = new ArrayList<>(INTERACTED_CREATURE_IDS);
+            ids.sort(String::compareTo);
+            return List.copyOf(ids);
+        }
+    }
+
     private static void onEndServerTick(MinecraftServer server) {
         serverTickCounter++;
 
