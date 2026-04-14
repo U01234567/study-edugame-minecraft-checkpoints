@@ -320,8 +320,7 @@ public final class StudyConfig {
             case PAUSE -> List.of(
                     "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",
                     "This is a good place to take a break.",
-                    "Your progress is saved here, and you will continue from this point",
-                    "after the break."
+                    "Your progress is saved here, and you will continue from this point after the break."
             );
             case CHOICE -> List.of(
                     "Checkpoint: you have finished " + completedChapter.displayTitle() + ".",

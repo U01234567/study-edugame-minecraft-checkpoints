@@ -22,9 +22,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a dark deer-like fantasy creature.",
-                        "It has a calm stance and long legs.",
-                        "It should stay still for the museum-style display."
+                        "They graze only in pairs.",
+                        "They remember every farm gate.",
+                        "Herd circles calm anxious calves."
                 ),
                 List.of(
                         new CreatureSpawn("abyss_deer_a", 272, 71, -335, FacingDirection.WEST),
@@ -44,9 +44,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a scarab-like fantasy creature.",
-                        "Its theme is based on amethyst.",
-                        "It should stay still for the museum-style display."
+                        "Their shells leave crystal dust.",
+                        "They navigate by tiny echoes.",
+                        "They tunnel toward buried geodes."
                 ),
                 List.of(
                         new CreatureSpawn("amethyst_scarab_a", 258, 66, 815, FacingDirection.NORTH),
@@ -59,9 +59,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This creature mixes dragon features with an axolotl-like body.",
-                        "It looks playful but unusual.",
-                        "It should stay still for the museum-style display."
+                        "Males display brighter fins.",
+                        "Museum water slows its ageing.",
+                        "It cannot breathe dry air."
                 ),
                 List.of(
                         new CreatureSpawn("axolotl_dragon_a", -147, 87, 55, FacingDirection.SOUTH)
@@ -72,9 +72,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a cave-themed fantasy creature.",
-                        "It has a dark and unsettling appearance.",
-                        "It should stay still for the museum-style display."
+                        "It follows candle smoke home.",
+                        "It dislikes enclosed wooden stalls.",
+                        "It counts footsteps before sleeping."
                 ),
                 List.of(
                         new CreatureSpawn("cave_dweller_a", 234, 72, -263, FacingDirection.EAST),
@@ -87,9 +87,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is an ape-like fantasy creature with an end-themed design.",
-                        "It looks agile, strong, and unusual.",
-                        "It should stay still for the museum-style display."
+                        "It drums on hollow trunks.",
+                        "They throw fruit before fighting.",
+                        "Troops settle disputes through rhythm."
                 ),
                 List.of(
                         new CreatureSpawn("ender_ape_a", 225, 65, 852, FacingDirection.NORTH),
@@ -102,9 +102,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This creature looks like a rabbit with unusual flying features.",
-                        "It has a light and whimsical shape.",
-                        "It should stay still for the museum-style display."
+                        "They nest where bells ring.",
+                        "Flight helps them scout foxes.",
+                        "They eat four-leaf clovers."
                 ),
                 List.of(
                         new CreatureSpawn("flying_bunny_a", 348, 69, -230, FacingDirection.WEST),
@@ -116,9 +116,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a small flying fantasy creature.",
-                        "It has a plant-like and watchful appearance.",
-                        "It should stay still for the museum-style display."
+                        "Females vanish in winter.",
+                        "The name reflects its vigilance.",
+                        "It hates ignored dark corners."
                 ),
                 List.of(
                         new CreatureSpawn("glare_a", 171, 63, 837, FacingDirection.NORTH),
@@ -131,9 +131,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This is a large plant-themed fantasy creature.",
-                        "Its design feels ancient and earthy.",
-                        "It should stay still for the museum-style display."
+                        "Moss spreads after every footstep.",
+                        "He is older than fences.",
+                        "He grows medicine from bark."
                 ),
                 List.of(
                         new CreatureSpawn("grand_grassling_father_a", -144, 71, 68, FacingDirection.EAST)
@@ -144,9 +144,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This is a golem-like creature with an icy theme.",
-                        "It looks solid, cold, and heavy.",
-                        "It should stay still for the museum-style display."
+                        "Cold leaks from a stone heart.",
+                        "Museum lamps cannot warm it.",
+                        "Golem means crafted, not born."
                 ),
                 List.of(
                         new CreatureSpawn("ice_golem_a", -152, 71, 68, FacingDirection.WEST)
@@ -157,9 +157,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a crab-like fantasy creature.",
-                        "It has a low body and large claws.",
-                        "It should stay still for the museum-style display."
+                        "Wheat roots hide its tunnels.",
+                        "Harvest time makes it restless.",
+                        "It snaps only when cornered."
                 ),
                 List.of(
                         new CreatureSpawn("killer_crab_a", 248, 71, -177, FacingDirection.NORTH),
@@ -172,9 +172,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This creature combines reptile features with a knightly shape.",
-                        "It looks armored and alert.",
-                        "It should stay still for the museum-style display."
+                        "Water keeps its armour flexible.",
+                        "It swears oaths beside rivers.",
+                        "It patrols forgotten crossing points."
                 ),
                 List.of(
                         new CreatureSpawn("lizard_knight_a", 139, 64, 783, FacingDirection.SOUTH),
@@ -187,9 +187,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a mushroom-themed fantasy creature.",
-                        "It has a rounded shape and a soft woodland feel.",
-                        "It should stay still for the museum-style display."
+                        "It sneezes near mushroom spores.",
+                        "It prefers bread over fungi.",
+                        "It distrusts red caps entirely."
                 ),
                 List.of(
                         new CreatureSpawn("mushroom_bup_a", 332, 63, -294, FacingDirection.WEST),
@@ -203,9 +203,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a broad humanoid fantasy creature.",
-                        "It has a rough and battle-ready look.",
-                        "It should stay still for the museum-style display."
+                        "They mapped the island first.",
+                        "They trade memory for metal.",
+                        "Orc once meant island keeper."
                 ),
                 List.of(
                         new CreatureSpawn("orc_a", 114, 65, 820, FacingDirection.NORTH),
@@ -218,9 +218,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a warden-like fantasy creature in an experimental form.",
-                        "It looks heavy, imposing, and unnatural.",
-                        "It should stay still for the museum-style display."
+                        "It was built for testing.",
+                        "Dry ground makes tracking harder.",
+                        "Salt air clogs its hearing."
                 ),
                 List.of(
                         new CreatureSpawn("prototype_warden_a", 225, 66, 771, FacingDirection.SOUTH),
@@ -233,9 +233,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "This is a robot-like creature with a retro television theme.",
-                        "It has a mechanical and comic appearance.",
-                        "It should stay still for the museum-style display."
+                        "Nobody knows who built it.",
+                        "It broadcasts only to itself.",
+                        "Solitude keeps its circuits stable."
                 ),
                 List.of(
                         new CreatureSpawn("retro_tv_robot_a", 282, 72, -174, FacingDirection.NORTH)
@@ -246,9 +246,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This is a fantasy creature with a kingly theme.",
-                        "It looks strange, dramatic, and important.",
-                        "It should stay still for the museum-style display."
+                        "Nearby machines lose their rhythm.",
+                        "It speaks through its red chest.",
+                        "Only one scrambler earns the crown."
                 ),
                 List.of(
                         new CreatureSpawn("scrambler_king_a", -143, 71, 160, FacingDirection.EAST)
@@ -259,12 +259,12 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This is a robot-like humanoid creature.",
-                        "It has a mechanical body and a simple silhouette.",
-                        "It should stay still for the museum-style display."
+                        "It was designed for demonstrations.",
+                        "Red marks approved walking routes.",
+                        "The hat flags version one."
                 ),
                 List.of(
-                        new CreatureSpawn("walking_robot_guy_a", -153, 71, 161, FacingDirection.WEST)
+                        new CreatureSpawn("walking_robot_guy_a", -153, 71, 160, FacingDirection.WEST)
                 )
         )),
         Map.entry("wardigo", new CreatureCard(
@@ -272,9 +272,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_1,
                 CreatureMovementMode.FIXED,
                 List.of(
-                        "This is a dark fantasy creature with a menacing shape.",
-                        "It looks lean, tall, and unnatural.",
-                        "It should stay still for the museum-style display."
+                        "It outgrew ordinary museum doors.",
+                        "Its height came from overfeeding.",
+                        "Bones hardened after endless growth."
                 ),
                 List.of(
                         new CreatureSpawn("wardigo_a", -147, 100, 50, FacingDirection.NORTH)

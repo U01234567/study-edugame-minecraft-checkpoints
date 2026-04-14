@@ -22,6 +22,7 @@ The repository preserves the materials, code, runtime dependencies, and document
 * `mods/external/` — third-party runtime jars, external creature source/reference assets, and source credits
 * `server/` — local server setup and scripts for running the world
 * `analysis/` — scripts for statistical analysis
+* `materials/` — screenshots of the world and mods
 
 ## External sources and credits
 
