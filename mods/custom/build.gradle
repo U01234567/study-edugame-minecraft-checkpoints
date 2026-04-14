@@ -96,7 +96,11 @@ tasks.named("runClient") {
 		)
 	}
 
-	args "--quickPlaySingleplayer", studyWorldSaveName
+	args(
+			"--username", "Explorer16",
+			"--uuid", "00000000-0000-0000-0000-00000000000f",
+			"--quickPlaySingleplayer", studyWorldSaveName
+	)
 }
 
 processResources {
