@@ -552,6 +552,28 @@ public final class StudyEventLog {
         );
     }
 
+    public static void logEmptyClick(String playerName,
+                                     String clickType,
+                                     String chapterTitle,
+                                     double x,
+                                     double y,
+                                     double z,
+                                     boolean sprinting,
+                                     boolean onGround) {
+        logSessionHeader();
+        logEvent(
+                "empty_click",
+                "player=" + safe(playerName),
+                "click_type=" + safe(clickType),
+                "chapter_title=" + safe(chapterTitle),
+                "x=" + formatDouble(x),
+                "y=" + formatDouble(y),
+                "z=" + formatDouble(z),
+                "sprinting=" + sprinting,
+                "on_ground=" + onGround
+        );
+    }
+
     public static void logGameEnded(String playerName, String reason) {
         logSessionHeader();
         logEvent(

@@ -177,6 +177,7 @@ class ChapterSummary:
     clicks: list[ClickRecord] = dataclasses.field(default_factory=list)
     creature_reads: list[CreatureReadRecord] = dataclasses.field(default_factory=list)
     blocked_actions: collections.Counter[str] = dataclasses.field(default_factory=collections.Counter)
+    empty_clicks: collections.Counter[str] = dataclasses.field(default_factory=collections.Counter)
     movement_samples: int = 0
     latest_total_distance: float = 0.0
     latest_total_sprint_distance: float = 0.0
@@ -203,6 +204,9 @@ class ChapterSummary:
 
     def total_blocked_actions(self) -> int:
         return sum(self.blocked_actions.values())
+
+    def total_empty_clicks(self) -> int:
+        return sum(self.empty_clicks.values())
 
     def blocked_click_like_actions(self) -> int:
         return sum(self.blocked_actions.get(name, 0) for name in CLICK_LIKE_BLOCKED_ACTIONS)
@@ -709,6 +713,11 @@ def build_session_summary(
                 )
             )
 
+        elif event.event_type == "empty_click":
+            chapter_number = chapter_number_from_title(event.fields.get("chapter_title"))
+            if chapter_number in chapters:
+                chapters[chapter_number].empty_clicks[event.fields.get("click_type", "unknown")] += 1
+
         elif event.event_type == "blocked_action":
             if current_active_chapter in chapters:
                 chapters[current_active_chapter].blocked_actions[event.fields.get("action", "unknown")] += 1
@@ -1193,15 +1202,15 @@ def render_creature_matrix_row(session: SessionSummary, creature: CreatureDefini
         "<tr>"
         f"<td>{escape(creature.display_name)}</td>"
         f"<td>{escape(CHAPTER_TITLES.get(creature.chapter_number, f'Chapter {creature.chapter_number}'))}</td>"
-        f"<td class='num'>{chapter_clicks[0]}</td>"
-        f"<td class='num'>{chapter_clicks[1]}</td>"
-        f"<td class='num'>{chapter_clicks[2]}</td>"
-        f"<td class='num'>{chapter_clicks[3]}</td>"
+        f"<td class='num'>{escape(format_possible_count(chapter_clicks[0], creature.chapter_number == 0))}</td>"
+        f"<td class='num'>{escape(format_possible_count(chapter_clicks[1], creature.chapter_number == 1))}</td>"
+        f"<td class='num'>{escape(format_possible_count(chapter_clicks[2], creature.chapter_number == 2))}</td>"
+        f"<td class='num'>{escape(format_possible_count(chapter_clicks[3], creature.chapter_number == 3))}</td>"
         f"<td class='num'>{total_clicks}</td>"
-        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[0]))}</td>"
-        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[1]))}</td>"
-        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[2]))}</td>"
-        f"<td class='num'>{escape(format_seconds(chapter_read_seconds[3]))}</td>"
+        f"<td class='num'>{escape(format_possible_seconds(chapter_read_seconds[0], creature.chapter_number == 0))}</td>"
+        f"<td class='num'>{escape(format_possible_seconds(chapter_read_seconds[1], creature.chapter_number == 1))}</td>"
+        f"<td class='num'>{escape(format_possible_seconds(chapter_read_seconds[2], creature.chapter_number == 2))}</td>"
+        f"<td class='num'>{escape(format_possible_seconds(chapter_read_seconds[3], creature.chapter_number == 3))}</td>"
         f"<td class='num'>{escape(format_seconds(total_read_seconds))}</td>"
         f"<td class='num'>{len(uuids)}</td>"
         f"<td class='num'>{repeat_clicks}</td>"
@@ -1234,6 +1243,7 @@ def render_chapter_detail(chapter: ChapterSummary) -> str:
         <tr><th>Interacting</th><td>{escape(activity_with_percent(activity['interacting'], duration))}</td><th>Other / stationary</th><td>{escape(activity_with_percent(activity['other'], duration))}</td></tr>
         <tr><th>Distance</th><td>{chapter.latest_total_distance:.1f}</td><th>Sprint distance</th><td>{chapter.latest_total_sprint_distance:.1f}</td></tr>
         <tr><th>Jumps</th><td>{chapter.jumps}</td><th>Movement samples</th><td>{chapter.movement_samples}</td></tr>
+        <tr><th>Empty air clicks</th><td colspan="3">{escape(format_empty_click_summary(chapter.empty_clicks))}</td></tr>
         <tr><th>Chapter 0 conditions</th><td colspan="3">{escape(chapter_zero_notes)}</td></tr>
         <tr><th>Chapter 0 validation failures</th><td colspan="3">{validation_notes}</td></tr>
         <tr><th>Top clicked creatures</th><td colspan="3">{escape(top_clicks)}</td></tr>
@@ -1394,6 +1404,40 @@ def format_seconds(value: float | None) -> str:
     if value >= 60:
         return format_timedelta(dt.timedelta(seconds=value))
     return f"{value:.1f}s"
+
+
+def format_possible_count(value: int, can_change: bool) -> str:
+    if value == 0 and not can_change:
+        return ""
+    return str(value)
+
+
+def format_possible_seconds(value: float, can_change: bool) -> str:
+    if value == 0.0 and not can_change:
+        return ""
+    return format_seconds(value)
+
+
+def format_empty_click_summary(counter: collections.Counter[str]) -> str:
+    total = sum(counter.values())
+    if total == 0:
+        return "0"
+
+    left = counter.get("left", 0)
+    right = counter.get("right", 0)
+    other = total - left - right
+
+    parts: list[str] = []
+    if left:
+        parts.append(f"left {left}")
+    if right:
+        parts.append(f"right {right}")
+    if other:
+        parts.append(f"other {other}")
+
+    if not parts:
+        return str(total)
+    return f"{total} ({', '.join(parts)})"
 
 
 def format_condition(condition: str | None, source: str | None) -> str:

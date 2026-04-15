@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -61,6 +62,7 @@ public final class StudyInteractionController {
     private static double lastSampleX;
     private static double lastSampleY;
     private static double lastSampleZ;
+    private static double movementDistanceSinceLastSample;
     private static double totalDistance;
     private static double totalSprintDistance;
     private static boolean previousOnGround;
@@ -250,7 +252,7 @@ public final class StudyInteractionController {
         handleStudyHotkeys(client);
         blockForbiddenScreens(client);
         logBlockedKeyAttempts(client);
-        sampleMovement(client.player);
+        sampleMovement(client, client.player);
     }
 
     public static boolean shouldBlockMouseWheel(Minecraft client) {
@@ -288,6 +290,38 @@ public final class StudyInteractionController {
                 "vertical_scroll=" + String.format(Locale.ROOT, "%.3f", verticalScrollAmount)
                         + ",screen=" + screenName
                         + ",chapter=" + chapterTitle
+        );
+    }
+
+    public static void logEmptyClick(Minecraft client, int button) {
+        if (client == null || client.player == null || client.level == null || client.screen != null) {
+            return;
+        }
+
+        HitResult hitResult = client.hitResult;
+        if (hitResult == null || hitResult.getType() != HitResult.Type.MISS) {
+            return;
+        }
+
+        String clickType;
+        if (button == 0) {
+            clickType = "left";
+        } else if (button == 1) {
+            clickType = "right";
+        } else {
+            return;
+        }
+
+        StudyChapter activeChapter = StudyFlowController.getActiveChapter();
+        StudyEventLog.logEmptyClick(
+                client.player.getName().getString(),
+                clickType,
+                activeChapter != null ? activeChapter.displayTitle() : "none",
+                client.player.getX(),
+                client.player.getY(),
+                client.player.getZ(),
+                client.player.isSprinting(),
+                client.player.onGround()
         );
     }
 
@@ -836,17 +870,29 @@ public final class StudyInteractionController {
         }
     }
 
-    private static void sampleMovement(LocalPlayer player) {
+    private static void sampleMovement(Minecraft client, LocalPlayer player) {
         if (!StudyFlowController.isChapterActive()) {
             trackedChapter = null;
             lastMovementSampleMs = 0L;
             totalDistance = 0.0D;
             totalSprintDistance = 0.0D;
+            movementDistanceSinceLastSample = 0.0D;
             return;
         }
 
         StudyChapter activeChapter = StudyFlowController.getActiveChapter();
         long now = System.currentTimeMillis();
+
+        if (client.screen instanceof StudyCreatureInfoScreen) {
+            trackedChapter = activeChapter;
+            lastMovementSampleMs = now;
+            lastSampleX = player.getX();
+            lastSampleY = player.getY();
+            lastSampleZ = player.getZ();
+            movementDistanceSinceLastSample = 0.0D;
+            previousOnGround = player.onGround();
+            return;
+        }
 
         if (trackedChapter != activeChapter || lastMovementSampleMs == 0L) {
             trackedChapter = activeChapter;
@@ -856,17 +902,19 @@ public final class StudyInteractionController {
             lastSampleZ = player.getZ();
             totalDistance = 0.0D;
             totalSprintDistance = 0.0D;
+            movementDistanceSinceLastSample = 0.0D;
             previousOnGround = player.onGround();
             return;
         }
 
         double dxTick = player.getX() - lastSampleX;
         double dzTick = player.getZ() - lastSampleZ;
-        double sampleDistance = Math.sqrt((dxTick * dxTick) + (dzTick * dzTick));
+        double tickDistance = Math.sqrt((dxTick * dxTick) + (dzTick * dzTick));
 
-        totalDistance += sampleDistance;
+        totalDistance += tickDistance;
+        movementDistanceSinceLastSample += tickDistance;
         if (player.isSprinting()) {
-            totalSprintDistance += sampleDistance;
+            totalSprintDistance += tickDistance;
         }
 
         if (previousOnGround && !player.onGround() && player.getDeltaMovement().y > 0.0D) {
@@ -879,6 +927,9 @@ public final class StudyInteractionController {
             );
         }
         previousOnGround = player.onGround();
+        lastSampleX = player.getX();
+        lastSampleY = player.getY();
+        lastSampleZ = player.getZ();
 
         if (now - lastMovementSampleMs >= MOVEMENT_SAMPLE_INTERVAL_MS) {
             StudyEventLog.logMovementSample(
@@ -887,7 +938,7 @@ public final class StudyInteractionController {
                     player.getX(),
                     player.getY(),
                     player.getZ(),
-                    sampleDistance,
+                    movementDistanceSinceLastSample,
                     totalDistance,
                     totalSprintDistance,
                     player.isSprinting(),
@@ -895,9 +946,7 @@ public final class StudyInteractionController {
             );
 
             lastMovementSampleMs = now;
-            lastSampleX = player.getX();
-            lastSampleY = player.getY();
-            lastSampleZ = player.getZ();
+            movementDistanceSinceLastSample = 0.0D;
         }
     }
 
