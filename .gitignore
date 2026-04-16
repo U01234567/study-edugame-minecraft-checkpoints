@@ -24,3 +24,6 @@ world/players/
 
 # Cache files
 **/__pycache__
+
+# Data for analysis
+analysis/data/
