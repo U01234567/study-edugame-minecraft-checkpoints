@@ -22,9 +22,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_2,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "They graze only in pairs.",
+                        "They eat grass only in pairs.",
                         "They remember every farm gate.",
-                        "Herd circles calm anxious calves."
+                        "Herd circles calm nervous young deer."
                 ),
                 List.of(
                         new CreatureSpawn("abyss_deer_a", 272, 71, -335, FacingDirection.WEST),
@@ -46,7 +46,7 @@ public final class StudyCreatureCards {
                 List.of(
                         "Their shells leave crystal dust.",
                         "They navigate by tiny echoes.",
-                        "They tunnel toward buried geodes."
+                        "They dig toward buried crystals."
                 ),
                 List.of(
                         new CreatureSpawn("amethyst_scarab_a", 258, 66, 815, FacingDirection.NORTH),
@@ -87,9 +87,9 @@ public final class StudyCreatureCards {
                 StudyChapter.CHAPTER_3,
                 CreatureMovementMode.FREE,
                 List.of(
-                        "It drums on hollow trunks.",
+                        "It drums on hollow tree trunks.",
                         "They throw fruit before fighting.",
-                        "Troops settle disputes through rhythm."
+                        "Groups solve fights with drum beats."
                 ),
                 List.of(
                         new CreatureSpawn("ender_ape_a", 225, 65, 852, FacingDirection.NORTH),
@@ -103,7 +103,7 @@ public final class StudyCreatureCards {
                 CreatureMovementMode.FREE,
                 List.of(
                         "They nest where bells ring.",
-                        "Flight helps them scout foxes.",
+                        "Flying helps them look for foxes.",
                         "They eat four-leaf clovers."
                 ),
                 List.of(
@@ -117,7 +117,7 @@ public final class StudyCreatureCards {
                 CreatureMovementMode.FREE,
                 List.of(
                         "Females vanish in winter.",
-                        "The name reflects its vigilance.",
+                        "Its name shows how watchful it is.",
                         "It hates ignored dark corners."
                 ),
                 List.of(
@@ -174,7 +174,7 @@ public final class StudyCreatureCards {
                 List.of(
                         "Water keeps its armour flexible.",
                         "It swears oaths beside rivers.",
-                        "It patrols forgotten crossing points."
+                        "It guards forgotten crossing points."
                 ),
                 List.of(
                         new CreatureSpawn("lizard_knight_a", 139, 64, 783, FacingDirection.SOUTH),
@@ -188,7 +188,7 @@ public final class StudyCreatureCards {
                 CreatureMovementMode.FREE,
                 List.of(
                         "It sneezes near mushroom spores.",
-                        "It prefers bread over fungi.",
+                        "It prefers bread over mushrooms.",
                         "It distrusts red caps entirely."
                 ),
                 List.of(
@@ -235,7 +235,7 @@ public final class StudyCreatureCards {
                 List.of(
                         "Nobody knows who built it.",
                         "It broadcasts only to itself.",
-                        "Solitude keeps its circuits stable."
+                        "Solitude keeps its electronics stable."
                 ),
                 List.of(
                         new CreatureSpawn("retro_tv_robot_a", 282, 72, -174, FacingDirection.NORTH)
@@ -273,7 +273,7 @@ public final class StudyCreatureCards {
                 CreatureMovementMode.FIXED,
                 List.of(
                         "It outgrew ordinary museum doors.",
-                        "Its height came from overfeeding.",
+                        "It grew tall because it was fed too much.",
                         "Bones hardened after endless growth."
                 ),
                 List.of(

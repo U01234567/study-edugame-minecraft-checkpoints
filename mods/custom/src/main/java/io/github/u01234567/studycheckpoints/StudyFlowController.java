@@ -21,6 +21,8 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 /**
@@ -79,9 +81,11 @@ public final class StudyFlowController {
         // Remove vanilla survival HUD elements that are not relevant to the study:
         // - hearts
         // - hunger
+        // - air / water bubbles
         // - experience bar / level
         HudElementRegistry.removeElement(VanillaHudElements.HEALTH_BAR);
         HudElementRegistry.removeElement(VanillaHudElements.FOOD_BAR);
+        HudElementRegistry.removeElement(VanillaHudElements.AIR_BAR);
         HudElementRegistry.removeElement(VanillaHudElements.INFO_BAR);
         HudElementRegistry.removeElement(VanillaHudElements.EXPERIENCE_LEVEL);
 
@@ -826,8 +830,33 @@ public final class StudyFlowController {
         }
     }
 
+    private static final Map<String, String> PUBLIC_CREATURE_CODES = Map.ofEntries(
+        Map.entry("abyss_deer", "DAB"),
+        Map.entry("amethyst_scarab", "SA"),
+        Map.entry("axolotl_dragon", "DAX"),
+        Map.entry("cave_dweller", "DC"),
+        Map.entry("ender_ape", "AE"),
+        Map.entry("flying_bunny", "BF"),
+        Map.entry("glare", "G"),
+        Map.entry("grand_grassling_father", "FGG"),
+        Map.entry("ice_golem", "GI"),
+        Map.entry("killer_crab", "CK"),
+        Map.entry("lizard_knight", "KL"),
+        Map.entry("mushroom_bup", "BM"),
+        Map.entry("orc", "O"),
+        Map.entry("prototype_warden", "WP"),
+        Map.entry("retro_tv_robot", "RTR"),
+        Map.entry("scrambler_king", "KS"),
+        Map.entry("walking_robot_guy", "GRW"),
+        Map.entry("wardigo", "W")
+    );
+
     private static String buildCreaturesSeenPayload() {
-        return String.join(",", StudyInteractionController.interactedCreatureIdsSorted());
+        return StudyInteractionController.interactedCreatureIdsSorted().stream()
+                .filter(StudyCreatureCards::isTrackedOutsideChapterZero)
+                .map(PUBLIC_CREATURE_CODES::get)
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.joining(","));
     }
 
     private static String urlEncode(String value) {

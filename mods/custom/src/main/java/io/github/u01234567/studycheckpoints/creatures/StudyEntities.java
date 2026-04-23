@@ -38,10 +38,10 @@ public final class StudyEntities {
 
     private static final float DEFAULT_HITBOX_WIDTH = 2.8F;
     private static final float DEFAULT_HITBOX_HEIGHT = 1.8F;
-    private static final float INTERACTION_HITBOX_WIDTH_PADDING = 0.35F;
-    private static final float INTERACTION_HITBOX_HEIGHT_PADDING = 0.40F;
-    private static final float MINIMUM_INTERACTION_HITBOX_WIDTH = 1.35F;
-    private static final float MINIMUM_INTERACTION_HITBOX_HEIGHT = 1.25F;
+    private static final float INTERACTION_HITBOX_WIDTH_PADDING = 0.60F;
+    private static final float INTERACTION_HITBOX_HEIGHT_PADDING = 0.70F;
+    private static final float MINIMUM_INTERACTION_HITBOX_WIDTH = 1.80F;
+    private static final float MINIMUM_INTERACTION_HITBOX_HEIGHT = 1.60F;
 
     private static final Map<String, EntityType<StudyCreatureEntity>> REGISTERED_CREATURES =
             new LinkedHashMap<>();

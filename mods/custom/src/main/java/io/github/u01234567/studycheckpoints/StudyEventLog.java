@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.UUID;
+import java.security.SecureRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,7 +44,21 @@ public final class StudyEventLog {
     private static final AtomicReference<Path> MIRROR_LOG_FILE = new AtomicReference<>();
     private static final AtomicReference<String> SESSION_PLAYER_NAME = new AtomicReference<>("unknown");
 
-    private static final String SESSION_ID = UUID.randomUUID().toString();
+    private static final char[] SESSION_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
+    private static final SecureRandom SESSION_ID_RANDOM = new SecureRandom();
+    private static final int SESSION_ID_RAW_LENGTH = 8;
+    
+    private static final String SESSION_ID = generateShortSessionId();
+    
+    private static String generateShortSessionId() {
+        StringBuilder raw = new StringBuilder(SESSION_ID_RAW_LENGTH);
+    
+        for (int i = 0; i < SESSION_ID_RAW_LENGTH; i++) {
+            raw.append(SESSION_ID_ALPHABET[SESSION_ID_RANDOM.nextInt(SESSION_ID_ALPHABET.length)]);
+        }
+    
+        return raw.substring(0, 4) + "-" + raw.substring(4);
+    }
 
     private static final String SESSION_STARTED_AT_FILE_SAFE =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")

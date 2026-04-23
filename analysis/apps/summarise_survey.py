@@ -38,59 +38,143 @@ RETENTION_QUESTION_SPECS = [
     ("img1", "IMAGE + What is the name of this creature?"),
     ("img2", "IMAGE + What are unique facts about this creature?"),
     ("name1", "NAME + What does this creature look like?"),
-    ("name2", "NAME + In which environment does this creature live?"),
+    ("name2", "NAME + In which environment does this creature live, and how would you describe its surroundings?"),
 ]
 
 SCALES = [
     {
-        "id": "cognitive_load",
-        "title": "Cognitive load",
-        "section_title": "Overall experience (1/2)",
-        "description": "Please answer the following questions on a scale from 0 (= not at all the case) to 10 (= completely the case).",
-        "interpretation": "Higher scores indicate less optimal cognitive load. Intrinsic items are 1–3, extraneous items are 4–14, and germane items are 15–17.",
+        "id": "cl_ch1",
+        "title": "Cognitive load | Chapter 1 (The Museum)",
+        "section_title": "Experience per chapter (1/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 0 (= not at all the case) to 10 (= completely the case).",
+        "interpretation": "Higher scores indicate less optimal cognitive load.",
         "min_value": 0,
         "max_value": 10,
         "items": [
-            {"column": "cl_scores_1", "statement": "The topics covered in the game were very complex.", "reverse": False},
-            {"column": "cl_scores_2", "statement": "The game covered creature characteristics that I perceived as very complex.", "reverse": False},
-            {"column": "cl_scores_3", "statement": "The game covered differences between the creatures that I perceived as very complex.", "reverse": False},
-            {"column": "cl_scores_4", "statement": "The instructions and/or explanations used in the game were very unclear.", "reverse": False},
-            {"column": "cl_scores_5", "statement": "The instructions and/or explanations used in the game were, in terms of learning, very ineffective.", "reverse": False},
-            {"column": "cl_scores_6", "statement": "The instructions and/or explanations used in the game were full of unclear content.", "reverse": False},
-            {"column": "cl_scores_7", "statement": "The way of interacting with the game was very unclear.", "reverse": False},
-            {"column": "cl_scores_8", "statement": "The way of interacting with the game was, in terms of learning, very ineffective.", "reverse": False},
-            {"column": "cl_scores_9", "statement": "The way of interacting with the game made it harder to learn.", "reverse": False},
-            {"column": "cl_scores_10", "statement": "The way of interacting with the game was difficult to master.", "reverse": False},
-            {"column": "cl_scores_11", "statement": "The elements in the game world made the learning very unclear.", "reverse": False},
-            {"column": "cl_scores_12", "statement": "The game world was, in terms of learning, very ineffective.", "reverse": False},
-            {"column": "cl_scores_13", "statement": "The game world was full of irrelevant content.", "reverse": False},
-            {"column": "cl_scores_14", "statement": "It was difficult to find the relevant learning information in the game world.", "reverse": False},
-            {"column": "cl_scores_15", "statement": "The game really enhanced my understanding of the topics covered.", "reverse": True},
-            {"column": "cl_scores_16", "statement": "The game really enhanced my understanding of the creature characteristics covered.", "reverse": True},
-            {"column": "cl_scores_17", "statement": "The game really enhanced my understanding of the differences between the creatures.", "reverse": True},
+            {"column": "cl_ch1_scores_1", "statement": "The topics covered in this chapter were very complex.", "reverse": False},
+            {"column": "cl_ch1_scores_2", "statement": "This chapter covered creature characteristics that seemed very complex.", "reverse": False},
+            {"column": "cl_ch1_scores_3", "statement": "This chapter covered differences between the creatures that seemed very complex.", "reverse": False},
+            {"column": "cl_ch1_scores_4", "statement": "The elements in this chapter's game world made the learning very unclear.", "reverse": False},
+            {"column": "cl_ch1_scores_5", "statement": "This chapter's game world was, in terms of learning, very ineffective.", "reverse": False},
+            {"column": "cl_ch1_scores_6", "statement": "This chapter's game world was full of irrelevant content.", "reverse": False},
+            {"column": "cl_ch1_scores_7", "statement": "It was difficult to find the relevant learning information in this chapter's game world.", "reverse": False},
         ],
     },
     {
-        "id": "engagement",
-        "title": "Engagement",
-        "section_title": "Overall experience (2/2)",
-        "description": "Please answer the following questions on a scale from 1 (= strongly disagree) to 7 (= strongly agree).",
+        "id": "cl_ch2",
+        "title": "Cognitive load | Chapter 2 (The Farm)",
+        "section_title": "Experience per chapter (1/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 0 (= not at all the case) to 10 (= completely the case).",
+        "interpretation": "Higher scores indicate less optimal cognitive load.",
+        "min_value": 0,
+        "max_value": 10,
+        "items": [
+            {"column": "cl_ch2_scores_1", "statement": "The topics covered in this chapter were very complex.", "reverse": False},
+            {"column": "cl_ch2_scores_2", "statement": "This chapter covered creature characteristics that seemed very complex.", "reverse": False},
+            {"column": "cl_ch2_scores_3", "statement": "This chapter covered differences between the creatures that seemed very complex.", "reverse": False},
+            {"column": "cl_ch2_scores_4", "statement": "The elements in this chapter's game world made the learning very unclear.", "reverse": False},
+            {"column": "cl_ch2_scores_5", "statement": "This chapter's game world was, in terms of learning, very ineffective.", "reverse": False},
+            {"column": "cl_ch2_scores_6", "statement": "This chapter's game world was full of irrelevant content.", "reverse": False},
+            {"column": "cl_ch2_scores_7", "statement": "It was difficult to find the relevant learning information in this chapter's game world.", "reverse": False},
+        ],
+    },
+    {
+        "id": "cl_ch3",
+        "title": "Cognitive load | Chapter 3 (The Jungle)",
+        "section_title": "Experience per chapter (1/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 0 (= not at all the case) to 10 (= completely the case).",
+        "interpretation": "Higher scores indicate less optimal cognitive load.",
+        "min_value": 0,
+        "max_value": 10,
+        "items": [
+            {"column": "cl_ch3_scores_1", "statement": "The topics covered in this chapter were very complex.", "reverse": False},
+            {"column": "cl_ch3_scores_2", "statement": "This chapter covered creature characteristics that seemed very complex.", "reverse": False},
+            {"column": "cl_ch3_scores_3", "statement": "This chapter covered differences between the creatures that seemed very complex.", "reverse": False},
+            {"column": "cl_ch3_scores_4", "statement": "The elements in this chapter's game world made the learning very unclear.", "reverse": False},
+            {"column": "cl_ch3_scores_5", "statement": "This chapter's game world was, in terms of learning, very ineffective.", "reverse": False},
+            {"column": "cl_ch3_scores_6", "statement": "This chapter's game world was full of irrelevant content.", "reverse": False},
+            {"column": "cl_ch3_scores_7", "statement": "It was difficult to find the relevant learning information in this chapter's game world.", "reverse": False},
+        ],
+    },
+    {
+        "id": "eng_ch1",
+        "title": "Engagement | Chapter 1 (The Museum)",
+        "section_title": "Experience per chapter (2/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 1 (= strongly disagree) to 7 (= strongly agree).",
         "interpretation": "Higher scores indicate higher engagement.",
         "min_value": 1,
         "max_value": 7,
         "items": [
-            {"column": "eng_scores_1", "statement": "I lost myself in this experience.", "reverse": False},
-            {"column": "eng_scores_2", "statement": "The time I spent playing this game just slipped away.", "reverse": False},
-            {"column": "eng_scores_3", "statement": "I was absorbed in this experience.", "reverse": False},
-            {"column": "eng_scores_4", "statement": "I felt frustrated while playing this game.", "reverse": True},
-            {"column": "eng_scores_5", "statement": "I found this game confusing to play.", "reverse": True},
-            {"column": "eng_scores_6", "statement": "Playing this game was taxing.", "reverse": True},
-            {"column": "eng_scores_7", "statement": "This game was attractive.", "reverse": False},
-            {"column": "eng_scores_8", "statement": "This game was aesthetically appealing.", "reverse": False},
-            {"column": "eng_scores_9", "statement": "This game appealed to my senses.", "reverse": False},
-            {"column": "eng_scores_10", "statement": "Playing this game was worthwhile.", "reverse": False},
-            {"column": "eng_scores_11", "statement": "My experience was rewarding.", "reverse": False},
-            {"column": "eng_scores_12", "statement": "I felt interested in this experience.", "reverse": False},
+            {"column": "eng_ch1_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
+            {"column": "eng_ch1_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
+            {"column": "eng_ch1_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch1_scores_4", "statement": "This chapter looked good.", "reverse": False},
+            {"column": "eng_ch1_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
+        ],
+    },
+    {
+        "id": "eng_ch2",
+        "title": "Engagement | Chapter 2 (The Farm)",
+        "section_title": "Experience per chapter (2/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 1 (= strongly disagree) to 7 (= strongly agree).",
+        "interpretation": "Higher scores indicate higher engagement.",
+        "min_value": 1,
+        "max_value": 7,
+        "items": [
+            {"column": "eng_ch2_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
+            {"column": "eng_ch2_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
+            {"column": "eng_ch2_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch2_scores_4", "statement": "This chapter looked good.", "reverse": False},
+            {"column": "eng_ch2_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
+        ],
+    },
+    {
+        "id": "eng_ch3",
+        "title": "Engagement | Chapter 3 (The Jungle)",
+        "section_title": "Experience per chapter (2/2)",
+        "description": "Please answer the following questions for each chapter separately on a scale from 1 (= strongly disagree) to 7 (= strongly agree).",
+        "interpretation": "Higher scores indicate higher engagement.",
+        "min_value": 1,
+        "max_value": 7,
+        "items": [
+            {"column": "eng_ch3_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
+            {"column": "eng_ch3_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
+            {"column": "eng_ch3_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch3_scores_4", "statement": "This chapter looked good.", "reverse": False},
+            {"column": "eng_ch3_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
+        ],
+    },
+    {
+        "id": "cl_overall",
+        "title": "Cognitive load | Overall",
+        "section_title": "Overall experience (1/2)",
+        "description": "Please answer the following questions about the game overall on a scale from 0 (= not at all the case) to 10 (= completely the case).",
+        "interpretation": "Higher scores indicate less optimal cognitive load.",
+        "min_value": 0,
+        "max_value": 10,
+        "items": [
+            {"column": "cl_overall_scores_1", "statement": "The instructions and/or explanations used in the game were very unclear.", "reverse": False},
+            {"column": "cl_overall_scores_2", "statement": "The instructions and/or explanations used in the game were, in terms of learning, very ineffective.", "reverse": False},
+            {"column": "cl_overall_scores_3", "statement": "The instructions and/or explanations used in the game were full of unclear content.", "reverse": False},
+            {"column": "cl_overall_scores_4", "statement": "The way of interacting with the game was very unclear.", "reverse": False},
+            {"column": "cl_overall_scores_5", "statement": "The way of interacting with the game was, in terms of learning, very ineffective.", "reverse": False},
+            {"column": "cl_overall_scores_6", "statement": "The way of interacting with the game made it harder to learn.", "reverse": False},
+            {"column": "cl_overall_scores_7", "statement": "The way of interacting with the game was difficult to master.", "reverse": False},
+        ],
+    },
+    {
+        "id": "eng_overall",
+        "title": "Engagement | Overall",
+        "section_title": "Overall experience (2/2)",
+        "description": "Please answer the following questions about the game overall on a scale from 1 (= strongly disagree) to 7 (= strongly agree).",
+        "interpretation": "Higher scores indicate higher engagement.",
+        "min_value": 1,
+        "max_value": 7,
+        "items": [
+            {"column": "eng_overall_scores_1", "statement": "I felt frustrated while playing this game.", "reverse": True},
+            {"column": "eng_overall_scores_2", "statement": "I found this game confusing to play.", "reverse": True},
+            {"column": "eng_overall_scores_3", "statement": "Playing this game was worth my time.", "reverse": False},
+            {"column": "eng_overall_scores_4", "statement": "My experience was rewarding.", "reverse": False},
         ],
     },
     {
@@ -103,8 +187,7 @@ SCALES = [
         "max_value": 7,
         "items": [
             {"column": "ctrl_scores_1", "statement": "At the checkpoints, I was free to decide how I wanted to proceed.", "reverse": False},
-            {"column": "ctrl_scores_2", "statement": "At the checkpoints, I had important decisions to make.", "reverse": False},
-            {"column": "ctrl_scores_3", "statement": "The choices I made at the checkpoints influenced what happened next.", "reverse": False},
+            {"column": "ctrl_scores_2", "statement": "The choices I made at the checkpoints influenced what happened next.", "reverse": False},
         ],
     },
 ]
@@ -458,7 +541,7 @@ def render_html(
         metric_card("Rows used in scales / X table", str(non_delayed_count), 'rows where DELAYED is not "1"'),
         metric_card("Rows marked delayed", str(delayed_count), 'rows where DELAYED == "1"'),
         metric_card("Creatures tracked", str(len(CREATURES)), "from the embedded-data / delayed-link script"),
-        metric_card("Scales", str(len(SCALES)), "cognitive load, engagement, perceived control"),
+        metric_card("Scales", str(len(SCALES)), "chapter-specific and overall cognitive load / engagement, plus perceived control",),
     ]
 
     return f"""<!doctype html>
@@ -925,6 +1008,81 @@ function summarise(values) {{
   return {{ min: sorted[0], avg, max: sorted[sorted.length - 1], n: sorted.length }};
 }}
 
+function renderSingleScaleBlock(scale, participants) {{
+  const rows = [];
+  const pooledAdjustedScores = [];
+
+  for (const item of scale.items) {{
+    const values = participants
+      .map((participant) => adjustedValue(scale, item, participant.scales?.[scale.id]?.[item.column]))
+      .filter((value) => value !== null && !Number.isNaN(value));
+
+    pooledAdjustedScores.push(...values);
+    const stats = summarise(values);
+
+    rows.push(`
+      <tr>
+        <td>${{escapeHtml(item.statement)}}</td>
+        <td class="num">${{formatNumber(stats.min)}}</td>
+        <td class="num">${{formatNumber(stats.avg)}}</td>
+        <td class="num">${{formatNumber(stats.max)}}</td>
+        <td class="num">${{stats.n}}</td>
+        <td>${{item.reverse ? 'true' : ''}}</td>
+      </tr>
+    `);
+  }}
+
+  const overviewStats = summarise(pooledAdjustedScores);
+
+  const scaleParticipantCount = participants.filter((participant) => {{
+    return scale.items.every((item) => {{
+      const value = adjustedValue(scale, item, participant.scales?.[scale.id]?.[item.column]);
+      return value !== null && !Number.isNaN(value);
+    }});
+  }}).length;
+
+  const totalPossibleMin = scale.items.length * Number(scale.min_value);
+  const totalPossibleMax = scale.items.length * Number(scale.max_value);
+
+  return `
+    <section style="margin-top: 16px;">
+      <h3>${{escapeHtml(scale.title)}}</h3>
+      <div class="table-wrap">
+        <table>
+          <colgroup>
+            <col class="col-scale-statement">
+            <col class="col-scale-score">
+            <col class="col-scale-score">
+            <col class="col-scale-score">
+            <col class="col-scale-n">
+            <col class="col-scale-reverse">
+          </colgroup>
+          <tr>
+            <th>Statement</th>
+            <th class="num">Min score</th>
+            <th class="num">Avg score</th>
+            <th class="num">Max score</th>
+            <th class="num">n</th>
+            <th>Reverse-coded</th>
+          </tr>
+          ${{rows.join('')}}
+          <tr>
+            <td><strong>Scale overview</strong></td>
+            <td class="num"><strong>${{formatNumber(overviewStats.min)}}</strong></td>
+            <td class="num"><strong>${{formatNumber(overviewStats.avg)}}</strong></td>
+            <td class="num"><strong>${{formatNumber(overviewStats.max)}}</strong></td>
+            <td class="num"><strong>${{scaleParticipantCount}}</strong></td>
+            <td></td>
+          </tr>
+        </table>
+      </div>
+      <p class="small">Reverse-coded items are displayed after reversing, so all item summaries point in the same conceptual direction as the scale note below.</p>
+      <p class="small">Interpretation: ${{escapeHtml(scale.interpretation)}}</p>
+      <p class="small">Item response range: ${{scale.min_value}}–${{scale.max_value}}. If you sum complete participant totals, the theoretical total range is ${{totalPossibleMin}}–${{totalPossibleMax}}.</p>
+    </section>
+  `;
+}}
+
 function renderScaleTables() {{
   const participants = selectedNonDelayedParticipants();
   const container = document.getElementById('scale-table-container');
@@ -934,82 +1092,37 @@ function renderScaleTables() {{
     return;
   }}
 
-  const sections = REPORT_DATA.scales.map((scale) => {{
-    const rows = [];
-    const pooledAdjustedScores = [];
+  const sectionOrder = [
+    "Experience per chapter (1/2)",
+    "Experience per chapter (2/2)",
+    "Overall experience (1/2)",
+    "Overall experience (2/2)",
+    "Experience at checkpoints",
+  ];
 
-    for (const item of scale.items) {{
-      const values = participants
-        .map((participant) => adjustedValue(scale, item, participant.scales?.[scale.id]?.[item.column]))
-        .filter((value) => value !== null && !Number.isNaN(value));
+  const grouped = new Map();
 
-      pooledAdjustedScores.push(...values);
-      const stats = summarise(values);
-
-      rows.push(`
-        <tr>
-          <td>${{escapeHtml(item.statement)}}</td>
-          <td class="num">${{formatNumber(stats.min)}}</td>
-          <td class="num">${{formatNumber(stats.avg)}}</td>
-          <td class="num">${{formatNumber(stats.max)}}</td>
-          <td class="num">${{stats.n}}</td>
-          <td>${{item.reverse ? 'true' : ''}}</td>
-        </tr>
-      `);
+  for (const scale of REPORT_DATA.scales) {{
+    if (!grouped.has(scale.section_title)) {{
+      grouped.set(scale.section_title, []);
     }}
+    grouped.get(scale.section_title).push(scale);
+  }}
 
-    const overviewStats = summarise(pooledAdjustedScores);
+  const sections = sectionOrder
+    .filter((sectionTitle) => grouped.has(sectionTitle))
+    .map((sectionTitle) => {{
+      const scalesInSection = grouped.get(sectionTitle);
+      const description = scalesInSection[0]?.description || "";
 
-    const scaleParticipantCount = participants.filter((participant) => {{
-      return scale.items.every((item) => {{
-        const value = adjustedValue(scale, item, participant.scales?.[scale.id]?.[item.column]);
-        return value !== null && !Number.isNaN(value);
-      }});
-    }}).length;
-
-    const totalPossibleMin = scale.items.length * Number(scale.min_value);
-    const totalPossibleMax = scale.items.length * Number(scale.max_value);
-
-    return `
-      <div class="card">
-        <h2>${{escapeHtml(scale.title)}}</h2>
-        <p class="small">${{escapeHtml(scale.section_title)}}</p>
-        <p class="small">${{escapeHtml(scale.description)}}</p>
-        <div class="table-wrap">
-          <table>
-            <colgroup>
-              <col class="col-scale-statement">
-              <col class="col-scale-score">
-              <col class="col-scale-score">
-              <col class="col-scale-score">
-              <col class="col-scale-n">
-              <col class="col-scale-reverse">
-            </colgroup>
-            <tr>
-              <th>Statement</th>
-              <th class="num">Min score</th>
-              <th class="num">Avg score</th>
-              <th class="num">Max score</th>
-              <th class="num">n</th>
-              <th>Reverse-coded</th>
-            </tr>
-            ${{rows.join('')}}
-            <tr>
-              <td><strong>Scale overview</strong></td>
-              <td class="num"><strong>${{formatNumber(overviewStats.min)}}</strong></td>
-              <td class="num"><strong>${{formatNumber(overviewStats.avg)}}</strong></td>
-              <td class="num"><strong>${{formatNumber(overviewStats.max)}}</strong></td>
-              <td class="num"><strong>${{scaleParticipantCount}}</strong></td>
-              <td></td>
-            </tr>
-          </table>
+      return `
+        <div class="card">
+          <h2>${{escapeHtml(sectionTitle)}}</h2>
+          <p class="small">${{escapeHtml(description)}}</p>
+          ${{scalesInSection.map((scale) => renderSingleScaleBlock(scale, participants)).join('')}}
         </div>
-        <p class="small">Reverse-coded items are displayed after reversing, so all item summaries point in the same conceptual direction as the scale note below.</p>
-        <p class="small">Interpretation: ${{escapeHtml(scale.interpretation)}}</p>
-        <p class="small">Item response range: ${{scale.min_value}}–${{scale.max_value}}. If you sum complete participant totals, the theoretical total range is ${{totalPossibleMin}}–${{totalPossibleMax}}.</p>
-      </div>
-    `;
-  }});
+      `;
+    }});
 
   container.innerHTML = sections.join('');
 }}
