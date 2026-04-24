@@ -100,10 +100,18 @@ def item(
     }
 
 
-def chapter_items(prefix: str, labels: list[str], min_value: float, max_value: float) -> list[dict[str, Any]]:
+def chapter_items(
+    prefix: str,
+    labels: list[str],
+    indices: list[int],
+    min_value: float,
+    max_value: float,
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+
     for chapter in (1, 2, 3):
-        for index, label in enumerate(labels, start=1):
+        for index in indices:
+            label = labels[index - 1]
             items.append(
                 item(
                     item_id=f"{prefix}_ch{chapter}_{index}",
@@ -113,43 +121,21 @@ def chapter_items(prefix: str, labels: list[str], min_value: float, max_value: f
                     max_value=max_value,
                 )
             )
-    return items
-
-
-def overall_items(
-    prefix: str,
-    labels: list[str],
-    min_value: float,
-    max_value: float,
-    reverse_indices: set[int] | None = None,
-) -> list[dict[str, Any]]:
-    reverse_indices = reverse_indices or set()
-    items: list[dict[str, Any]] = []
-
-    for index, label in enumerate(labels, start=1):
-        items.append(
-            item(
-                item_id=f"{prefix}_overall_{index}",
-                label=f"Overall: {label}",
-                columns=[f"{prefix}_overall_scores_{index}"],
-                min_value=min_value,
-                max_value=max_value,
-                reverse=index in reverse_indices,
-            )
-        )
 
     return items
 
 
-def stem_averaged_chapter_items(
+def chapter_stem_items(
     prefix: str,
     labels: list[str],
+    indices: list[int],
     min_value: float,
     max_value: float,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
 
-    for index, label in enumerate(labels, start=1):
+    for index in indices:
+        label = labels[index - 1]
         items.append(
             item(
                 item_id=f"{prefix}_chapter_stem_average_{index}",
@@ -167,17 +153,55 @@ def stem_averaged_chapter_items(
     return items
 
 
+def overall_items(
+    prefix: str,
+    labels: list[str],
+    indices: list[int],
+    min_value: float,
+    max_value: float,
+    reverse_indices: set[int] | None = None,
+) -> list[dict[str, Any]]:
+    reverse_indices = reverse_indices or set()
+    items: list[dict[str, Any]] = []
+
+    for index in indices:
+        label = labels[index - 1]
+        items.append(
+            item(
+                item_id=f"{prefix}_overall_{index}",
+                label=f"Overall: {label}",
+                columns=[f"{prefix}_overall_scores_{index}"],
+                min_value=min_value,
+                max_value=max_value,
+                reverse=index in reverse_indices,
+            )
+        )
+
+    return items
+
+
 BLOCKS = [
     {
-        "id": "cl_per_chapter",
+        "id": "il_per_chapter",
         "tab": "per_chapter",
         "kind": "cl",
-        "title": "Per-chapter cognitive load",
-        "description": "Chapter-specific intrinsic-load and environment-related extraneous-load items.",
-        "score_note": "Higher scores indicate more of the item as worded.",
+        "title": "Per-chapter intrinsic cognitive load",
+        "description": "Chapter-specific perceived complexity of the learning content.",
+        "score_note": "Higher scores indicate higher intrinsic cognitive load.",
         "scale_min": 0,
         "scale_max": 10,
-        "items": chapter_items("cl", CL_CHAPTER_LABELS, 0, 10),
+        "items": chapter_items("cl", CL_CHAPTER_LABELS, [1, 2, 3], 0, 10),
+    },
+    {
+        "id": "environment_el_per_chapter",
+        "tab": "per_chapter",
+        "kind": "cl",
+        "title": "Per-chapter environment-related extraneous cognitive load",
+        "description": "Chapter-specific extraneous load attributed to the game world/environment.",
+        "score_note": "Higher scores indicate higher environment-related extraneous cognitive load.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "items": chapter_items("cl", CL_CHAPTER_LABELS, [4, 5, 6, 7], 0, 10),
     },
     {
         "id": "eng_per_chapter",
@@ -188,18 +212,40 @@ BLOCKS = [
         "score_note": "Higher scores indicate higher engagement.",
         "scale_min": 1,
         "scale_max": 7,
-        "items": chapter_items("eng", ENG_CHAPTER_LABELS, 1, 7),
+        "items": chapter_items("eng", ENG_CHAPTER_LABELS, [1, 2, 3, 4, 5], 1, 7),
     },
     {
-        "id": "cl_overall",
+        "id": "instruction_el_overall",
         "tab": "overall",
         "kind": "cl",
-        "title": "Overall-game cognitive load",
-        "description": "Overall instruction-related extraneous load, interaction-related extraneous load, and germane-load items.",
-        "score_note": "Interpret as dimension-specific cognitive-load information rather than one simple good/bad score.",
+        "title": "Overall instruction-related extraneous cognitive load",
+        "description": "Overall extraneous load attributed to instructions and explanations.",
+        "score_note": "Higher scores indicate higher instruction-related extraneous cognitive load.",
         "scale_min": 0,
         "scale_max": 10,
-        "items": overall_items("cl", CL_OVERALL_LABELS, 0, 10),
+        "items": overall_items("cl", CL_OVERALL_LABELS, [1, 2, 3], 0, 10),
+    },
+    {
+        "id": "interaction_el_overall",
+        "tab": "overall",
+        "kind": "cl",
+        "title": "Overall interaction-related extraneous cognitive load",
+        "description": "Overall extraneous load attributed to interacting with the game.",
+        "score_note": "Higher scores indicate higher interaction-related extraneous cognitive load.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "items": overall_items("cl", CL_OVERALL_LABELS, [4, 5, 6, 7], 0, 10),
+    },
+    {
+        "id": "gl_overall",
+        "tab": "overall",
+        "kind": "cl",
+        "title": "Overall germane cognitive load",
+        "description": "Overall perceived learning-related understanding and productive processing.",
+        "score_note": "Higher scores indicate higher germane cognitive load.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "items": overall_items("cl", CL_OVERALL_LABELS, [8, 9, 10, 11], 0, 10),
     },
     {
         "id": "eng_overall",
@@ -210,31 +256,67 @@ BLOCKS = [
         "score_note": "Frustration and confusion are reverse-coded, so higher scores indicate higher engagement.",
         "scale_min": 1,
         "scale_max": 7,
-        "items": overall_items("eng", ENG_OVERALL_LABELS, 1, 7, reverse_indices={1, 2}),
+        "items": overall_items("eng", ENG_OVERALL_LABELS, [1, 2, 3, 4], 1, 7, reverse_indices={1, 2}),
     },
     {
-        "id": "cl_combined",
-        "tab": "combined",
+        "id": "il_main",
+        "tab": "main_model",
         "kind": "cl",
-        "title": "Combined cognitive-load construct",
-        "description": "Repeated chapter stems are averaged first, then combined with the overall cognitive-load items.",
-        "score_note": "This avoids overweighting repeated chapter items. Treat as exploratory unless later analyses support it.",
+        "title": "Main-model intrinsic cognitive load",
+        "description": "Per-chapter intrinsic-load stems averaged across chapters and then averaged into one participant-level score.",
+        "score_note": "Higher scores indicate higher intrinsic cognitive load.",
         "scale_min": 0,
         "scale_max": 10,
-        "items": stem_averaged_chapter_items("cl", CL_CHAPTER_LABELS, 0, 10)
-        + overall_items("cl", CL_OVERALL_LABELS, 0, 10),
+        "items": chapter_stem_items("cl", CL_CHAPTER_LABELS, [1, 2, 3], 0, 10),
     },
     {
-        "id": "eng_combined",
-        "tab": "combined",
+        "id": "environment_el_main",
+        "tab": "main_model",
+        "kind": "cl",
+        "title": "Main-model environment-related extraneous cognitive load",
+        "description": "Per-chapter environment-related extraneous-load stems averaged across chapters and then averaged into one participant-level score.",
+        "score_note": "Higher scores indicate higher environment-related extraneous cognitive load.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "items": chapter_stem_items("cl", CL_CHAPTER_LABELS, [4, 5, 6, 7], 0, 10),
+    },
+    {
+        "id": "gl_main",
+        "tab": "main_model",
+        "kind": "cl",
+        "title": "Main-model germane cognitive load",
+        "description": "Overall-game germane-load items averaged into one participant-level score.",
+        "score_note": "Higher scores indicate higher germane cognitive load.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "items": overall_items("cl", CL_OVERALL_LABELS, [8, 9, 10, 11], 0, 10),
+    },
+    {
+        "id": "eng_main",
+        "tab": "main_model",
         "kind": "eng",
-        "title": "Combined engagement construct",
-        "description": "Repeated chapter stems are averaged first, then combined with the overall engagement items.",
-        "score_note": "This avoids overweighting repeated chapter items. Treat as exploratory unless later analyses support it.",
+        "title": "Main-model engagement",
+        "description": "Per-chapter engagement stems are averaged across chapters and then combined with the overall-game engagement items.",
+        "score_note": "Frustration and confusion are reverse-coded, so higher scores indicate higher engagement.",
         "scale_min": 1,
         "scale_max": 7,
-        "items": stem_averaged_chapter_items("eng", ENG_CHAPTER_LABELS, 1, 7)
-        + overall_items("eng", ENG_OVERALL_LABELS, 1, 7, reverse_indices={1, 2}),
+        "items": chapter_stem_items("eng", ENG_CHAPTER_LABELS, [1, 2, 3, 4, 5], 1, 7)
+        + overall_items("eng", ENG_OVERALL_LABELS, [1, 2, 3, 4], 1, 7, reverse_indices={1, 2}),
+    },
+    {
+        "id": "el_main",
+        "tab": "main_model",
+        "kind": "cl",
+        "title": "Main-model extraneous cognitive load",
+        "description": "Equal-source-weighted mean of environment-related, instruction-related, and interaction-related extraneous cognitive load.",
+        "score_note": "Higher scores indicate higher extraneous cognitive load. Each extraneous-load source contributes equally.",
+        "scale_min": 0,
+        "scale_max": 10,
+        "components": [
+            "environment_el_main",
+            "instruction_el_overall",
+            "interaction_el_overall",
+        ],
     },
 ]
 
@@ -521,8 +603,32 @@ def summarise(values: list[float]) -> dict[str, Any]:
     }
 
 
+def compute_item_block_score(row: dict[str, str], block: dict[str, Any]) -> dict[str, Any]:
+    numeric_values: list[float] = []
+    item_values: dict[str, float | None] = {}
+
+    for item_spec in block.get("items", []):
+        value = adjusted_item_value(row, item_spec)
+        rounded_value = round_or_none(value)
+        item_values[item_spec["id"]] = rounded_value
+
+        if value is not None:
+            numeric_values.append(value)
+
+    return {
+        "mean": round_or_none(mean(numeric_values)),
+        "n_items_answered": len(numeric_values),
+        "n_items_total": len(block.get("items", [])),
+        "complete": len(numeric_values) == len(block.get("items", [])),
+        "item_values": item_values,
+    }
+
+
 def build_participants(rows: list[dict[str, str]], condition_lookup: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
     participants: list[dict[str, Any]] = []
+
+    item_blocks = [block for block in BLOCKS if "items" in block]
+    component_blocks = [block for block in BLOCKS if "components" in block]
 
     for row_index, row in enumerate(rows, start=1):
         delayed = clean(row.get("DELAYED"))
@@ -539,24 +645,30 @@ def build_participants(rows: list[dict[str, str]], condition_lookup: dict[str, d
         block_scores: dict[str, Any] = {}
         block_item_values: dict[str, dict[str, Any]] = {}
 
-        for block in BLOCKS:
-            item_values: dict[str, Any] = {}
-            numeric_values: list[float] = []
+        for block in item_blocks:
+            score = compute_item_block_score(row, block)
+            block_scores[block["id"]] = {
+                "mean": score["mean"],
+                "n_items_answered": score["n_items_answered"],
+                "n_items_total": score["n_items_total"],
+                "complete": score["complete"],
+            }
+            block_item_values[block["id"]] = score["item_values"]
 
-            for item_spec in block["items"]:
-                value = adjusted_item_value(row, item_spec)
-                item_values[item_spec["id"]] = round_or_none(value)
-
-                if value is not None:
-                    numeric_values.append(value)
+        for block in component_blocks:
+            component_values = [
+                block_scores[component_id]["mean"]
+                for component_id in block["components"]
+                if component_id in block_scores and block_scores[component_id]["mean"] is not None
+            ]
 
             block_scores[block["id"]] = {
-                "mean": round_or_none(mean(numeric_values)),
-                "n_items_answered": len(numeric_values),
-                "n_items_total": len(block["items"]),
-                "complete": len(numeric_values) == len(block["items"]),
+                "mean": round_or_none(mean([float(value) for value in component_values])),
+                "n_items_answered": len(component_values),
+                "n_items_total": len(block["components"]),
+                "complete": len(component_values) == len(block["components"]),
             }
-            block_item_values[block["id"]] = item_values
+            block_item_values[block["id"]] = {}
 
         participants.append(
             {
@@ -721,15 +833,6 @@ th {
   text-align: right;
   white-space: nowrap;
 }
-.badge {
-  display: inline-block;
-  border-radius: 999px;
-  background: var(--accent-light);
-  color: var(--accent);
-  padding: 4px 9px;
-  font-weight: 700;
-  font-size: 12px;
-}
 .warning {
   border-left: 4px solid #b45309;
   background: #fff7ed;
@@ -757,13 +860,13 @@ th {
     <button class="tab-btn active" data-tab="overview">Overview</button>
     <button class="tab-btn" data-tab="per_chapter">Per-chapter</button>
     <button class="tab-btn" data-tab="overall">Overall game</button>
-    <button class="tab-btn" data-tab="combined">Combined construct</button>
+    <button class="tab-btn" data-tab="main_model">Main-model scores</button>
   </div>
 
   <section class="tab-panel active" id="tab-overview"></section>
   <section class="tab-panel" id="tab-per_chapter"></section>
   <section class="tab-panel" id="tab-overall"></section>
-  <section class="tab-panel" id="tab-combined"></section>
+  <section class="tab-panel" id="tab-main_model"></section>
 </main>
 
 <script>
@@ -922,8 +1025,8 @@ function renderBlock(block) {
 
 function renderSubtabs(tabId) {
   const blocks = REPORT_DATA.blocks.filter(block => block.tab === tabId);
-  const clBlock = blocks.find(block => block.kind === "cl");
-  const engBlock = blocks.find(block => block.kind === "eng");
+  const clBlocks = blocks.filter(block => block.kind === "cl");
+  const engBlocks = blocks.filter(block => block.kind === "eng");
 
   return `
     <div class="subtabs">
@@ -932,11 +1035,11 @@ function renderSubtabs(tabId) {
     </div>
 
     <section class="subtab-panel active" id="subtab-${tabId}-cl">
-      ${clBlock ? renderBlock(clBlock) : ""}
+      ${clBlocks.map(renderBlock).join("")}
     </section>
 
     <section class="subtab-panel" id="subtab-${tabId}-eng">
-      ${engBlock ? renderBlock(engBlock) : ""}
+      ${engBlocks.map(renderBlock).join("")}
     </section>
   `;
 }
@@ -980,10 +1083,12 @@ function renderOverview() {
     </div>
 
     <div class="card">
-      <h2>Scoring decision for combined constructs</h2>
-      <p>The combined constructs use the <strong>stem-averaged approach</strong>: the three repeated chapter versions of each item stem are first averaged into one participant-level item, and this item is then combined with the overall-game items.</p>
-      <p>This was chosen because it avoids overweighting per-chapter items merely because they were asked three times.</p>
-      <p class="small">Combined constructs remain exploratory unless later analyses support treating the items as one scale.</p>
+      <h2>Main-model scoring decisions</h2>
+      <p>Intrinsic cognitive load is computed from per-chapter intrinsic-load stems averaged across chapters.</p>
+      <p>Extraneous cognitive load is computed as an equal-source-weighted mean of environment-related, instruction-related, and interaction-related extraneous cognitive load.</p>
+      <p>Germane cognitive load is computed from the overall-game germane-load items.</p>
+      <p>Engagement is computed from chapter-averaged engagement stems plus the overall-game engagement items, after reverse-coding frustration and confusion.</p>
+      <p class="small">No single overall cognitive-load score is produced, because intrinsic, extraneous, and germane cognitive load are conceptually distinct.</p>
     </div>
 
     <div class="card">
@@ -1016,10 +1121,10 @@ function renderMainTabs() {
   const tabLabels = {
     per_chapter: "Per-chapter",
     overall: "Overall game",
-    combined: "Combined construct",
+    main_model: "Main-model scores",
   };
 
-  for (const tabId of ["per_chapter", "overall", "combined"]) {
+  for (const tabId of ["per_chapter", "overall", "main_model"]) {
     document.getElementById(`tab-${tabId}`).innerHTML = `
       <div class="card">
         <h2>${escapeHtml(tabLabels[tabId])}</h2>
@@ -1136,7 +1241,7 @@ def render_html(
     tab_labels = {
         "per_chapter": "Per-chapter",
         "overall": "Overall game",
-        "combined": "Combined construct",
+        "main_model": "Main-model scores",
     }
 
     kind_labels = {
@@ -1163,9 +1268,9 @@ def render_html(
             for block in BLOCKS
         ],
         "tab_notes": {
-            "per_chapter": "These plots summarise the repeated chapter-level items across the three game chapters.",
+            "per_chapter": "These plots summarise chapter-level questionnaire responses across the three game chapters.",
             "overall": "These plots summarise the items that were asked about the game as a whole.",
-            "combined": "These plots use stem-averaged chapter items plus overall-game items. This is exploratory.",
+            "main_model": "These plots show the participant-level scores intended for the main statistical models.",
         },
         "condition_order": CONDITION_ORDER,
         "block_summaries": block_summaries,
