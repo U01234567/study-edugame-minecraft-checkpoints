@@ -107,7 +107,7 @@ SCALES = [
         "items": [
             {"column": "eng_ch1_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
             {"column": "eng_ch1_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
-            {"column": "eng_ch1_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch1_scores_3", "statement": "I was absorbed in this chapter.", "reverse": False},
             {"column": "eng_ch1_scores_4", "statement": "This chapter looked good.", "reverse": False},
             {"column": "eng_ch1_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
         ],
@@ -123,7 +123,7 @@ SCALES = [
         "items": [
             {"column": "eng_ch2_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
             {"column": "eng_ch2_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
-            {"column": "eng_ch2_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch2_scores_3", "statement": "I was absorbed in this chapter.", "reverse": False},
             {"column": "eng_ch2_scores_4", "statement": "This chapter looked good.", "reverse": False},
             {"column": "eng_ch2_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
         ],
@@ -139,7 +139,7 @@ SCALES = [
         "items": [
             {"column": "eng_ch3_scores_1", "statement": "I lost myself in this chapter.", "reverse": False},
             {"column": "eng_ch3_scores_2", "statement": "The time I spent in this chapter just slipped away.", "reverse": False},
-            {"column": "eng_ch3_scores_3", "statement": "I was fully focused on this chapter.", "reverse": False},
+            {"column": "eng_ch3_scores_3", "statement": "I was absorbed in this chapter.", "reverse": False},
             {"column": "eng_ch3_scores_4", "statement": "This chapter looked good.", "reverse": False},
             {"column": "eng_ch3_scores_5", "statement": "I felt interested in this chapter.", "reverse": False},
         ],
@@ -149,7 +149,7 @@ SCALES = [
         "title": "Cognitive load | Overall",
         "section_title": "Overall experience (1/2)",
         "description": "Please answer the following questions about the game overall on a scale from 0 (= not at all the case) to 10 (= completely the case).",
-        "interpretation": "Higher scores indicate less optimal cognitive load.",
+        "interpretation": "Higher scores indicate more cognitive load.",
         "min_value": 0,
         "max_value": 10,
         "items": [
@@ -160,6 +160,10 @@ SCALES = [
             {"column": "cl_overall_scores_5", "statement": "The way of interacting with the game was, in terms of learning, very ineffective.", "reverse": False},
             {"column": "cl_overall_scores_6", "statement": "The way of interacting with the game made it harder to learn.", "reverse": False},
             {"column": "cl_overall_scores_7", "statement": "The way of interacting with the game was difficult to master.", "reverse": False},
+            {"column": "cl_overall_scores_8", "statement": "The game really enhanced my understanding of the creatures covered.", "reverse": False},
+            {"column": "cl_overall_scores_9", "statement": "The game really enhanced my knowledge and understanding of the creature worlds.", "reverse": False},
+            {"column": "cl_overall_scores_10", "statement": "The game really enhanced my understanding of the creature characteristics.", "reverse": False},
+            {"column": "cl_overall_scores_11", "statement": "The game really enhanced my understanding of concepts and differences between the creatures.", "reverse": False},
         ],
     },
     {
