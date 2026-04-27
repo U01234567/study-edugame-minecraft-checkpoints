@@ -50,6 +50,7 @@ CLICK_LIKE_BLOCKED_ACTIONS = {
 
 MOVEMENT_SAMPLE_SECONDS = 1.0
 MOVEMENT_DISTANCE_EPSILON = 0.05
+GAME_CHAPTER_NUMBERS = (1, 2, 3)
 
 
 @dataclasses.dataclass(slots=True)
@@ -849,6 +850,127 @@ def build_session_summary(
     )
 
 
+def render_in_short_block(session: SessionSummary) -> str:
+    game_chapters = [session.chapters[number] for number in GAME_CHAPTER_NUMBERS]
+    chapter_duration = sum(chapter.duration_seconds() or 0.0 for chapter in game_chapters)
+    chapter_zero_duration = session.chapters[0].duration_seconds() or 0.0
+    instruction_seconds = session.total_instruction_read_seconds()
+
+    activity_totals = {"interacting": 0.0, "walking": 0.0, "sprinting": 0.0, "other": 0.0}
+    for chapter in game_chapters:
+        activity = chapter.activity_breakdown_seconds()
+        for key in activity_totals:
+            activity_totals[key] += activity[key]
+
+    distance = sum(chapter.latest_total_distance for chapter in game_chapters)
+    overlay_seconds = sum(checkpoint_overlay_seconds(record) for record in session.checkpoints if record.completed_chapter >= 0)
+
+    creature_clicks = [click for chapter in game_chapters for click in chapter.clicks]
+    empty_clicks = sum(chapter.total_empty_clicks() for chapter in game_chapters)
+    blocked_clicks = sum(chapter.blocked_click_like_actions() for chapter in game_chapters)
+    allowed_clicks = sum(chapter.allowed_clicks() for chapter in game_chapters)
+    disallowed_creature_clicks = sum(1 for click in creature_clicks if click.wrong_chapter)
+    all_ingame_clicks = len(creature_clicks) + empty_clicks + blocked_clicks
+    disallowed_or_empty = disallowed_creature_clicks + empty_clicks + blocked_clicks
+    jumps = sum(chapter.jumps for chapter in game_chapters)
+
+    species_counts = collections.Counter(click.species_key for click in creature_clicks)
+    creature_counts = collections.Counter(click_identity(click) for click in creature_clicks)
+
+    choice_records = [
+        record
+        for record in session.checkpoints
+        if record.completed_chapter in (1, 2) and record.choice
+    ]
+    if not choice_records:
+        choice_records = [record for record in session.checkpoints if record.choice][:2]
+    choices_html = render_choice_summary(choice_records[:2])
+
+    ingame_progress = (
+        f"overlays {format_seconds(overlay_seconds)}; "
+        f"reading cards {activity_with_percent(activity_totals['interacting'], chapter_duration)}; "
+        f"walking {activity_with_percent(activity_totals['walking'], chapter_duration)}; "
+        f"sprinting {activity_with_percent(activity_totals['sprinting'], chapter_duration)}; "
+        f"other {activity_with_percent(activity_totals['other'], chapter_duration)}; "
+        f"distance {distance:.1f}"
+    )
+
+    return f"""
+  <div class="card in-short">
+    <h2>In short</h2>
+    <div class="short-grid">
+      {short_stat("Session ID", session.session_id, "Session identifier read from the newest parsed log file.")}
+      {short_stat("Start", format_datetime(session.started_at), "Timestamp of the first parseable event in this session log.")}
+      <div class="short-stat short-wide" title="Experimental condition plus the two main checkpoint choices after chapters 1 and 2. The parenthesised time is the logged time the choice was on screen where available; otherwise the display-to-choice response time.">
+        <div class="short-label">Condition + choices</div>
+        <div class="short-value">{escape(format_condition(session.condition, session.condition_source))}</div>
+        {choices_html}
+      </div>
+      {short_stat("Progress overall", format_timedelta(session.duration()), "Full duration from the first to the last parseable event in the log.")}
+      {short_stat("Progress before chapters", f"instructions {format_seconds(instruction_seconds)}; ch0 {format_seconds(chapter_zero_duration)}", "Instruction-screen reading time plus Chapter 0 active-play duration.")}
+      {short_stat("Progress ingame", ingame_progress, "Checkpoint overlays include logged checkpoint response time plus pause timers. Chapter totals merge Chapters 1–3; percentages use merged active chapter time as the denominator.")}
+      {short_stat("Actions", f"all {all_ingame_clicks}; allowed {allowed_clicks}; disallowed/empty {disallowed_or_empty}; disabled btn {session.total_instruction_disabled_clicks()}; jumps {jumps}", "All ingame clicks = creature-card clicks plus empty-air clicks plus blocked click-like actions in Chapters 1–3. Allowed clicks are creature-card opens in the configured chapter. Disallowed/empty combines wrong-chapter creature clicks, empty-air clicks, and blocked click-like actions.")}
+      {short_stat("Interactions", f"species {len(species_counts)}; creatures {len(creature_counts)}; species revisited {sum(1 for count in species_counts.values() if count > 1)}; creatures revisited {sum(1 for count in creature_counts.values() if count > 1)}", "Unique species and unique creature entities clicked during Chapters 1–3. Revisited means clicked more than once.")}
+    </div>
+  </div>
+    """
+
+
+def short_stat(label: str, value: str, tooltip: str) -> str:
+    return (
+        f'<div class="short-stat" title="{escape(tooltip)}">'
+        f'<div class="short-label">{escape(label)}</div>'
+        f'<div class="short-value">{escape(value)}</div>'
+        '</div>'
+    )
+
+
+def render_choice_summary(records: list[CheckpointRecord]) -> str:
+    if not records:
+        return '<ol class="short-choices"><li>No checkpoint choices found</li></ol>'
+
+    rows = []
+    for record in records:
+        seconds = record.choice_time_on_screen_seconds()
+        if seconds is None:
+            seconds = record.response_seconds()
+        rows.append(
+            f"<li>{escape(format_checkpoint_choice(record))} "
+            f"<span class='short-muted'>(thought {escape(format_seconds(seconds))})</span></li>"
+        )
+
+    return f"<ol class='short-choices'>{''.join(rows)}</ol>"
+
+
+def format_checkpoint_choice(record: CheckpointRecord) -> str:
+    choice = (record.choice or "").strip().lower()
+    if choice in {"break", "pause", "2-min pause", "two-minute pause"} or record.pause_started_at is not None:
+        return "2-min pause"
+    if choice == "continue":
+        return "continue"
+    return humanize_key(choice or "unknown").lower()
+
+
+def checkpoint_overlay_seconds(record: CheckpointRecord) -> float:
+    seconds = record.choice_time_on_screen_seconds()
+    if seconds is None:
+        seconds = record.response_seconds()
+    total = seconds or 0.0
+
+    if record.pause_started_at is not None and record.pause_finished_at is not None:
+        total += max(0.0, (record.pause_finished_at - record.pause_started_at).total_seconds())
+
+    return total
+
+
+def click_identity(click: ClickRecord) -> str:
+    if click.entity_uuid and click.entity_uuid != "unknown":
+        return click.entity_uuid
+    if click.creature_name and click.creature_name != "unknown":
+        return click.creature_name
+    return f"{click.species_key}@{click.entity_block_pos}"
+
+
 def render_session_html(session: SessionSummary) -> str:
     overview_metrics = [
         metric_card("Start", format_datetime(session.started_at)),
@@ -887,6 +1009,7 @@ def render_session_html(session: SessionSummary) -> str:
         for creature in sorted(session.creatures, key=lambda item: (item.chapter_number, item.display_name.lower()))
     )
     chapter_zero_failure_rows = "\n".join(render_chapter_zero_failure_row(record) for record in session.chapters[0].chapter_zero_validation_failures)
+    in_short_block = render_in_short_block(session)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -928,9 +1051,18 @@ th, td {{ border: 1px solid var(--line); padding: 7px 8px; vertical-align: top; 
 th {{ background: #f2f5f7; text-align: left; }}
 .two-col {{ display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }}
 .three-col {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }}
+.in-short {{ border: 2px solid #10b981; background: #f8fffb; }}
+.short-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }}
+.short-stat {{ border: 1px solid #b7e4c7; border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.78); min-height: 72px; }}
+.short-wide {{ grid-column: span 2; }}
+.short-label {{ font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }}
+.short-value {{ font-size: 15px; font-weight: 700; line-height: 1.35; }}
+.short-choices {{ margin: 6px 0 0 20px; padding: 0; font-size: 13px; line-height: 1.35; }}
+.short-muted {{ color: var(--muted); font-weight: 400; }}
 @media (max-width: 1200px) {{
   .metric-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-  .two-col, .three-col {{ grid-template-columns: 1fr; }}
+  .two-col, .three-col, .short-grid {{ grid-template-columns: 1fr; }}
+  .short-wide {{ grid-column: span 1; }}
 }}
 </style>
 </head>
@@ -942,6 +1074,8 @@ th {{ background: #f2f5f7; text-align: left; }}
     <p class="small">Log: {escape(str(session.log_path.resolve()))}</p>
     <p class="small">HTML: {escape(str(OUTPUT_PATH.resolve()))}</p>
   </div>
+
+  {in_short_block}
 
   <section class="grid metric-grid">
     {''.join(overview_metrics)}

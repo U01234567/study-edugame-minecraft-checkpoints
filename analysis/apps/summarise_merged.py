@@ -4,6 +4,7 @@ import csv
 import html
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,25 @@ CONDITION_ORDER = [
     "Required pauses",
     "Optional pauses",
     "Unknown condition",
+]
+
+GENDER_ORDER = [
+    "Male",
+    "Female",
+    "Transgender",
+    "Nonbinary",
+    "Other / prefer not to say",
+    "Unknown / missing",
+]
+
+AGE_BIN_ORDER = [
+    "<18",
+    "18–24",
+    "25–34",
+    "35–44",
+    "45–54",
+    "55+",
+    "Unknown / missing",
 ]
 
 CL_CHAPTER_LABELS = [
@@ -369,6 +389,66 @@ def parse_numeric(value: object) -> float | None:
     return number
 
 
+def parse_age(value: object) -> int | None:
+    text = clean(value)
+    if not text:
+        return None
+
+    numeric_value = parse_numeric(text)
+    if numeric_value is not None:
+        age = int(numeric_value)
+    else:
+        match = re.search(r"\b(\d{1,3})\b", text)
+        if match is None:
+            return None
+        age = int(match.group(1))
+
+    if 0 < age < 120:
+        return age
+    return None
+
+
+def normalise_gender(value: object) -> str:
+    text = clean(value)
+    if not text:
+        return "Unknown / missing"
+
+    key = re.sub(r"\s+", " ", text).strip().lower()
+    lookup = {
+        "male": "Male",
+        "female": "Female",
+        "transgender": "Transgender",
+        "nonbinary": "Nonbinary",
+        "non-binary": "Nonbinary",
+        "other / prefer not to say": "Other / prefer not to say",
+        "other/prefer not to say": "Other / prefer not to say",
+        "prefer not to say": "Other / prefer not to say",
+        "other": "Other / prefer not to say",
+        "1": "Male",
+        "2": "Female",
+        "3": "Transgender",
+        "4": "Nonbinary",
+        "5": "Other / prefer not to say",
+    }
+    return lookup.get(key, text)
+
+
+def age_bin(age: int | None) -> str:
+    if age is None:
+        return "Unknown / missing"
+    if age < 18:
+        return "<18"
+    if age <= 24:
+        return "18–24"
+    if age <= 34:
+        return "25–34"
+    if age <= 44:
+        return "35–44"
+    if age <= 54:
+        return "45–54"
+    return "55+"
+
+
 def extract_import_id(value: str) -> str | None:
     text = clean(value)
     if not text or '"ImportId"' not in text:
@@ -670,6 +750,9 @@ def build_participants(rows: list[dict[str, str]], condition_lookup: dict[str, d
             }
             block_item_values[block["id"]] = {}
 
+        age = parse_age(row.get("age", ""))
+        gender = normalise_gender(row.get("gender", ""))
+
         participants.append(
             {
                 "mcid": mcid,
@@ -678,6 +761,11 @@ def build_participants(rows: list[dict[str, str]], condition_lookup: dict[str, d
                 "source_log": source_log,
                 "has_condition": condition != "Unknown condition",
                 "startDate": clean(row.get("startDate") or row.get("StartDate")),
+                "age": age,
+                "age_raw": clean(row.get("age", "")),
+                "age_bin": age_bin(age),
+                "gender": gender,
+                "gender_raw": clean(row.get("gender", "")),
                 "block_scores": block_scores,
                 "block_item_values": block_item_values,
             }
@@ -705,12 +793,70 @@ def build_block_summaries(participants: list[dict[str, Any]]) -> dict[str, Any]:
     return summaries
 
 
+def build_demographic_summary(participants: list[dict[str, Any]]) -> dict[str, Any]:
+    age_values = [
+        int(participant["age"])
+        for participant in participants
+        if participant.get("age") is not None
+    ]
+
+    gender_counts = {gender: 0 for gender in GENDER_ORDER}
+    age_bin_counts = {bin_label: 0 for bin_label in AGE_BIN_ORDER}
+
+    for participant in participants:
+        gender = str(participant.get("gender") or "Unknown / missing")
+        if gender not in gender_counts:
+            gender_counts[gender] = 0
+        gender_counts[gender] += 1
+
+        bin_label = str(participant.get("age_bin") or "Unknown / missing")
+        if bin_label not in age_bin_counts:
+            age_bin_counts[bin_label] = 0
+        age_bin_counts[bin_label] += 1
+
+    by_condition: dict[str, Any] = {}
+    for condition in CONDITION_ORDER:
+        condition_participants = [
+            participant
+            for participant in participants
+            if participant["condition"] == condition
+        ]
+        condition_ages = [
+            int(participant["age"])
+            for participant in condition_participants
+            if participant.get("age") is not None
+        ]
+        by_condition[condition] = {
+            "n": len(condition_participants),
+            "age": summarise([float(age) for age in condition_ages]),
+            "gender_counts": {
+                gender: sum(1 for participant in condition_participants if participant.get("gender") == gender)
+                for gender in GENDER_ORDER
+            },
+        }
+
+    return {
+        "age": summarise([float(age) for age in age_values]),
+        "age_available": len(age_values),
+        "age_missing": len(participants) - len(age_values),
+        "age_bin_counts": age_bin_counts,
+        "gender_counts": gender_counts,
+        "gender_available": sum(
+            1 for participant in participants if participant.get("gender") != "Unknown / missing"
+        ),
+        "gender_missing": sum(
+            1 for participant in participants if participant.get("gender") == "Unknown / missing"
+        ),
+        "by_condition": by_condition,
+    }
+
+
 HTML_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Merged questionnaire summary</title>
+<title>Merged summary</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 :root {
@@ -851,7 +997,7 @@ th {
 <body>
 <main>
   <div class="card">
-    <h1>Merged questionnaire summary</h1>
+    <h1>Merged summary</h1>
     <p class="small">Newest TSV plus condition assignment parsed from study logs. Boxplots use fixed questionnaire scale ranges to avoid misleading visual differences.</p>
     <p class="small"><strong>TSV:</strong> <span id="source-tsv"></span></p>
   </div>
@@ -920,6 +1066,81 @@ function renderConditionOverviewTable() {
         <th class="num">Participants</th>
       </tr>
       ${rows}
+    </table>
+  `;
+}
+
+function renderDemographicOverview() {
+  const demographics = REPORT_DATA.demographics;
+  const age = demographics.age || {};
+
+  const genderRows = REPORT_DATA.gender_order.map(gender => `
+    <tr>
+      <td>${escapeHtml(gender)}</td>
+      <td class="num">${demographics.gender_counts[gender] || 0}</td>
+      ${REPORT_DATA.condition_order.map(condition => {
+        const counts = demographics.by_condition[condition]?.gender_counts || {};
+        return `<td class="num">${counts[gender] || 0}</td>`;
+      }).join("")}
+    </tr>
+  `).join("");
+
+  const ageRows = REPORT_DATA.condition_order.map(condition => {
+    const stats = demographics.by_condition[condition]?.age || {};
+    return `
+      <tr>
+        <td>${escapeHtml(condition)}</td>
+        <td class="num">${stats.n || 0}</td>
+        <td class="num">${formatNumber(stats.mean)}</td>
+        <td class="num">${formatNumber(stats.median)}</td>
+        <td class="num">${formatNumber(stats.min)}</td>
+        <td class="num">${formatNumber(stats.max)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const ageBinRows = REPORT_DATA.age_bin_order.map(binLabel => `
+    <tr>
+      <td>${escapeHtml(binLabel)}</td>
+      <td class="num">${demographics.age_bin_counts[binLabel] || 0}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="metric-grid">
+      ${metric("Age available", demographics.age_available)}
+      ${metric("Age missing", demographics.age_missing)}
+      ${metric("Mean age", formatNumber(age.mean) || "-")}
+      ${metric("Gender available", demographics.gender_available)}
+    </div>
+
+    <h3>Age by condition</h3>
+    <table>
+      <tr>
+        <th>Condition</th>
+        <th class="num">n</th>
+        <th class="num">Mean</th>
+        <th class="num">Median</th>
+        <th class="num">Min</th>
+        <th class="num">Max</th>
+      </tr>
+      ${ageRows}
+    </table>
+
+    <h3>Age bins</h3>
+    <table>
+      <tr><th>Age bin</th><th class="num">Participants</th></tr>
+      ${ageBinRows}
+    </table>
+
+    <h3>Gender identity by condition</h3>
+    <table>
+      <tr>
+        <th>Gender identity</th>
+        <th class="num">Overall</th>
+        ${REPORT_DATA.condition_order.map(condition => `<th class="num">${escapeHtml(condition)}</th>`).join("")}
+      </tr>
+      ${genderRows}
     </table>
   `;
 }
@@ -1075,6 +1296,12 @@ function renderOverview() {
     <div class="card">
       <h2>Participants per condition</h2>
       ${renderConditionOverviewTable()}
+    </div>
+
+    <div class="card">
+      <h2>Demographics</h2>
+      <p class="small">Age is parsed from the survey age field; simple numeric strings and strings containing an integer are converted to integer years.</p>
+      ${renderDemographicOverview()}
     </div>
 
     <div class="card ${unknown > 0 ? "warning" : ""}">
@@ -1237,6 +1464,7 @@ def render_html(
     source_tsv: Path,
     participants: list[dict[str, Any]],
     block_summaries: dict[str, Any],
+    demographic_summary: dict[str, Any],
 ) -> str:
     tab_labels = {
         "per_chapter": "Per-chapter",
@@ -1273,7 +1501,10 @@ def render_html(
             "main_model": "These plots show the participant-level scores intended for the main statistical models.",
         },
         "condition_order": CONDITION_ORDER,
+        "gender_order": GENDER_ORDER,
+        "age_bin_order": AGE_BIN_ORDER,
         "block_summaries": block_summaries,
+        "demographics": demographic_summary,
     }
 
     report_json = json.dumps(report_data, ensure_ascii=False).replace("</", "<\\/")
@@ -1289,6 +1520,7 @@ def main() -> int:
     condition_lookup = build_condition_lookup(LOG_DIR)
     participants = build_participants(rows, condition_lookup)
     block_summaries = build_block_summaries(participants)
+    demographic_summary = build_demographic_summary(participants)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(
@@ -1296,6 +1528,7 @@ def main() -> int:
             source_tsv=source_tsv,
             participants=participants,
             block_summaries=block_summaries,
+            demographic_summary=demographic_summary,
         ),
         encoding="utf-8",
     )

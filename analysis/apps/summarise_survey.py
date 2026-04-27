@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import html
 import json
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,15 @@ CREATURES: list[tuple[str, str]] = [
 CREATURE_NAME_BY_ID = {creature_id: name for creature_id, name in CREATURES}
 IGNORED_SEEN_EXTRAS = {"cow", "chicken", "pig"}
 MAX_RETENTION_SLOTS = 18
+
+GENDER_ORDER = [
+    "Male",
+    "Female",
+    "Transgender",
+    "Nonbinary",
+    "Other / prefer not to say",
+    "Unknown / missing",
+]
 
 RETENTION_QUESTION_SPECS = [
     ("img1", "IMAGE + What is the name of this creature?"),
@@ -244,6 +254,70 @@ def parse_numeric(value: str) -> float | int | None:
     return number
 
 
+def parse_age(value: object) -> int | None:
+    text = clean(value)
+    if not text:
+        return None
+
+    numeric_value = parse_numeric(text)
+    if numeric_value is not None:
+        age = int(numeric_value)
+    else:
+        match = re.search(r"\b(\d{1,3})\b", text)
+        if match is None:
+            return None
+        age = int(match.group(1))
+
+    if 0 < age < 120:
+        return age
+    return None
+
+
+def normalise_gender(value: object) -> str:
+    text = clean(value)
+    if not text:
+        return "Unknown / missing"
+
+    key = re.sub(r"\s+", " ", text).strip().lower()
+    lookup = {
+        "male": "Male",
+        "female": "Female",
+        "transgender": "Transgender",
+        "nonbinary": "Nonbinary",
+        "non-binary": "Nonbinary",
+        "other / prefer not to say": "Other / prefer not to say",
+        "other/prefer not to say": "Other / prefer not to say",
+        "prefer not to say": "Other / prefer not to say",
+        "other": "Other / prefer not to say",
+        "1": "Male",
+        "2": "Female",
+        "3": "Transgender",
+        "4": "Nonbinary",
+        "5": "Other / prefer not to say",
+    }
+    return lookup.get(key, text)
+
+
+def summarise_age_values(values: list[int]) -> dict[str, float | int | None]:
+    if not values:
+        return {"n": 0, "mean": None, "median": None, "min": None, "max": None}
+
+    sorted_values = sorted(values)
+    middle = len(sorted_values) // 2
+    if len(sorted_values) % 2:
+        median: float | int = sorted_values[middle]
+    else:
+        median = (sorted_values[middle - 1] + sorted_values[middle]) / 2
+
+    return {
+        "n": len(sorted_values),
+        "mean": sum(sorted_values) / len(sorted_values),
+        "median": median,
+        "min": sorted_values[0],
+        "max": sorted_values[-1],
+    }
+
+
 def parse_seen_details(raw_seen: str) -> tuple[list[str], list[str]]:
     seen_ids: list[str] = []
     invalid_ids: list[str] = []
@@ -404,6 +478,8 @@ def build_participants(
         mcid = clean(row.get("MCID")) or clean(row.get("_recordId")) or f"row-{len(participants) + 1}"
         response_id = clean(row.get("ResponseId")) or clean(row.get("_recordId")) or f"row-{len(participants) + 1}"
         start_date = clean(row.get("startDate"))
+        age = parse_age(row.get("age", ""))
+        gender = normalise_gender(row.get("gender", ""))
 
         seen_from_columns: dict[str, bool] = {}
         seen_columns_ids: list[str] = []
@@ -455,6 +531,10 @@ def build_participants(
                 "startDate": start_date,
                 "endDate": clean(row.get("endDate")),
                 "progress": clean(row.get("progress")),
+                "age": age,
+                "age_raw": clean(row.get("age", "")),
+                "gender": gender,
+                "gender_raw": clean(row.get("gender", "")),
                 "saw_debriefing": clean(row.get("SAW_DEBRIEFING")),
                 "delayed_link": clean(row.get("DELAYED_LINK")),
                 "delayed": is_delayed,
@@ -505,11 +585,71 @@ def render_participant_row(participant: dict[str, object]) -> str:
         f"<td>{escape(participant['startDate'])}</td>"
         f"<td>{escape(participant['endDate'])}</td>"
         f"<td class='num'>{escape(participant['progress'])}</td>"
+        f"<td class='num'>{escape(participant.get('age') if participant.get('age') is not None else '')}</td>"
+        f"<td>{escape(participant.get('gender') if participant.get('gender') != 'Unknown / missing' else '')}</td>"
         f"<td>{escape(saw_debriefing)}</td>"
         f"<td>{delayed_link_html}</td>"
         f"<td>{escape(delayed_display)}</td>"
         "</tr>"
     )
+
+
+def render_demographic_overview(participants: list[dict[str, object]]) -> str:
+    analysis_rows = [participant for participant in participants if not participant.get("delayed")]
+    age_values = [
+        int(participant["age"])
+        for participant in analysis_rows
+        if participant.get("age") is not None
+    ]
+    age_stats = summarise_age_values(age_values)
+
+    gender_counts = {gender: 0 for gender in GENDER_ORDER}
+    for participant in analysis_rows:
+        gender = str(participant.get("gender") or "Unknown / missing")
+        if gender not in gender_counts:
+            gender_counts[gender] = 0
+        gender_counts[gender] += 1
+
+    gender_rows = "".join(
+        f"<tr><td>{escape(gender)}</td><td class='num'>{count}</td></tr>"
+        for gender, count in gender_counts.items()
+        if count or gender in GENDER_ORDER
+    )
+
+    return f"""
+    <div class="card">
+      <h2>Demographics</h2>
+      <p class="small">Computed from the analysis rows: rows where DELAYED is not "1". Age is parsed as integer years from either numeric strings or strings containing an integer.</p>
+      <section class="grid metric-grid" style="margin-top:12px;">
+        {metric_card("Age available", str(age_stats['n']))}
+        {metric_card("Age missing", str(len(analysis_rows) - int(age_stats['n'])))}
+        {metric_card("Mean age", format_number_for_html(age_stats['mean']))}
+        {metric_card("Age range", format_age_range(age_stats))}
+        {metric_card("Gender available", str(sum(count for gender, count in gender_counts.items() if gender != 'Unknown / missing')))}
+        {metric_card("Gender missing", str(gender_counts.get('Unknown / missing', 0)))}
+      </section>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <tr><th>Gender identity</th><th class="num">Participants</th></tr>
+          {gender_rows}
+        </table>
+      </div>
+    </div>
+    """
+
+
+def format_number_for_html(value: float | int | None) -> str:
+    if value is None:
+        return "-"
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{float(value):.1f}"
+
+
+def format_age_range(stats: dict[str, float | int | None]) -> str:
+    if stats.get("min") is None or stats.get("max") is None:
+        return "-"
+    return f"{format_number_for_html(stats['min'])}–{format_number_for_html(stats['max'])}"
 
 
 def render_html(
@@ -664,6 +804,8 @@ th {{ background: #f2f5f7; text-align: left; }}
     {''.join(metrics)}
   </section>
 
+  {render_demographic_overview(participants_sorted)}
+
   <div class="tabs">
     <button class="tab-btn active" data-tab="participants">Per participant</button>
     <button class="tab-btn" data-tab="creatures">Per creature</button>
@@ -688,6 +830,8 @@ th {{ background: #f2f5f7; text-align: left; }}
             <col class="col-date">
             <col class="col-date">
             <col class="col-progress">
+            <col class="col-progress">
+            <col class="col-flag">
             <col class="col-flag">
             <col class="col-link">
             <col class="col-flag">
@@ -698,11 +842,13 @@ th {{ background: #f2f5f7; text-align: left; }}
             <th>startDate</th>
             <th>endDate</th>
             <th class="num">progress</th>
+            <th class="num">age</th>
+            <th>gender</th>
             <th class="num">SAW_DEBRIEFING</th>
             <th>DELAYED_LINK</th>
             <th>DELAYED</th>
           </tr>
-          {participant_rows or '<tr><td colspan="8">No participant rows found.</td></tr>'}
+          {participant_rows or '<tr><td colspan="10">No participant rows found.</td></tr>'}
         </table>
       </div>
     </div>
