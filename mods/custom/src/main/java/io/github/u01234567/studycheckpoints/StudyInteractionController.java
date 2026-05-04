@@ -804,7 +804,7 @@ public final class StudyInteractionController {
             return;
         }
 
-        if (!StudyConfig.isTestingPhase() && isChatLikeScreen(screen)) {
+        if (!StudyConfig.canTypeCommands() && isChatLikeScreen(screen)) {
             logBlockedScreenOnce(client, "chat_screen_blocked");
             client.setScreen(null);
             return;
@@ -845,11 +845,19 @@ public final class StudyInteractionController {
     }
 
     private static void logBlockedKeyAttempts(Minecraft client) {
-        if (!StudyConfig.isTestingPhase() && client.options.keyChat.consumeClick()) {
+        if (!StudyConfig.canTypeCommands() && client.options.keyChat.consumeClick()) {
             StudyEventLog.logBlockedAction(
                     client.player.getName().getString(),
                     "chat_key_blocked",
                     "key=chat"
+            );
+        }
+
+        if (!StudyConfig.canTypeCommands() && client.options.keyCommand.consumeClick()) {
+            StudyEventLog.logBlockedAction(
+                    client.player.getName().getString(),
+                    "command_key_blocked",
+                    "key=command"
             );
         }
 

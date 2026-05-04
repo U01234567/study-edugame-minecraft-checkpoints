@@ -46,7 +46,7 @@ public class StudyCheckpoints implements ModInitializer {
 	private static void registerTestingCommands() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(Commands.literal("timetravel")
-					.requires(source -> StudyConfig.isTestingPhase())
+					.requires(source -> StudyConfig.canTypeCommands())
 					.executes(context -> executeTimetravelCommand(context.getSource()))
 			);
 		});

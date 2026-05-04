@@ -246,7 +246,7 @@ public final class StudyFlowController {
     // Testing helper: shorten the currently active timed study phase to the last N milliseconds.
     // This is intended for local development only.
     public static boolean requestTestingSkipToLastRemainingMs(String playerName, long remainingMs) {
-        if (!StudyConfig.isTestingPhase()) {
+        if (!StudyConfig.canTypeCommands()) {
             return false;
         }
 

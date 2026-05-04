@@ -30,7 +30,12 @@ public final class StudyConfig {
     // - cond_pause (amber)
     // - cond_choice (lilac)
     // - none (= random assignment of the above)
-    private static final String FORCED_EXPERIMENT_CONDITION = "cond_choice";
+    private static final String FORCED_EXPERIMENT_CONDITION = "none";
+
+    // Emergency participant recovery mode.
+    // When true, normal participant restrictions stay active, but chat/command
+    // typing and study commands such as /timetravel are allowed.
+    private static final boolean RUN_WITH_CMD = false;
 
     // Delay time for the delayed "click a button" reminder during checkpoints.
     private static final long CHECKPOINT_PROMPT_DELAY_MS = 20_000L;
@@ -189,6 +194,11 @@ public final class StudyConfig {
     // Return whether testing-only helpers and relaxed restrictions are enabled.
     public static boolean isTestingPhase() {
         return TESTING_PHASE;
+    }
+
+    // Return whether the player may open chat/command input and use study commands.
+    public static boolean canTypeCommands() {
+        return TESTING_PHASE || RUN_WITH_CMD;
     }
 
     // Title of the very first consent overlay.
