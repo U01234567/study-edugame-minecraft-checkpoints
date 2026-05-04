@@ -62,9 +62,9 @@ AGE_BIN_ORDER = [
 ]
 
 CL_CHAPTER_LABELS = [
-    "Topics were very complex",
-    "Creature characteristics seemed very complex",
-    "Differences between creatures seemed very complex",
+    "Creature appearances were complex",
+    "Creature facts were complex",
+    "Creatures were difficult to tell apart",
     "Game-world elements made learning unclear",
     "Game world was ineffective for learning",
     "Game world was full of irrelevant content",
@@ -73,24 +73,24 @@ CL_CHAPTER_LABELS = [
 
 ENG_CHAPTER_LABELS = [
     "I lost myself in this chapter",
-    "Time just slipped away",
-    "I was absorbed",
-    "Chapter looked good",
-    "I felt interested",
+    "Time spent in this chapter slipped away",
+    "I was absorbed in this chapter",
+    "Chapter was pleasurable to look at",
+    "I felt interested in this chapter",
 ]
 
 CL_OVERALL_LABELS = [
-    "Instructions/explanations were very unclear",
-    "Instructions/explanations were ineffective for learning",
-    "Instructions/explanations were full of unclear content",
-    "Interaction was very unclear",
-    "Interaction was ineffective for learning",
-    "Interaction made it harder to learn",
-    "Interaction was difficult to master",
+    "Instructions about what to do were clear",
+    "Chapters/checkpoints explanation was clear",
+    "Creature-finding/learning instructions were effective",
+    "Interaction was clear",
+    "Interaction was effective for creature learning",
+    "Interaction made creature learning easier",
+    "Interaction was easy to master",
     "Enhanced understanding of creatures covered",
-    "Enhanced knowledge of creature worlds",
-    "Enhanced understanding of creature characteristics",
-    "Enhanced understanding of concepts and differences",
+    "Connected creature appearances with facts",
+    "Organised creature information mentally",
+    "Kept different creatures apart",
 ]
 
 ENG_OVERALL_LABELS = [
@@ -239,22 +239,22 @@ BLOCKS = [
         "tab": "overall",
         "kind": "cl",
         "title": "Overall instruction-related extraneous cognitive load",
-        "description": "Overall extraneous load attributed to instructions and explanations.",
-        "score_note": "Higher scores indicate higher instruction-related extraneous cognitive load.",
+        "description": "Overall extraneous load attributed to the instructions and explanations; positively framed items are reverse-coded.",
+        "score_note": "Higher scores indicate higher instruction-related extraneous cognitive load after reverse-coding.",
         "scale_min": 0,
         "scale_max": 10,
-        "items": overall_items("cl", CL_OVERALL_LABELS, [1, 2, 3], 0, 10),
+        "items": overall_items("cl", CL_OVERALL_LABELS, [1, 2, 3], 0, 10, reverse_indices={1, 2, 3}),
     },
     {
         "id": "interaction_el_overall",
         "tab": "overall",
         "kind": "cl",
         "title": "Overall interaction-related extraneous cognitive load",
-        "description": "Overall extraneous load attributed to interacting with the game.",
-        "score_note": "Higher scores indicate higher interaction-related extraneous cognitive load.",
+        "description": "Overall extraneous load attributed to interacting with the game; positively framed items are reverse-coded.",
+        "score_note": "Higher scores indicate higher interaction-related extraneous cognitive load after reverse-coding.",
         "scale_min": 0,
         "scale_max": 10,
-        "items": overall_items("cl", CL_OVERALL_LABELS, [4, 5, 6, 7], 0, 10),
+        "items": overall_items("cl", CL_OVERALL_LABELS, [4, 5, 6, 7], 0, 10, reverse_indices={4, 5, 6, 7}),
     },
     {
         "id": "gl_overall",
