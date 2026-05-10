@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Merged study summary</title>
+  <style>__MERGED_APP_CSS__</style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Merged study summary</h1>
+      <div id="condition-legend" class="legend"></div>
+    </section>
+
+    <nav class="tabs" aria-label="Summary tabs">
+      <button class="tab-button active" data-tab="main">Main</button>
+      <button class="tab-button" data-tab="retention">Retention</button>
+      <button class="tab-button" data-tab="cognitive-load">Cognitive load</button>
+      <button class="tab-button" data-tab="engagement">Engagement</button>
+      <button class="tab-button" data-tab="control">Perceived control</button>
+      <button class="tab-button" data-tab="logs">Game logs</button>
+      <button class="tab-button" data-tab="interviews">Interviews</button>
+      <button class="tab-button" data-tab="statistics">Inferential statistics</button>
+    </nav>
+
+    <section id="tab-main" class="tab-panel active"></section>
+    <section id="tab-retention" class="tab-panel"></section>
+    <section id="tab-cognitive-load" class="tab-panel"></section>
+    <section id="tab-engagement" class="tab-panel"></section>
+    <section id="tab-control" class="tab-panel"></section>
+    <section id="tab-logs" class="tab-panel"></section>
+    <section id="tab-interviews" class="tab-panel"></section>
+    <section id="tab-statistics" class="tab-panel"></section>
+  </main>
+
+  <div id="figure-modal" hidden>
+    <button id="figure-modal-close" type="button" aria-label="Close enlarged figure">×</button>
+    <div id="figure-modal-content"></div>
+  </div>
+
+  <script id="report-data" type="application/json">__REPORT_PAYLOAD__</script>
+  <script>__MERGED_APP_JS__</script>
+</body>
+</html>

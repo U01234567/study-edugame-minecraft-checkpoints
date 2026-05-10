@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blind retention scoring</title>
+  <link rel="stylesheet" href="/static/scoring_app.css">
+</head>
+<body>
+  <main id="app">
+    <section id="loading">Loading retention answers…</section>
+
+    <section id="done" hidden>
+      <div class="checkmark">✓</div>
+      <h1>Grading complete</h1>
+      <p>All assigned answers have been graded or skipped.</p>
+      <button id="review" type="button">Review previous grades</button>
+    </section>
+
+    <section id="screen" hidden>
+      <aside id="left">
+        <p id="grader-label" class="eyebrow"></p>
+        <h1 id="creature-name"></h1>
+        <button id="creature-image-button" type="button" aria-label="Enlarge creature image">
+          <img id="creature-image" alt="Creature image">
+        </button>
+        <p id="creature-meta" class="small"></p>
+        <ul id="creature-facts"></ul>
+
+        <section class="card">
+          <p id="rubric-key" class="eyebrow"></p>
+          <h2 id="rubric-title"></h2>
+          <div id="score-options"></div>
+        </section>
+      </aside>
+
+      <section id="right">
+        <nav id="nav">
+          <button id="previous" type="button">Previous</button>
+          <select id="task-select"></select>
+          <button id="next" type="button">Next</button>
+        </nav>
+
+        <article class="answer-card">
+          <h2>Question</h2>
+          <p id="question"></p>
+          <h2>Answer</h2>
+          <p id="answer"></p>
+        </article>
+      </section>
+
+      <footer id="actions">
+        <label>
+          Grader note
+          <textarea id="note" rows="2" placeholder="Optional short note"></textarea>
+        </label>
+        <button id="skip" type="button">Skip</button>
+        <button id="grade" type="button">Save grade</button>
+        <div id="progress"></div>
+      </footer>
+    </section>
+  </main>
+
+  <div id="image-modal" hidden>
+    <button id="image-modal-close" type="button" aria-label="Close enlarged image">×</button>
+    <img id="image-modal-img" alt="Enlarged creature image">
+  </div>
+
+  <script src="/static/scoring_app.js"></script>
+</body>
+</html>

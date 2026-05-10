@@ -1,0 +1,32 @@
+{
+  "version": "2026-05-interview-manifest-v1",
+  "notes": "Do not enter MCIDs here. The app infers MCID speakers from each CSV's Speaker column. Only map filenames to selection categories and notes.",
+  "category_definitions": {
+    "low_prior_game_experience": "Low prior game experience; preferably from the required continue condition.",
+    "high_prior_game_experience": "High prior game experience; preferably from the optional pauses condition.",
+    "required_pause_chapter_change": "Required pause participant with a clear chapter-to-chapter change after the pause, such as increased card-reading time, more standing still / other time, or reduced movement.",
+    "optional_pause_chose_pause": "Optional pause participant who chose at least one 2-minute pause.",
+    "many_disallowed_empty_disabled_clicks": "Participant with many disallowed, empty, or disabled clicks, either during instructions or during the game.",
+    "unusual_task_performance": "Participant with unusually high or low task performance.",
+    "high_total_movement_distance": "Participant with high total movement distance.",
+    "age_gender_coverage": "Participant selected to improve age and gender coverage across the interview sample."
+  },
+  "interviews": [
+    {
+      "filename": "Interview_01.csv",
+      "interview_no": 1,
+      "selection_categories": [
+        "high_prior_game_experience"
+      ],
+      "notes": "TBD."
+    },
+    {
+      "filename": "Interview_02.csv",
+      "interview_no": 2,
+      "selection_categories": [
+        "many_disallowed_empty_disabled_clicks"
+      ],
+      "notes": "TBD."
+    }
+  ]
+}

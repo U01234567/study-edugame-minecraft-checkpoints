@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 OUTPUT_DIR = REPO_ROOT / "output"
 OUTPUT_PATH = OUTPUT_DIR / "survey_summary.html"
+SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
 
 CREATURES: list[tuple[str, str]] = [
     ("abyss_deer", "Abyss deer"),
@@ -1343,9 +1344,9 @@ def main() -> int:
         print(f"Expected a ./data/ directory at {DATA_DIR.resolve()}, but it was not found.")
         return 1
 
-    tsv_path = newest_tsv_file(DATA_DIR)
-    if tsv_path is None:
-        print(f"Expected at least one .tsv export inside {DATA_DIR.resolve()}, but none were found.")
+    tsv_path = SURVEY_EXPORT_PATH
+    if not tsv_path.exists():
+        print(f"Expected survey export at {tsv_path.resolve()}, but it was not found.")
         return 1
 
     rows, header, _labels = load_rows(tsv_path)

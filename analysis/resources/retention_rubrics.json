@@ -1,0 +1,198 @@
+{
+  "version": "2026-05-retention-rubric-draft-1",
+  "score_scale": [0, 1, 2, 3, 4],
+  "questions": {
+    "img1": "IMAGE + What is the name of this creature?",
+    "img2": "IMAGE + What are unique facts about this creature?",
+    "name1": "NAME + What does this creature look like?",
+    "name2": "NAME + Where in the game did you find this creature? Name the chapter and specific place if you can."
+  },
+  "rubrics": {
+    "img1": {
+      "title": "Creature name",
+      "score_labels": {
+        "0": "Blank, nonsensical, off-topic, or a different creature with no usable partial match.",
+        "1": "Very vague or mostly incorrect name; only a weak clue toward the correct creature.",
+        "2": "Partly correct name: one meaningful component correct, but another component missing or wrong.",
+        "3": "Almost correct name: minor spelling, word-order, pluralisation, or article error that still clearly identifies the creature.",
+        "4": "Correct creature name or an unambiguous spelling variant."
+      }
+    },
+    "img2": {
+      "title": "Unique facts",
+      "score_labels": {
+        "0": "Blank, nonsensical, off-topic, or contains no correct creature-specific fact.",
+        "1": "One weak, generic, or only partly correct fact; little creature-specific information.",
+        "2": "One correct creature-specific fact, or two partially correct facts.",
+        "3": "Two correct creature-specific facts, or one correct fact plus a strong partial fact.",
+        "4": "Three correct creature-specific facts, or an equivalently complete and specific answer."
+      }
+    },
+    "name1": {
+      "title": "Appearance",
+      "score_labels": {
+        "0": "Blank, nonsensical, off-topic, or describes another creature.",
+        "1": "One very broad visual feature only; could apply to many creatures.",
+        "2": "One clear correct visual feature, or two weak/partial visual features.",
+        "3": "Two clear correct visual features, or one precise distinctive feature plus partial support.",
+        "4": "Detailed, distinctive visual description that would let another person recognise the creature."
+      }
+    },
+    "name2": {
+      "title": "In-game location",
+      "score_labels": {
+        "0": "Blank, nonsensical, off-topic, or wrong chapter/environment.",
+        "1": "Very vague location; no correct chapter, but a weak clue may fit the correct environment.",
+        "2": "Correct broad chapter/environment only.",
+        "3": "Correct chapter/environment plus a partly correct specific place or contextual detail.",
+        "4": "Correct chapter/environment plus a specific place or spatial/contextual detail."
+      }
+    }
+  },
+  "creatures": {
+    "abyss_deer": {
+      "name": "Abyss deer",
+      "image": "resources/interactive_app/static/creatures/creature_1.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Abyss deer here.",
+      "facts": ["They eat grass only in pairs.", "They remember every farm gate.", "Herd circles calm nervous young deer."]
+    },
+    "amethyst_scarab": {
+      "name": "Amethyst scarab",
+      "image": "resources/interactive_app/static/creatures/creature_2.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Amethyst scarab here.",
+      "facts": ["Their shells leave crystal dust.", "They navigate by tiny echoes.", "They dig toward buried crystals."]
+    },
+    "axolotl_dragon": {
+      "name": "Axolotl dragon",
+      "image": "resources/interactive_app/static/creatures/creature_3.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Axolotl dragon here.",
+      "facts": ["Males display brighter fins.", "Museum water slows its ageing.", "It cannot breathe dry air."]
+    },
+    "cave_dweller": {
+      "name": "Cave dweller",
+      "image": "resources/interactive_app/static/creatures/creature_4.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Cave dweller here.",
+      "facts": ["It follows candle smoke home.", "It dislikes enclosed wooden stalls.", "It counts footsteps before sleeping."]
+    },
+    "ender_ape": {
+      "name": "Ender ape",
+      "image": "resources/interactive_app/static/creatures/creature_5.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Ender ape here.",
+      "facts": ["It drums on hollow tree trunks.", "They throw fruit before fighting.", "Groups solve fights with drum beats."]
+    },
+    "flying_bunny": {
+      "name": "Flying bunny",
+      "image": "resources/interactive_app/static/creatures/creature_6.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Flying bunny here.",
+      "facts": ["They nest where bells ring.", "Flying helps them look for foxes.", "They eat four-leaf clovers."]
+    },
+    "glare": {
+      "name": "Glare",
+      "image": "resources/interactive_app/static/creatures/creature_7.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Glare here.",
+      "facts": ["Females vanish in winter.", "Its name shows how watchful it is.", "It hates ignored dark corners."]
+    },
+    "grand_grassling_father": {
+      "name": "Grand grassling father",
+      "image": "resources/interactive_app/static/creatures/creature_8.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Grand grassling father here.",
+      "facts": ["Moss spreads after every footstep.", "He is older than fences.", "He grows medicine from bark."]
+    },
+    "ice_golem": {
+      "name": "Ice golem",
+      "image": "resources/interactive_app/static/creatures/creature_9.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Ice golem here.",
+      "facts": ["Cold leaks from a stone heart.", "Museum lamps cannot warm it.", "Golem means crafted, not born."]
+    },
+    "killer_crab": {
+      "name": "Killer crab",
+      "image": "resources/interactive_app/static/creatures/creature_10.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Killer crab here.",
+      "facts": ["Wheat roots hide its tunnels.", "Harvest time makes it restless.", "It snaps only when cornered."]
+    },
+    "lizard_knight": {
+      "name": "Lizard knight",
+      "image": "resources/interactive_app/static/creatures/creature_11.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Lizard knight here.",
+      "facts": ["Water keeps its armour flexible.", "It swears oaths beside rivers.", "It guards forgotten crossing points."]
+    },
+    "mushroom_bup": {
+      "name": "Mushroom bup",
+      "image": "resources/interactive_app/static/creatures/creature_12.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Mushroom bup here.",
+      "facts": ["It sneezes near mushroom spores.", "It prefers bread over mushrooms.", "It distrusts red caps entirely."]
+    },
+    "orc": {
+      "name": "Orc",
+      "image": "resources/interactive_app/static/creatures/creature_13.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Orc here.",
+      "facts": ["They mapped the island first.", "They trade memory for metal.", "Orc once meant island keeper."]
+    },
+    "prototype_warden": {
+      "name": "Prototype warden",
+      "image": "resources/interactive_app/static/creatures/creature_14.png",
+      "chapter": "Chapter 3",
+      "environment": "The Jungle",
+      "appearance_placeholder": "Placeholder: add final visual description of the Prototype warden here.",
+      "facts": ["It was built for testing.", "Dry ground makes tracking harder.", "Salt air clogs its hearing."]
+    },
+    "retro_tv_robot": {
+      "name": "Retro TV robot",
+      "image": "resources/interactive_app/static/creatures/creature_15.png",
+      "chapter": "Chapter 2",
+      "environment": "The Farm",
+      "appearance_placeholder": "Placeholder: add final visual description of the Retro TV robot here.",
+      "facts": ["Nobody knows who built it.", "It broadcasts only to itself.", "Solitude keeps its electronics stable."]
+    },
+    "scrambler_king": {
+      "name": "Scrambler king",
+      "image": "resources/interactive_app/static/creatures/creature_16.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Scrambler king here.",
+      "facts": ["Nearby machines lose their rhythm.", "It speaks through its red chest.", "Only one scrambler earns the crown."]
+    },
+    "walking_robot_guy": {
+      "name": "Walking robot guy",
+      "image": "resources/interactive_app/static/creatures/creature_17.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Walking robot guy here.",
+      "facts": ["It was designed for demonstrations.", "Red marks approved walking routes.", "The hat flags version one."]
+    },
+    "wardigo": {
+      "name": "Wardigo",
+      "image": "resources/interactive_app/static/creatures/creature_18.png",
+      "chapter": "Chapter 1",
+      "environment": "The Museum",
+      "appearance_placeholder": "Placeholder: add final visual description of the Wardigo here.",
+      "facts": ["It outgrew ordinary museum doors.", "It grew tall because it was fed too much.", "Bones hardened after endless growth."]
+    }
+  }
+}
