@@ -1,0 +1,30 @@
+﻿{
+  "name": "minecraft-study",
+  "private": true,
+  "version": "0.1.0",
+  "author": "Jonas de Brouwer",
+  "description": "Minecraft Study desktop application",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:debug": "tauri build --debug",
+    "tauri": "tauri",
+
+    "payload:clean": "node scripts/clean-payload.mjs",
+    "payload:prepare": "node scripts/prepare-payload.mjs",
+    "payload:prepare:win": "node scripts/prepare-payload.mjs --target win-x64",
+    "payload:prepare:mac": "node scripts/prepare-payload.mjs --target mac-arm64",
+
+    "app:dev": "npm run payload:clean && npm run payload:prepare && npm run dev",
+    "app:dev:win": "npm run payload:clean && npm run payload:prepare:win && npm run dev",
+    "app:dev:mac": "npm run payload:clean && npm run payload:prepare:mac && npm run dev",
+
+    "app:build": "npm run payload:clean && npm run payload:prepare && npm run build",
+    "app:build:win": "npm run payload:clean && npm run payload:prepare:win && npm run build",
+    "app:build:mac": "npm run payload:clean && npm run payload:prepare:mac && npm run build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

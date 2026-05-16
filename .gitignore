@@ -28,3 +28,60 @@ world/players/
 # Data for analysis
 analysis/data/
 analysis/score_backups/
+
+# Node / Tauri frontend
+desktop/node_modules/
+desktop/dist/
+desktop/.vite/
+
+# Rust / Tauri backend
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Local desktop env
+desktop/.env
+desktop/.env.local
+desktop/.env.*.local
+
+# Generated payloads and releases
+payload-dist/
+releases/
+desktop/payload-dist/
+desktop/src-tauri/resources/payload/
+desktop/src-tauri/resources/generated/
+
+# Installer/package outputs
+*.msi
+*.exe
+*.dmg
+*.app
+*.AppImage
+*.deb
+*.rpm
+
+# Gradle generated state
+mods/custom/build/
+mods/custom/run/
+mods/custom/.gradle/
+
+# Minecraft/session runtime files
+**/session.lock
+**/usercache.json
+**/latest.log
+**/*.log.gz
+
+# Private cryptographic material
+**/private-key*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+
+# Upload artifacts
+**/logs.zip
+**/logs.zip.enc
+**/upload-status.json
+**/receipt.json
+
+# Generated config
+**/study-config.json

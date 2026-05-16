@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minecraft Study</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand">
+            <div class="logo-slot">
+              <img id="study-logo" class="study-logo" alt="Study logo" hidden />
+              <div id="logo-placeholder" class="logo-placeholder">
+                Logo missing from <code>desktop/src/assets/uni-logo.png</code>
+              </div>
+            </div>
+
+            <div class="title-block">
+              <p class="eyebrow">Minecraft Study</p>
+              <h1>Evaluating Minecraft as educational tool</h1>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button
+              id="todo-toggle"
+              class="icon-action"
+              type="button"
+              aria-expanded="false"
+              aria-controls="todo-popover"
+              title="Show to-do list"
+            >
+              ☑ <span>To do</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div id="todo-popover" class="todo-popover" hidden>
+        <div class="todo-popover-header">
+          <strong>To do</strong>
+          <button id="todo-close" class="close-popover" type="button" aria-label="Close to-do list">
+            ×
+          </button>
+        </div>
+
+        <ol class="todo-list">
+          <li class="todo-item is-complete">
+            <span class="todo-check" aria-hidden="true">✓</span>
+            <span>Download app</span>
+          </li>
+          <li class="todo-item" data-todo="game">
+            <span class="todo-check" aria-hidden="true">2</span>
+            <span>Play game</span>
+          </li>
+          <li class="todo-item" data-todo="logs">
+            <span class="todo-check" aria-hidden="true">3</span>
+            <span>Share logs (automatic)</span>
+          </li>
+          <li class="todo-item" data-todo="questionnaire">
+            <span class="todo-check" aria-hidden="true">4</span>
+            <span>Answer questionnaire</span>
+          </li>
+        </ol>
+      </div>
+
+      <section class="study-sheet" aria-labelledby="study-information-title">
+        <section class="intro-section">
+          <h2 id="study-information-title">Study Information</h2>
+
+          <div class="important-note">
+            <p>
+              <strong>If you want to start right away, at least read this:</strong>
+            </p>
+
+            <ul>
+              <li>
+                At the bottom of this page, there is an image with instructions. Take a
+                picture of that with your phone, as you cannot open this page while
+                playing the game.
+              </li>
+              <li>
+                The game time is fixed: a level / chapter ends when the timer ends.
+              </li>
+              <li>
+                At the very end (in the questionnaire), you are asked to provide your
+                university email address. Using a different email address is fine too.
+              </li>
+            </ul>
+          </div>
+
+          <p><strong>Study title:</strong> Evaluating Minecraft as educational tool</p>
+
+          <p>
+            In this study, you will play our custom educational Minecraft game,
+            answer questions about your experience, take a knowledge test about
+            the fantasy creatures in the game, and provide an email address for
+            a short follow-up questionnaire about one week later. The session takes about 50 minutes in
+            total (35 min in-game + 15 min questions).
+          </p>
+
+          <p>
+            You can only take part if you are 16 years or older and currently
+            studying at a university.
+          </p>
+
+          <p>
+            Your participation is entirely voluntary. You can decide not to take
+            part, stop at any time during the study, or skip a question, without
+            any negative consequences and without giving a reason. If you want
+            your identifiable data to be deleted after participation, you can
+            request this until 19 June 2026. After that date, the link between
+            your identity and the data will be deleted and the dataset will be
+            anonymised, so removal will no longer be possible.
+          </p>
+
+          <p>
+            The task is similar to doing a learning activity on a laptop and then
+            answering questions about it. No specific risks are expected. There
+            is no direct personal benefit, but the study may help improve the
+            design of educational games.
+          </p>
+
+          <p>
+            For this study, we may collect and process your questionnaire
+            responses, game log data,
+            retention test responses, age, gender, and email address. Your email
+            address will only be used to send the one-week follow-up
+            questionnaire and the written debriefing, and will not be included in
+            the final dataset.
+          </p>
+
+          <p>
+            The research data will be stored securely for at least ten years.
+            Pseudonymised questionnaire data and game log data may be archived and later shared
+            with other researchers for non-commercial scientific reuse after the
+            related publication. Before sharing, direct identifiers will be
+            removed and identifying details will be minimised as far as possible.
+            Access will be provided through Dataverse under restricted access,
+            by request and after approval by the current researchers, only to
+            researchers and, where relevant, peer reviewers for scientific
+            purposes. Reuse will be subject to CC BY-NC terms and safeguards
+            prohibiting re-identification, participant contact, and onward
+            sharing. In principle, you have the right to request access to,
+            correction of, deletion of, restriction of, or objection to the
+            processing of your personal data.
+          </p>
+
+          <p>
+            If you take part through <span data-study-field="participantPoolLabel">[add participant pool label to desktop/.env]</span>,
+            you will receive course credit. Participants recruited outside the
+            participant pool do not receive compensation.
+          </p>
+
+          <div class="private-placeholder">
+            <p>
+              <strong>For questions about the study, please contact:</strong>
+              <span data-study-field="contactName">[add researcher name to desktop/.env]</span>
+              (<a
+                data-study-email="contactEmail"
+                href="#"
+              >[add researcher email to desktop/.env]</a>)
+            </p>
+
+            <p>
+              If you have any remarks or complaints regarding this research, you
+              may also contact the
+              “<span data-study-field="redcName">[add REDC name to desktop/.env]</span>”
+              via <a
+                data-study-email="redcEmail"
+                href="#"
+              >[add REDC email to desktop/.env]</a>.
+            </p>
+          </div>
+        </section>
+
+        <section class="consent-section" aria-labelledby="consent-title">
+          <h2 id="consent-title">Before the game starts</h2>
+
+          <p>
+            By clicking “Agree and continue” on the laptop, I confirm that:
+          </p>
+
+          <ul>
+            <li>I have read and understood the information on this page.</li>
+            <li>I have had the opportunity to ask questions.</li>
+            <li>
+              I understand that participation is voluntary and that I can stop at
+              any time during the study without negative consequences and without
+              giving a reason.
+            </li>
+            <li>
+              I confirm that I am 16 years or older &amp; currently studying at a
+              university.
+            </li>
+            <li>
+              I give permission for the researchers to process my coded data for
+              this study.
+            </li>
+            <li>
+              I give permission for the research data to be stored securely for
+              at least ten years.
+            </li>
+            <li>
+              I understand that I can request deletion of my identifiable data
+              until 19 June 2026, after which the link between my identity and
+              the data will be deleted.
+            </li>
+            <li>
+              I understand that my email address will only be used for the
+              one-week follow-up questionnaire and the written debriefing, and
+              will not be included in the final dataset.
+            </li>
+            <li>
+              I understand what participation involves &amp; I agree to
+              participate in this study.
+            </li>
+          </ul>
+
+          <p>
+            You can start! The game will explain everything. But if you get
+            stuck, use the figure below as a reminder:
+          </p>
+
+          <figure class="controls-figure">
+            <img id="controls-image" class="controls-image" alt="Game controls" hidden />
+            <figcaption id="controls-placeholder" class="controls-placeholder">
+              Game controls image missing from <code>desktop/src/assets/print_controls.png</code>
+            </figcaption>
+          </figure>
+        </section>
+      </section>
+
+      <footer class="app-footer">
+        <div class="footer-left">
+          <button id="uninstall-button" class="button button-danger" type="button">
+            Uninstall
+          </button>
+
+          <button id="help-button" class="button button-secondary" type="button">
+            Help
+          </button>
+        </div>
+
+        <div class="start-action">
+          <p id="start-hint" class="start-hint" hidden>
+            Game is loading and will open automatically in fullscreen in about 15 seconds.
+          </p>
+
+          <button id="start-button" class="button button-start" type="button">
+            Start!
+          </button>
+        </div>
+      </footer>
+
+      <dialog id="help-dialog" class="dialog">
+        <h2 id="help-title">Help</h2>
+        <p id="help-message">
+          If the game does not start in the final build, close Minecraft if it is
+          open, reopen this app, and try again. If logs cannot be sent
+          automatically, the final build will show manual sending instructions.
+        </p>
+        <button class="button button-secondary" data-close-dialog type="button">
+          Close
+        </button>
+      </dialog>
+
+      <dialog id="uninstall-dialog" class="dialog">
+        <h2>Uninstall</h2>
+        <p>
+          The final app will provide platform-specific uninstall instructions
+          here. This will also explain where local study files are stored and how
+          to remove them after participation.
+        </p>
+        <button class="button button-secondary" data-close-dialog type="button">
+          Close
+        </button>
+      </dialog>
+    </main>
+  </body>
+</html>

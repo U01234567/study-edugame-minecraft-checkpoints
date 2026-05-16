@@ -6,7 +6,8 @@ This repository contains:
 
 * the Minecraft world used in the study
 * the mods used for the study setup and logging
-* the files and scripts used to run the world locally
+* the desktop app shell used for participant distribution
+* the files and scripts used to run the world locally during development
 * the statistics scripts used to analyse study results
 
 This repository does **not** contain resulting datasets from the study.
@@ -20,9 +21,20 @@ The repository preserves the materials, code, runtime dependencies, and document
 * `world/` — Minecraft world files for the study environment
 * `mods/custom/` — Fabric-based custom study mod source code
 * `mods/external/` — third-party runtime jars, external creature source/reference assets, and source credits
-* `server/` — local server setup and scripts for running the world
+* `desktop/` — Tauri desktop app for participant distribution
 * `analysis/` — scripts for statistical analysis
 * `materials/` — screenshots of the world and mods
+
+## Desktop participant app
+
+The `desktop/` folder contains the Tauri desktop app for participants who download and play the study on their own local desktop or laptop.
+
+This app is intended for distance sampling. It is not the setup used for in-lab sampling, where the study can be run locally through the development/lab workflow.
+
+For setup and development notes, see:
+
+* [`desktop/README.md`](desktop/README.md)
+
 
 ## External sources and credits
 
