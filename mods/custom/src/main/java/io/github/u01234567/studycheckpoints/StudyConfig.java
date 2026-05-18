@@ -21,7 +21,7 @@ import java.util.Map;
  */
 public final class StudyConfig {
     private static final Path GAME_DIR = FabricLoader.getInstance().getGameDir();
-    private static final Path ENV_FILE = GAME_DIR.resolve("../../../.env").normalize().toAbsolutePath();
+    private static final Path ENV_FILE = resolveEnvFile();
 
     private static final String QUALTRICS_URL_TEMPLATE_KEY = "QUALTRICS_URL_TEMPLATE";
 
@@ -361,6 +361,19 @@ public final class StudyConfig {
         return FINAL_QUESTIONNAIRE_BUTTON_LABEL;
     }
 
+    private static Path resolveEnvFile() {
+        String explicitPath = System.getProperty("study.config.path");
+        if (explicitPath == null || explicitPath.isBlank()) {
+            explicitPath = System.getenv("MINECRAFT_STUDY_CONFIG");
+        }
+
+        if (explicitPath != null && !explicitPath.isBlank()) {
+            return Path.of(explicitPath).normalize().toAbsolutePath();
+        }
+
+        return GAME_DIR.resolve("study-runtime.env").normalize().toAbsolutePath();
+    }
+
     private static synchronized void ensureLoaded() {
         if (values != null) {
             return;
@@ -369,7 +382,7 @@ public final class StudyConfig {
         values = new HashMap<>();
 
         if (!Files.exists(ENV_FILE)) {
-            StudyCheckpoints.LOGGER.warn("No study .env file found at {}", ENV_FILE);
+            StudyCheckpoints.LOGGER.error("Study configuration file is missing: {}", ENV_FILE);
             return;
         }
 

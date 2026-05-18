@@ -22,18 +22,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class StudyEventLog {
     private static final Path GAME_DIR = FabricLoader.getInstance().getGameDir();
 
-    private static final Path PRIMARY_LOG_DIR =
-            GAME_DIR.resolve("../../../analysis/logs").normalize().toAbsolutePath();
+    private static final Path PRIMARY_LOG_DIR = resolvePrimaryLogDir();
     private static final Path MIRROR_LOG_DIR =
             GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
     private static final Path[] ANALYSIS_DIR_CANDIDATES = new Path[] {
-            GAME_DIR.resolve("../../../analysis").normalize().toAbsolutePath(),
             GAME_DIR.resolve("analysis").normalize().toAbsolutePath()
     };
 
-    // World directories (repo original and copy)
-    private static final Path REPO_WORLD_DIR =
-            GAME_DIR.resolve("../../../world").normalize().toAbsolutePath();
+    // Packaged runtime world copy used by this participant run.
     private static final Path RUNTIME_WORLD_DIR =
             GAME_DIR.resolve("saves").resolve(StudyCheckpoints.STUDY_WORLD_SAVE_NAME).normalize().toAbsolutePath();
 
@@ -43,6 +39,19 @@ public final class StudyEventLog {
     private static final AtomicReference<Path> PRIMARY_LOG_FILE = new AtomicReference<>();
     private static final AtomicReference<Path> MIRROR_LOG_FILE = new AtomicReference<>();
     private static final AtomicReference<String> SESSION_PLAYER_NAME = new AtomicReference<>("unknown");
+
+    private static Path resolvePrimaryLogDir() {
+        String explicit = System.getProperty("study.output.dir");
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit).normalize().toAbsolutePath();
+        }
+
+        return GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
+    }
+
+    private static boolean automaticSummaryEnabled() {
+        return Boolean.parseBoolean(System.getProperty("study.enable_python_summary", "false"));
+    }
 
     private static final char[] SESSION_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
     private static final SecureRandom SESSION_ID_RANDOM = new SecureRandom();
@@ -162,9 +171,7 @@ public final class StudyEventLog {
     // - Study mod version
     // - Minecraft version
     // - Fabric version
-    // - Source world path
-    // - When the source Minecraft world was last updated
-    // - Runtime copied world path
+    // - Runtime world path
     // - When the runtime Minecraft world was last updated
     public static void logSessionHeader() {
         if (!HEADER_WRITTEN.compareAndSet(false, true)) {
@@ -181,8 +188,6 @@ public final class StudyEventLog {
         appendLine("session_player=" + SESSION_PLAYER_NAME.get());
         appendLine("analysis_log_file=" + ensurePrimaryLogFile());
         appendLine("runtime_log_mirror=" + ensureMirrorLogFile());
-        appendLine("repo_world_source=" + REPO_WORLD_DIR);
-        appendLine("repo_world_source_last_modified=" + getWorldLastModified(REPO_WORLD_DIR));
         appendLine("runtime_world_copy=" + RUNTIME_WORLD_DIR);
         appendLine("runtime_world_copy_last_modified=" + getWorldLastModified(RUNTIME_WORLD_DIR));
         appendLine("================================================================");
@@ -599,7 +604,7 @@ public final class StudyEventLog {
     }
 
     private static void triggerSessionSummaryBestEffort() {
-        if (!SESSION_SUMMARY_TRIGGERED.compareAndSet(false, true)) {
+        if (!automaticSummaryEnabled() || !SESSION_SUMMARY_TRIGGERED.compareAndSet(false, true)) {
             return;
         }
 

@@ -323,13 +323,112 @@ h3 {
   border-color: var(--green);
 }
 
+.todo-item.is-failed {
+  color: var(--red);
+}
+
+.todo-item.is-failed .todo-check {
+  color: var(--white);
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.status-card,
+.completion-screen,
 .study-sheet {
   width: min(var(--paper-width), 100%);
-  margin: 0 auto;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 18px 22px;
+  background: var(--white);
+  border: 1px solid var(--gray-line);
+  border-left: 6px solid var(--gold);
+  box-shadow: var(--shadow);
+}
+
+.status-card h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+
+.status-card p {
+  margin-bottom: 0;
+  color: var(--black);
+  line-height: 1.45;
+}
+
+.status-card.is-success {
+  border-left-color: var(--green);
+}
+
+.status-card.is-warning {
+  border-left-color: var(--gold);
+}
+
+.status-card.is-error {
+  border-left-color: var(--red);
+}
+
+.completion-screen {
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  margin-bottom: 18px;
+  padding: 48px 32px;
+  color: var(--gray-text);
+  background: var(--white);
+  border: 1px solid var(--gray-line);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.completion-screen[hidden] {
+  display: none;
+}
+
+.completion-screen h2 {
+  margin: 0.75rem 0 0.5rem;
+  color: var(--gray-text);
+  font-size: clamp(1.8rem, 5vw, 3rem);
+}
+
+.completion-screen p {
+  margin: 0;
+  color: var(--gray-text);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.completion-check {
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  border: 8px solid var(--gray-line);
+  border-radius: 50%;
+  color: var(--gray-text);
+  font-size: 4.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.study-sheet {
   padding: 32px 36px;
   background: var(--white);
   border: 1px solid var(--gray-line);
   box-shadow: var(--shadow);
+}
+
+.study-sheet[hidden] {
+  display: none;
 }
 
 .important-note {
@@ -479,6 +578,11 @@ h3 {
   cursor: pointer;
 }
 
+.button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .button-start {
   min-width: 190px;
   color: var(--white);
@@ -487,9 +591,22 @@ h3 {
   font-size: 1.05rem;
 }
 
-.button-start:hover {
+.button-start:hover:not(:disabled) {
   background: var(--green-dark);
   border-color: var(--green-dark);
+}
+
+.button-abort {
+  min-width: 190px;
+  color: var(--white);
+  background: var(--red);
+  border-color: var(--red);
+  font-size: 1.05rem;
+}
+
+.button-abort:hover:not(:disabled) {
+  background: var(--red-dark);
+  border-color: var(--red-dark);
 }
 
 .button-secondary {
@@ -498,7 +615,7 @@ h3 {
   border-color: var(--navy);
 }
 
-.button-secondary:hover {
+.button-secondary:hover:not(:disabled) {
   color: var(--white);
   background: var(--navy);
 }
@@ -509,7 +626,7 @@ h3 {
   border-color: var(--red);
 }
 
-.button-danger:hover {
+.button-danger:hover:not(:disabled) {
   background: var(--red-dark);
   border-color: var(--red-dark);
 }
@@ -535,6 +652,41 @@ h3 {
 .dialog p {
   color: var(--black);
   line-height: 1.55;
+}
+
+.connection-summary {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  background: var(--gray-soft);
+  border-left: 5px solid var(--gold);
+}
+
+.connection-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 0.25rem 0.55rem;
+  color: var(--white);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.status-pill-good {
+  background: var(--green);
+}
+
+.status-pill-bad {
+  background: var(--red);
 }
 
 @media (max-width: 760px) {
@@ -581,6 +733,12 @@ h3 {
     font-size: 1.35rem;
   }
 
+  .status-card {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px;
+  }
+
   .study-sheet {
     padding: 24px 20px;
   }
@@ -620,7 +778,8 @@ h3 {
     padding: 0.65rem 0.85rem;
   }
 
-  .button-start {
+  .button-start,
+  .button-abort {
     min-width: 120px;
   }
 }

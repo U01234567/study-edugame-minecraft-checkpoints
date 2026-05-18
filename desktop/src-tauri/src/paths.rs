@@ -9,15 +9,12 @@ use tauri::{AppHandle, Manager};
 pub struct AppPaths {
     pub app_data_dir: PathBuf,
     pub runs_dir: PathBuf,
-    pub dev_mods_custom_dir: PathBuf,
-    pub dev_analysis_logs_dir: PathBuf,
     pub bundled_payload_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeStatus {
-    pub dev_source_available: bool,
     pub payload_available: bool,
     pub payload_path: Option<String>,
     pub launch_mode: String,
@@ -38,14 +35,6 @@ pub fn resolve_app_paths(app: &AppHandle) -> Result<AppPaths, String> {
         .ok_or("Could not resolve desktop directory.")?
         .to_path_buf();
 
-    let repo_root_dir = desktop_dir
-        .parent()
-        .ok_or("Could not resolve repository root directory.")?
-        .to_path_buf();
-
-    let dev_mods_custom_dir = repo_root_dir.join("mods").join("custom");
-    let dev_analysis_logs_dir = repo_root_dir.join("analysis").join("logs");
-
     let bundled_payload_dir = payload_candidates(app, &desktop_dir)
         .into_iter()
         .find(|path| path.exists());
@@ -53,45 +42,28 @@ pub fn resolve_app_paths(app: &AppHandle) -> Result<AppPaths, String> {
     Ok(AppPaths {
         app_data_dir,
         runs_dir,
-        dev_mods_custom_dir,
-        dev_analysis_logs_dir,
         bundled_payload_dir,
     })
 }
 
-pub fn runtime_status(app: &AppHandle) -> Result<RuntimeStatus, String> {
-    let paths = resolve_app_paths(app)?;
-
-    let gradlew_bat = paths.dev_mods_custom_dir.join("gradlew.bat");
-    let gradlew = paths.dev_mods_custom_dir.join("gradlew");
-
-    let dev_source_available = paths.dev_mods_custom_dir.exists()
-        && (gradlew_bat.exists() || gradlew.exists());
+#[tauri::command]
+pub fn runtime_status(app: AppHandle) -> Result<RuntimeStatus, String> {
+    let paths = resolve_app_paths(&app)?;
 
     let payload_available = paths.bundled_payload_dir.is_some();
 
-    let launch_mode = if dev_source_available {
-        "gradle-source-dev".to_string()
-    } else if payload_available {
-        "prepared-payload-pending-direct-launch".to_string()
+    let launch_mode = if payload_available {
+        "packaged-release".to_string()
     } else {
         "not-ready".to_string()
     };
 
     let message = match launch_mode.as_str() {
-        "gradle-source-dev" => {
-            "Development source launch is available. Start will use the existing Gradle runClient path.".to_string()
-        }
-        "prepared-payload-pending-direct-launch" => {
-            "Prepared payload was found, but the exact no-Gradle Java launch command still needs verification.".to_string()
-        }
-        _ => {
-            "No launchable study source or prepared payload was found.".to_string()
-        }
+        "packaged-release" => "The packaged study payload is available.".to_string(),
+        _ => "This installation is incomplete. Please reinstall Minecraft Study.".to_string(),
     };
 
     Ok(RuntimeStatus {
-        dev_source_available,
         payload_available,
         payload_path: paths
             .bundled_payload_dir
@@ -138,6 +110,8 @@ fn target_name() -> &'static str {
         "win-x64"
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "mac-arm64"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "mac-x64"
     } else {
         "unsupported"
     }

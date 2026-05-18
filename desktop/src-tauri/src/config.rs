@@ -1,7 +1,8 @@
 use crate::paths;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 #[derive(Debug, Serialize)]
@@ -13,64 +14,125 @@ pub struct StudyConfig {
     redc_name: String,
     redc_email: String,
     help_url: String,
+    website_root: String,
+    upload_recipient_configured: bool,
     app_version: String,
 }
 
 #[tauri::command]
 pub fn get_study_config() -> StudyConfig {
     let env_values = read_desktop_env();
+    let root = website_root();
 
     StudyConfig {
         contact_name: env_value(
             &env_values,
             "STUDY_CONTACT_NAME",
-            "[add researcher name to desktop/.env]",
+            "[researcher name missing]",
         ),
         contact_email: env_value(
             &env_values,
             "STUDY_CONTACT_EMAIL",
-            "[add researcher email to desktop/.env]",
+            "[researcher email missing]",
         ),
         participant_pool_label: env_value(
             &env_values,
             "STUDY_PARTICIPANT_POOL_LABEL",
-            "[add participant pool label to desktop/.env]",
+            "[participant pool missing]",
         ),
         redc_name: env_value(
             &env_values,
             "STUDY_REDC_NAME",
-            "[add REDC name to desktop/.env]",
+            "[REDC name missing]",
         ),
         redc_email: env_value(
             &env_values,
             "STUDY_REDC_EMAIL",
-            "[add REDC email to desktop/.env]",
+            "[REDC email missing]",
         ),
         help_url: env_value(
             &env_values,
             "STUDY_HELP_URL",
-            "https://example.com/apps/minecraft-study/help/",
+            &format!("{root}apps/minecraft-study/help/"),
         ),
+        website_root: root,
+        upload_recipient_configured: upload_recipient().is_some(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 
 #[tauri::command]
 pub fn get_runtime_status(app: AppHandle) -> Result<paths::RuntimeStatus, String> {
-    paths::runtime_status(&app)
+    paths::runtime_status(app)
+}
+
+pub(crate) fn write_runtime_env_file(run_dir: &Path) -> Result<PathBuf, String> {
+    let template = qualtrics_template()?;
+    let path = run_dir.join("study-runtime.env");
+    let contents = format!("QUALTRICS_URL_TEMPLATE={}\n", template.trim());
+
+    fs::write(&path, contents)
+        .map_err(|error| format!("Could not write runtime study env file: {error}"))?;
+
+    Ok(path)
 }
 
 pub(crate) fn qualtrics_template() -> Result<String, String> {
-    let root_env = read_root_env();
-    let template = env_value(&root_env, "QUALTRICS_URL_TEMPLATE", "");
+    let mut env_values = read_root_env();
+
+    // The desktop environment file is read after the root environment file so release-specific values can override shared defaults.
+    for (key, value) in read_desktop_env() {
+        env_values.insert(key, value);
+    }
+
+    let template = env_value(&env_values, "QUALTRICS_URL_TEMPLATE", "");
 
     if template.is_empty() {
         return Err(String::from(
-            "QUALTRICS_URL_TEMPLATE is missing from the repository root .env file.",
+            "The questionnaire link is missing from this build.",
         ));
     }
 
     Ok(template)
+}
+
+pub(crate) fn upload_recipient() -> Option<String> {
+    let env_values = read_desktop_env();
+    let value = env_value(&env_values, "MINECRAFT_STUDY_UPLOAD_RECIPIENT", "");
+
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+pub(crate) fn website_root() -> String {
+    let env_values = read_desktop_env();
+    let value = env_value(
+        &env_values,
+        "MINECRAFT_STUDY_WEBSITE_ROOT",
+        "https://example.com/",
+    );
+
+    with_trailing_slash(value.trim())
+}
+
+pub(crate) fn website_url(path: &str) -> String {
+    let root = website_root();
+    let path = path.trim_start_matches('/');
+
+    format!("{root}{path}")
+}
+
+fn with_trailing_slash(value: &str) -> String {
+    let trimmed = value.trim();
+
+    if trimmed.ends_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}/")
+    }
 }
 
 fn env_value(values: &HashMap<String, String>, key: &str, fallback: &str) -> String {
@@ -84,8 +146,30 @@ fn env_value(values: &HashMap<String, String>, key: &str, fallback: &str) -> Str
         .get(key)
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .unwrap_or(fallback)
-        .to_string()
+        .map(str::to_string)
+        .or_else(|| compiled_env_value(key))
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn compiled_env_value(key: &str) -> Option<String> {
+    let value = match key {
+        "QUALTRICS_URL_TEMPLATE" => option_env!("QUALTRICS_URL_TEMPLATE"),
+        "STUDY_CONTACT_NAME" => option_env!("STUDY_CONTACT_NAME"),
+        "STUDY_CONTACT_EMAIL" => option_env!("STUDY_CONTACT_EMAIL"),
+        "STUDY_PARTICIPANT_POOL_LABEL" => option_env!("STUDY_PARTICIPANT_POOL_LABEL"),
+        "STUDY_REDC_NAME" => option_env!("STUDY_REDC_NAME"),
+        "STUDY_REDC_EMAIL" => option_env!("STUDY_REDC_EMAIL"),
+        "STUDY_HELP_URL" => option_env!("STUDY_HELP_URL"),
+        "MINECRAFT_STUDY_WEBSITE_ROOT" => option_env!("MINECRAFT_STUDY_WEBSITE_ROOT"),
+        "MINECRAFT_STUDY_UPLOAD_RECIPIENT" => option_env!("MINECRAFT_STUDY_UPLOAD_RECIPIENT"),
+        _ => None,
+    }?;
+
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
 }
 
 fn read_desktop_env() -> HashMap<String, String> {

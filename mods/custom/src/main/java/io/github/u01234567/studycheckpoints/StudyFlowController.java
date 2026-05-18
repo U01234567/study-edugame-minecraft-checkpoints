@@ -243,8 +243,7 @@ public final class StudyFlowController {
                 && nowMs() >= questionnaireFirstOpenedAtMs + QUESTIONNAIRE_CLOSE_DELAY_MS;
     }
 
-    // Testing helper: shorten the currently active timed study phase to the last N milliseconds.
-    // This is intended for local development only.
+    // Internal validation helper: shorten the currently active timed study phase to the last N milliseconds.
     public static boolean requestTestingSkipToLastRemainingMs(String playerName, long remainingMs) {
         if (!StudyConfig.canTypeCommands()) {
             return false;

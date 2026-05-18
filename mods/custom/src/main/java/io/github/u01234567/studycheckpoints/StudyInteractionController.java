@@ -41,7 +41,7 @@ import java.util.UUID;
  * Central place for participant interaction restrictions and managed study-creature state.
  * In the real study, the player is kept in a restrictive adventure-style state and made
  * invulnerable. In TESTING_PHASE, the player is switched to creative mode once on join
- * and most participant restrictions are relaxed for local development.
+ * and most participant restrictions are relaxed for internal validation builds.
  */
 public final class StudyInteractionController {
     private static final long MOVEMENT_SAMPLE_INTERVAL_MS = 1_000L;

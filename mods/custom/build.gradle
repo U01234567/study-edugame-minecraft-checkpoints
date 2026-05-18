@@ -16,6 +16,7 @@ def studyWorldSaveName = "experiment-world"
 def studyWorldTargetDir = file("run/saves/${studyWorldSaveName}")
 def externalLibsDir = file("../external/libs")
 def worldEditJar = file("${externalLibsDir}/${project.worldedit_jar_name}")
+def studyLaunchArgFile = file("build/study-launch/runClient-classpath.args")
 
 repositories {
 	// Add repositories to retrieve artifacts from in here.
@@ -82,6 +83,36 @@ tasks.register("copyStudyWorld", Copy) {
 
 	from(studyWorldSourceDir)
 	into(studyWorldTargetDir)
+}
+
+// Write the same classpath that Loom's dev run uses, without launching Minecraft.
+// The desktop packager consumes this generated file immediately after Gradle builds.
+tasks.register("writeStudyRunClientClasspathArgFile") {
+	group = "study"
+	description = "Writes the runClient classpath argfile used by the desktop payload packager."
+
+	dependsOn tasks.named("classes")
+	dependsOn tasks.matching { it.name == "configureLaunch" || it.name == "downloadAssets" }
+
+	doLast {
+		def runClientTask = tasks.named("runClient").get()
+
+		if (!runClientTask.metaClass.hasProperty(runClientTask, "classpath")) {
+			throw new GradleException("The Loom runClient task does not expose a classpath property.")
+		}
+
+		def classpathFiles = runClientTask.classpath.files.findAll { it.exists() }
+		if (classpathFiles.isEmpty()) {
+			throw new GradleException("The Loom runClient classpath is empty.")
+		}
+
+		studyLaunchArgFile.parentFile.mkdirs()
+		studyLaunchArgFile.text = "-classpath\n" +
+				classpathFiles.collect { it.absolutePath }.join(File.pathSeparator) +
+				"\n"
+
+		logger.lifecycle("Wrote study runClient classpath argfile: ${studyLaunchArgFile}")
+	}
 }
 
 // Thirdly, make sure every 'runClient' starts from a newly copied study world

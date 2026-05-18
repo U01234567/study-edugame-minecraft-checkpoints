@@ -12,6 +12,43 @@ Do not commit local participant data, study logs, survey exports, retention scor
 
 ## Current commands
 
+
+### Decrypt encrypted Minecraft Study logs
+
+Run this from the `analysis` folder:
+
+```bash
+python main.py decrypt_logs
+```
+
+This reads the newest `.age` file from:
+
+```text
+./logs/
+```
+
+It decrypts it with your local age private key, writes the decrypted zip into `./logs/`, extracts files into `./logs/`, and does not overwrite existing files.
+
+The default private key path is:
+
+```text
+~/.minecraft-study/minecraft-study-logs-age-key.txt
+```
+
+You can override it:
+
+```bash
+python main.py decrypt_logs identity=C:/Users/YOU/.minecraft-study/minecraft-study-logs-age-key.txt
+```
+
+### Follow-up email helper
+
+Run this from the `analysis` folder:
+
+```bash
+python main.py followup_email
+```
+
 ### Summarise the last session
 
 Run this from the `analysis` folder:

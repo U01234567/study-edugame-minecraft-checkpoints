@@ -29,27 +29,27 @@ pub fn get_study_config() -> StudyConfig {
         contact_name: env_value(
             &env_values,
             "STUDY_CONTACT_NAME",
-            "[add researcher name to desktop/.env]",
+            "[researcher name missing]",
         ),
         contact_email: env_value(
             &env_values,
             "STUDY_CONTACT_EMAIL",
-            "[add researcher email to desktop/.env]",
+            "[researcher email missing]",
         ),
         participant_pool_label: env_value(
             &env_values,
             "STUDY_PARTICIPANT_POOL_LABEL",
-            "[add participant pool label to desktop/.env]",
+            "[participant pool missing]",
         ),
         redc_name: env_value(
             &env_values,
             "STUDY_REDC_NAME",
-            "[add REDC name to desktop/.env]",
+            "[REDC name missing]",
         ),
         redc_email: env_value(
             &env_values,
             "STUDY_REDC_EMAIL",
-            "[add REDC email to desktop/.env]",
+            "[REDC email missing]",
         ),
     }
 }
@@ -64,7 +64,7 @@ pub fn prepare_study_run() -> Result<StudyRunPreview, String> {
         minecraft_available: false,
         questionnaire_template: remote_template,
         message: String::from(
-            "Desktop backend is connected. Minecraft launch/upload is not connected yet.",
+            "Desktop backend is connected. The study is being prepared.",
         ),
     })
 }
@@ -116,7 +116,7 @@ fn qualtrics_template() -> Result<String, String> {
 
     if template.is_empty() {
         return Err(String::from(
-            "QUALTRICS_URL_TEMPLATE is missing from the repository root .env file.",
+            "The questionnaire link is missing from this build.",
         ));
     }
 

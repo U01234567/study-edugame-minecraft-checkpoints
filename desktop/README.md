@@ -94,45 +94,60 @@ npm install
 
 Run `npm install` again after editing `package.json` so that `package-lock.json` stays in sync.
 
-### 3. Prepare the runtime payload
+### 3. Prepare the standalone runtime payload
 
-The payload scripts are Node scripts so they can run on both Windows and macOS.
+The release payload is assembled at build time from the repository source. The script runs the Gradle/Fabric build in `mods/custom/`, copies the prepared Minecraft runtime folder, copies the study world and external runtime jars, creates a portable Java launch argfile, and copies a participant Java runtime into the packaged payload.
 
-For Windows x64:
+Participant installs should not require Java, Python, Rust, Node.js, Gradle, the source repository, or Minecraft modding tools. The MCID and condition assignment are still created at runtime for each participant run.
+
+Target-specific participant Java runtime variables:
+
+```bash
+JAVA_RUNTIME_WIN_X64=...
+JAVA_RUNTIME_MAC_ARM64=...
+JAVA_RUNTIME_MAC_X64=...
+```
+
+`BUILD_JAVA_HOME` may be set separately when the JDK used to build the Fabric mod differs from the participant Java runtime that will be bundled. If omitted, the script falls back to `JAVA_HOME`.
+
+For Windows x64, run on Windows:
 
 ```powershell
 npm run payload:clean
 npm run payload:prepare:win
 ```
 
-For macOS Apple Silicon, run this on the Mac:
+For macOS Apple Silicon, run on a Mac:
 
 ```bash
 npm run payload:clean
-npm run payload:prepare:mac
+npm run payload:prepare:mac-arm64
 ```
 
-If `JAVA_HOME` is not set, pass the Java runtime explicitly:
+For macOS Intel, run on a Mac:
 
 ```bash
-npm run payload:prepare:mac -- --jre "/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home"
+npm run payload:clean
+npm run payload:prepare:mac-x64
 ```
 
-### 4. Run the Tauri development app
+You can also pass the participant runtime directly:
+
+```bash
+npm run payload:prepare:mac-arm64 -- --jre "/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home"
+```
+
+### 4. Run the Tauri app locally
+
+Local runs use the same packaged payload path as release builds. Prepare the payload first, then run the app.
 
 From `desktop/`:
-
-```powershell
-npm run dev
-```
-
-To clean, prepare the Windows payload, and start the development app in one step:
 
 ```powershell
 npm run app:dev:win
 ```
 
-On macOS Apple Silicon:
+or on macOS Apple Silicon:
 
 ```bash
 npm run app:dev:mac
@@ -140,19 +155,27 @@ npm run app:dev:mac
 
 ### 5. Build an installer/package
 
-For Windows x64:
+For Windows x64, run on Windows:
 
 ```powershell
 npm run app:build:win
 ```
 
-For macOS Apple Silicon, run this on the Mac:
+For macOS Apple Silicon, run on macOS:
 
 ```bash
-npm run app:build:mac
+rustup target add aarch64-apple-darwin
+npm run app:build:mac-arm64
 ```
 
-Generated installers/packages should not be committed.
+For macOS Intel, run on macOS:
+
+```bash
+rustup target add x86_64-apple-darwin
+npm run app:build:mac-x64
+```
+
+macOS packages are generated on a Mac. One properly configured Mac can build both Mac targets, but both outputs should still be tested on matching clean target machines before study deployment. Generated installers/packages should not be committed.
 
 ### 6. Inspect the Tauri environment
 
