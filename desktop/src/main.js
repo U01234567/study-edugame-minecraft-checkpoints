@@ -2,13 +2,16 @@ const PUBLIC_LOGO_PATH = "/assets/uni-logo.png";
 const PUBLIC_CONTROLS_IMAGE_PATH = "/assets/print_controls.png";
 
 const START_HINT_MESSAGE =
-  "Game is loading and will open automatically in fullscreen in about 15 seconds.";
+  "Game is loading and will open automatically in fullscreen in about 20 seconds.";
 const SERVER_OFFLINE_MESSAGE =
   "Not connected to the study server. Make sure you have a network connection on your device.";
 const LOG_RETRY_MESSAGE =
   "Close this app, check your network connection, and reopen the app. The app will try again to share the logs.";
 const START_FAILED_MESSAGE =
   "Could not start the study. Please close and reopen this app, then try again. If it still fails, reinstall the app.";
+const INTRO_DECLINED_TITLE = "It looks like you do not want to participate.";
+const INTRO_DECLINED_MESSAGE =
+  "If that is the case, feel free to uninstall the app. If you merely tried to close the game, you can press Start! again whenever you have time.";
 const TECHNICAL_ERROR_PATTERNS = [
   /https?:\/\//i,
   /could not reach server/i,
@@ -590,6 +593,14 @@ async function initialiseBackendEvents() {
       showCompletionScreen();
       setStartButtonState("locked");
       isStudyLocked = true;
+    } else if (phase === "intro_declined") {
+      setTodoPending("game");
+      setStatus(
+        INTRO_DECLINED_TITLE,
+        sanitizeUserFacingMessage(message, INTRO_DECLINED_MESSAGE),
+        "warning"
+      );
+      setStartButtonState("ready");
     } else if (phase === "game_failed") {
       setStatus(
         "Minecraft closed with an issue.",
@@ -691,6 +702,14 @@ function initialiseStartButton() {
         showAllDoneButLogsNotShared(result.message);
         isStudyLocked = true;
         setStartButtonState("locked");
+      } else if (result.status === "intro_declined") {
+        setTodoPending("game");
+        setStatus(
+          INTRO_DECLINED_TITLE,
+          sanitizeUserFacingMessage(result.message, INTRO_DECLINED_MESSAGE),
+          "warning"
+        );
+        setStartButtonState("ready");
       } else if (result.status === "aborted") {
         if (!isTodoComplete("questionnaire")) {
           setTodoPending("game");

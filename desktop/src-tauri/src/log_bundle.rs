@@ -16,6 +16,7 @@ pub struct StudyLogMetadata {
     pub mcid: Option<String>,
     pub creatures_seen: Option<String>,
     pub questionnaire_button_pressed: bool,
+    pub intro_declined: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -171,6 +172,7 @@ fn copy_newest_study_log(
         mcid: source_log.mcid,
         creatures_seen: source_log.creatures_seen,
         questionnaire_button_pressed: source_log.questionnaire_button_pressed,
+        intro_declined: source_log.intro_declined,
     }))
 }
 
@@ -197,6 +199,7 @@ pub fn find_newest_study_log(
         mcid: mcid_from_study_log(&path, &contents),
         creatures_seen: creatures_seen_from_questionnaire_url(&contents),
         questionnaire_button_pressed: contents.contains("questionnaire_button_pressed"),
+        intro_declined: contents.contains("reason=intro_declined"),
         path,
     }))
 }

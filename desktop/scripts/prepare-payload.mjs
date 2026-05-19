@@ -128,6 +128,7 @@ const manifest = {
     javaDirectory: "runtime/jre",
     javaExecutable: copiedJavaLayout.relativeJavaExecutable,
     javaLayout: copiedJavaLayout.layout,
+    pruneSummary: copiedJavaLayout.pruneSummary,
   },
   launch: {
     directJavaLaunchReady: true,
@@ -135,6 +136,7 @@ const manifest = {
     argFile: portableLaunch.relativeArgFile,
     launchConfig: portableLaunch.relativeLaunchConfig,
     dependencyCount: portableLaunch.dependencyCount,
+    assets: portableLaunch.assets,
     note: "Release payload uses bundled Java and a complete portable Fabric dev-launch command. No Gradle/source tree is used at runtime.",
   },
 };
@@ -337,6 +339,7 @@ async function createPortableLaunchFiles(buildSource, launchDir, depsDir) {
   validateJavaArgTokens(javaArgTokens, sourceArgFile);
 
   const portableTokens = [
+    "-Xshare:off",
     `-Dfabric.dli.config=${portableLaunchCfg.relativeFromRun}`,
     "-Dfabric.dli.env=client",
     `-Dfabric.dli.main=${knotClientMainClass}`,
@@ -364,6 +367,7 @@ async function createPortableLaunchFiles(buildSource, launchDir, depsDir) {
     relativeArgFile: "game/launch/runClient-portable.args",
     relativeLaunchConfig: "game/launch/loom-cache/launch.cfg",
     dependencyCount: copiedPaths.size,
+    assets: portableLaunchCfg.assets,
   };
 }
 
@@ -382,6 +386,8 @@ async function createPortableLaunchConfig(sourceLaunchCfg, sourceLog4j, launchDi
   let section = null;
   let previousClientArg = null;
   let sawAssetsDir = false;
+  let assetsSource = null;
+  let assetIndexName = null;
 
   for (const line of lines) {
     if (line.trim() === "") {
@@ -422,12 +428,34 @@ async function createPortableLaunchConfig(sourceLaunchCfg, sourceLog4j, launchDi
     }
 
     if (section === "clientArgs") {
-      if (previousClientArg === "--assetsDir") {
-        const assetsSource = path.resolve(value);
+      const inlineAssetIndex = value.match(/^--assetIndex=(.+)$/);
+      if (inlineAssetIndex) {
+        assetIndexName = normaliseAssetIndexName(inlineAssetIndex[1]);
+        rewritten.push(`${indent}${value}`);
+        previousClientArg = null;
+        continue;
+      }
+
+      const inlineAssetsDir = value.match(/^--assetsDir=(.+)$/);
+      if (inlineAssetsDir) {
+        assetsSource = path.resolve(inlineAssetsDir[1]);
         await assertExists(assetsSource, "Fabric Loom downloaded assets folder");
-        await rm(portableAssetsDir, { recursive: true, force: true });
-        await mkdir(path.dirname(portableAssetsDir), { recursive: true });
-        await cp(assetsSource, portableAssetsDir, { recursive: true });
+        rewritten.push(`${indent}--assetsDir=../launch/assets`);
+        sawAssetsDir = true;
+        previousClientArg = null;
+        continue;
+      }
+
+      if (previousClientArg === "--assetIndex") {
+        assetIndexName = normaliseAssetIndexName(value);
+        rewritten.push(`${indent}${value}`);
+        previousClientArg = null;
+        continue;
+      }
+
+      if (previousClientArg === "--assetsDir") {
+        assetsSource = path.resolve(value);
+        await assertExists(assetsSource, "Fabric Loom downloaded assets folder");
         rewritten.push(`${indent}../launch/assets`);
         sawAssetsDir = true;
         previousClientArg = null;
@@ -442,15 +470,22 @@ async function createPortableLaunchConfig(sourceLaunchCfg, sourceLog4j, launchDi
     rewritten.push(`${indent}${await rewritePathishValue(value, depsDir, copiedPaths)}`);
   }
 
-  if (!sawAssetsDir) {
+  if (!sawAssetsDir || !assetsSource) {
     fail(`Fabric Loom launch config did not contain a client --assetsDir entry: ${sourceLaunchCfg}`);
   }
+
+  if (!assetIndexName) {
+    fail(`Fabric Loom launch config did not contain a client --assetIndex entry: ${sourceLaunchCfg}`);
+  }
+
+  const assets = await copyPrunedAssets(assetsSource, portableAssetsDir, assetIndexName);
 
   const portableLaunchCfg = path.join(portableLoomCacheDir, "launch.cfg");
   await writeFile(portableLaunchCfg, `${rewritten.join("\n").trimEnd()}\n`, "utf8");
 
   return {
     relativeFromRun: "../launch/loom-cache/launch.cfg",
+    assets,
   };
 }
 
@@ -658,6 +693,336 @@ function quoteArgFileToken(token) {
   return `"${token.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
+function normaliseAssetIndexName(value) {
+  const trimmed = String(value || "").trim().replace(/^['"]|['"]$/g, "");
+  return trimmed.endsWith(".json") ? trimmed.slice(0, -5) : trimmed;
+}
+
+async function copyPrunedAssets(assetsSource, destination, assetIndexName) {
+  const sourceIndexPath = path.join(assetsSource, "indexes", `${assetIndexName}.json`);
+  await assertExists(sourceIndexPath, `Minecraft asset index ${assetIndexName}`);
+
+  const sourceIndex = await readJsonFile(sourceIndexPath, `Minecraft asset index ${assetIndexName}`);
+
+  if (!sourceIndex || typeof sourceIndex !== "object" || !sourceIndex.objects || typeof sourceIndex.objects !== "object") {
+    fail(`Minecraft asset index has no objects map: ${sourceIndexPath}`);
+  }
+
+  const keptObjects = {};
+  const sourceObjects = Object.entries(sourceIndex.objects);
+  let keptBytes = 0;
+  let skippedBytes = 0;
+  let skippedAudioCount = 0;
+  let skippedLanguageCount = 0;
+  let copiedObjectCount = 0;
+  const copiedHashes = new Set();
+
+  await rm(destination, { recursive: true, force: true });
+  await mkdir(path.join(destination, "indexes"), { recursive: true });
+  await mkdir(path.join(destination, "objects"), { recursive: true });
+
+  for (const [logicalName, objectInfo] of sourceObjects) {
+    if (!objectInfo || typeof objectInfo.hash !== "string") {
+      fail(`Asset index entry is missing a hash for ${logicalName}`);
+    }
+
+    const size = Number(objectInfo.size || 0);
+
+    if (!shouldKeepAsset(logicalName)) {
+      skippedBytes += size;
+      if (isAudioAsset(logicalName)) {
+        skippedAudioCount += 1;
+      } else if (isNonEnglishLanguageAsset(logicalName)) {
+        skippedLanguageCount += 1;
+      }
+      continue;
+    }
+
+    keptObjects[logicalName] = objectInfo;
+    keptBytes += size;
+
+    if (!copiedHashes.has(objectInfo.hash)) {
+      await copyAssetObject(assetsSource, destination, objectInfo.hash, logicalName);
+      copiedHashes.add(objectInfo.hash);
+      copiedObjectCount += 1;
+    }
+  }
+
+  const trimmedIndex = {
+    ...sourceIndex,
+    objects: keptObjects,
+  };
+
+  const destinationIndexPath = path.join(destination, "indexes", `${assetIndexName}.json`);
+  await writeFile(destinationIndexPath, `${JSON.stringify(trimmedIndex, null, 2)}\n`, "utf8");
+
+  const summary = {
+    assetIndex: assetIndexName,
+    sourceObjectCount: sourceObjects.length,
+    keptObjectCount: Object.keys(keptObjects).length,
+    copiedObjectCount,
+    skippedObjectCount: sourceObjects.length - Object.keys(keptObjects).length,
+    keptBytes,
+    skippedBytes,
+    skippedAudioCount,
+    skippedLanguageCount,
+    policy: "keeps indexed non-audio assets and English/default language assets only",
+  };
+
+  console.log("Pruned Minecraft assets:");
+  console.log(`  asset index: ${assetIndexName}`);
+  console.log(`  kept: ${summary.keptObjectCount} indexed entries (${formatBytes(keptBytes)})`);
+  console.log(`  skipped: ${summary.skippedObjectCount} indexed entries (${formatBytes(skippedBytes)})`);
+  console.log(`  skipped audio/music entries: ${skippedAudioCount}`);
+  console.log(`  skipped non-English language entries: ${skippedLanguageCount}`);
+
+  return summary;
+}
+
+function shouldKeepAsset(logicalName) {
+  if (isAudioAsset(logicalName)) {
+    return false;
+  }
+
+  if (isNonEnglishLanguageAsset(logicalName)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isAudioAsset(logicalName) {
+  return logicalName === "minecraft/sounds.json" || logicalName.startsWith("minecraft/sounds/");
+}
+
+function isNonEnglishLanguageAsset(logicalName) {
+  if (logicalName.startsWith("minecraft/lang/")) {
+    return logicalName !== "minecraft/lang/en_us.json";
+  }
+
+  if (logicalName.startsWith("realms/lang/")) {
+    return logicalName !== "realms/lang/en_us.json";
+  }
+
+  return false;
+}
+
+async function copyAssetObject(assetsSource, destination, hash, logicalName) {
+  const objectShard = hash.slice(0, 2);
+  const sourceObject = path.join(assetsSource, "objects", objectShard, hash);
+  const destinationObject = path.join(destination, "objects", objectShard, hash);
+
+  await assertExists(sourceObject, `Minecraft asset object for ${logicalName}`);
+  await mkdir(path.dirname(destinationObject), { recursive: true });
+  await cp(sourceObject, destinationObject);
+}
+
+async function readJsonFile(filePath, label) {
+  const raw = await readFile(filePath, "utf8");
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`Could not parse ${label}: ${error.message}`);
+  }
+}
+
+function formatBytes(bytes) {
+  const mib = bytes / 1024 / 1024;
+  return `${mib.toFixed(2)} MiB`;
+}
+
+async function copyJavaRuntimePruned(source, destination) {
+  const summary = {
+    copiedFileCount: 0,
+    skippedFileCount: 0,
+    copiedBytes: 0,
+    skippedBytes: 0,
+  };
+
+  await copyDirectoryFiltered(source, destination, "", shouldCopyJavaRuntimeEntry, summary);
+
+  console.log("Pruned Java runtime copy:");
+  console.log(`  copied: ${summary.copiedFileCount} files (${formatBytes(summary.copiedBytes)})`);
+  console.log(`  skipped: ${summary.skippedFileCount} files (${formatBytes(summary.skippedBytes)})`);
+
+  return summary;
+}
+
+async function copyDirectoryFiltered(source, destination, relativeDir, shouldCopy, summary) {
+  await mkdir(destination, { recursive: true });
+
+  const entries = await readdir(source, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    const sourcePath = path.join(source, entry.name);
+    const destinationPath = path.join(destination, entry.name);
+
+    if (!shouldCopy(relativePath, entry)) {
+      await addSkippedEntryToSummary(sourcePath, entry, summary);
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      await copyDirectoryFiltered(sourcePath, destinationPath, relativePath, shouldCopy, summary);
+    } else if (entry.isFile()) {
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      await cp(sourcePath, destinationPath);
+      const stat = await fs.promises.stat(sourcePath);
+      summary.copiedFileCount += 1;
+      summary.copiedBytes += stat.size;
+    } else if (entry.isSymbolicLink()) {
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      await cp(sourcePath, destinationPath, { dereference: false });
+      summary.copiedFileCount += 1;
+    }
+  }
+}
+
+async function addSkippedEntryToSummary(sourcePath, entry, summary) {
+  if (entry.isFile()) {
+    const stat = await fs.promises.stat(sourcePath);
+    summary.skippedFileCount += 1;
+    summary.skippedBytes += stat.size;
+    return;
+  }
+
+  if (!entry.isDirectory()) {
+    summary.skippedFileCount += 1;
+    return;
+  }
+
+  const entries = await readdir(sourcePath, { withFileTypes: true });
+  for (const child of entries) {
+    await addSkippedEntryToSummary(path.join(sourcePath, child.name), child, summary);
+  }
+}
+
+function shouldCopyJavaRuntimeEntry(relativePath, entry) {
+  const normalized = relativePath.replaceAll("\\", "/").toLowerCase();
+  const basename = path.posix.basename(normalized);
+
+  if (isPrunedJavaRuntimeDirectory(normalized, entry)) {
+    return false;
+  }
+
+  if (basename === "src.zip" || /^classes.*\.jsa$/.test(basename)) {
+    return false;
+  }
+
+  if (basename.endsWith(".pdb") || basename.endsWith(".map") || basename.endsWith(".diz")) {
+    return false;
+  }
+
+  if (normalized.startsWith("bin/") || normalized.includes("/bin/")) {
+    return shouldKeepJavaBinEntry(basename, entry);
+  }
+
+  return true;
+}
+
+function isPrunedJavaRuntimeDirectory(normalized, entry) {
+  if (!entry.isDirectory()) {
+    return false;
+  }
+
+  const prunedDirectoryNames = new Set([
+    "demo",
+    "demos",
+    "include",
+    "jmods",
+    "man",
+    "sample",
+    "samples",
+  ]);
+
+  return normalized
+    .split("/")
+    .some((part) => prunedDirectoryNames.has(part));
+}
+
+function shouldKeepJavaBinEntry(basename, entry) {
+  if (!entry.isFile()) {
+    return true;
+  }
+
+  if (basename.endsWith(".dll") || basename.endsWith(".dylib") || basename.endsWith(".so")) {
+    return true;
+  }
+
+  const alwaysKeep = new Set([
+    "java",
+    "java.exe",
+    "javaw",
+    "javaw.exe",
+    "jspawnhelper",
+  ]);
+
+  if (alwaysKeep.has(basename)) {
+    return true;
+  }
+
+  const developmentTools = new Set([
+    "jar",
+    "jar.exe",
+    "jarsigner",
+    "jarsigner.exe",
+    "javac",
+    "javac.exe",
+    "javadoc",
+    "javadoc.exe",
+    "javap",
+    "javap.exe",
+    "jcmd",
+    "jcmd.exe",
+    "jconsole",
+    "jconsole.exe",
+    "jdb",
+    "jdb.exe",
+    "jdeprscan",
+    "jdeprscan.exe",
+    "jdeps",
+    "jdeps.exe",
+    "jfr",
+    "jfr.exe",
+    "jhsdb",
+    "jhsdb.exe",
+    "jimage",
+    "jimage.exe",
+    "jinfo",
+    "jinfo.exe",
+    "jlink",
+    "jlink.exe",
+    "jmap",
+    "jmap.exe",
+    "jmod",
+    "jmod.exe",
+    "jpackage",
+    "jpackage.exe",
+    "jps",
+    "jps.exe",
+    "jrunscript",
+    "jrunscript.exe",
+    "jshell",
+    "jshell.exe",
+    "jstack",
+    "jstack.exe",
+    "jstat",
+    "jstat.exe",
+    "jstatd",
+    "jstatd.exe",
+    "keytool",
+    "keytool.exe",
+    "rmiregistry",
+    "rmiregistry.exe",
+    "serialver",
+    "serialver.exe",
+  ]);
+
+  return !developmentTools.has(basename);
+}
+
 async function copyJavaRuntime(source, destination) {
   const normalizedSource = path.resolve(source);
 
@@ -683,7 +1048,8 @@ async function copyJavaRuntime(source, destination) {
 
   await rm(destination, { recursive: true, force: true });
   await mkdir(path.dirname(destination), { recursive: true });
-  await cp(normalizedSource, destination, { recursive: true });
+
+  const pruneSummary = await copyJavaRuntimePruned(normalizedSource, destination);
 
   if (rootBinJava) {
     const javaBinaryName = target.startsWith("win-") ? "java.exe" : "java";
@@ -692,6 +1058,7 @@ async function copyJavaRuntime(source, destination) {
     return {
       layout: "java-home",
       relativeJavaExecutable: relative,
+      pruneSummary,
     };
   }
 
@@ -699,6 +1066,7 @@ async function copyJavaRuntime(source, destination) {
   return {
     layout: "macos-jdk-bundle",
     relativeJavaExecutable: "runtime/jre/Contents/Home/bin/java",
+    pruneSummary,
   };
 }
 
