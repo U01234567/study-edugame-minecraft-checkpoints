@@ -19,6 +19,119 @@ function mean(values){ return values.length ? values.reduce((total,value)=>total
 function formatDuration(seconds){ if(!Number.isFinite(seconds)) return ''; const rounded=Math.round(seconds); const hours=Math.floor(rounded/3600); const minutes=Math.floor((rounded%3600)/60); const remainingSeconds=rounded%60; if(hours) return `${hours}h ${minutes}m ${remainingSeconds}s`; if(minutes) return `${minutes}m ${remainingSeconds}s`; return `${remainingSeconds}s`; }
 function renderLegend(){ document.getElementById('condition-legend').innerHTML=Object.entries(REPORT.condition_colours).map(([label,colour])=>`<span class="legend-item"><span class="swatch" style="background:${escapeHtml(colour)}"></span>${escapeHtml(label)}</span>`).join(''); }
 
+function detailsBlock(title, innerHtml, open=false){
+  return `<details class="summary-details"${open ? ' open' : ''}><summary>${escapeHtml(title)}</summary><div class="details-body">${innerHtml}</div></details>`;
+}
+
+function statsRowsByModel(rows, text){
+  return (rows || []).filter(row => String(row.model || '').includes(text));
+}
+
+function statsRowsByHypothesis(rows, hypothesis){
+  return (rows || []).filter(row => String(row.hypothesis || '') === hypothesis);
+}
+
+function renderStatsResultTable(rows){
+  return table([
+    {key:'hypothesis', label:'Hypothesis'},
+    {key:'model', label:'Model'},
+    {key:'outcome', label:'Outcome'},
+    {key:'n', label:'n', num:true},
+    {key:'term', label:'Term'},
+    {key:'b_display', label:'b', num:true},
+    {key:'se_hc3_display', label:'HC3 SE', num:true},
+    {key:'ci_95', label:'95% CI'},
+    {key:'planned_contrast_estimate_display', label:'Planned contrast', num:true},
+    {key:'planned_contrast_ci_95', label:'Contrast 95% CI'},
+    {key:'p_display', label:'p'},
+    {key:'p_holm_display', label:'Holm p'},
+    {key:'std_beta_display', label:'std. beta', num:true},
+    {key:'partial_r2_display', label:'partial r²', num:true},
+    {key:'note', label:'Interpretation note'}
+  ], rows || [], {className:'stats-table'});
+}
+
+function renderModelAudit(models){
+  return table([
+    {key:'model', label:'Model'},
+    {key:'formula', label:'Formula'},
+    {key:'n', label:'n', num:true},
+    {key:'df_residual', label:'df residual', num:true},
+    {key:'r2', label:'R²', num:true},
+    {key:'status', label:'Status'},
+    {key:'omitted_covariates', label:'Omitted covariates'}
+  ], models || [], {className:'stats-model-table'});
+}
+
+function renderIndirectTable(result){
+  if (!result) return '<p class="small">No model result.</p>';
+  const note = `<p class="small">Status: ${escapeHtml(result.status || 'OK')} · complete-case n = ${escapeHtml(result.n ?? '0')}</p>`;
+  return note + table([
+    {key:'contrast', label:'Contrast'},
+    {key:'mediator', label:'Mediator'},
+    {key:'effect', label:'Indirect effect', num:true},
+    {key:'boot_se', label:'Boot SE', num:true},
+    {key:'boot_ci_95', label:'Bootstrap 95% CI'},
+    {key:'bootstrap_samples', label:'Bootstrap samples', num:true},
+    {key:'focal', label:'Focal'}
+  ], result.indirect_rows || [], {className:'stats-table'});
+}
+
+function renderDirectMediationTable(result){
+  if (!result) return '';
+  return table([
+    {key:'contrast', label:'Contrast'},
+    {key:'direct_b', label:'Direct b', num:true}
+  ], result.direct_rows || [], {className:'stats-table'});
+}
+
+function flattenSerialRows(results){
+  return (results || []).flatMap(result => (result.rows || []).map(row => ({...row, n: result.n, status: result.status || 'OK'})));
+}
+
+function renderSerialTable(results){
+  return table([
+    {key:'contrast', label:'Contrast'},
+    {key:'path', label:'Path'},
+    {key:'n', label:'n', num:true},
+    {key:'effect', label:'Serial indirect effect', num:true},
+    {key:'boot_se', label:'Boot SE', num:true},
+    {key:'boot_ci_95', label:'Bootstrap 95% CI'},
+    {key:'bootstrap_samples', label:'Bootstrap samples', num:true},
+    {key:'status', label:'Status'}
+  ], flattenSerialRows(results), {className:'stats-table'});
+}
+
+function renderFactorAnalyses(prefix){
+  const rows = (REPORT.statistics.factor_analyses || []).filter(row => String(row.title || '').startsWith(prefix));
+  const summary = table([
+    {key:'title', label:'Scale check'},
+    {key:'n_complete', label:'complete n', num:true},
+    {key:'items', label:'items', num:true},
+    {key:'alpha', label:'Cronbach α', num:true},
+    {key:'first_eigenvalue', label:'first eigenvalue', num:true},
+    {key:'first_factor_variance_percent', label:'first-factor %', num:true},
+    {key:'loading_range', label:'loading range'},
+    {key:'status', label:'Status'}
+  ], rows, {className:'stats-table'});
+  const loadingDetails = rows.map(row => detailsBlock(
+    `${row.title}: item loadings`,
+    table([{key:'item', label:'Item'}, {key:'loading', label:'Loading', num:true}], row.loadings || [], {className:'stats-table'})
+  )).join('');
+  return detailsBlock(`${prefix} factor-analysis / scale checks`, summary + loadingDetails);
+}
+
+function renderPowerRows(power){
+  const rows = REPORT.condition_order.map(condition => ({
+    condition,
+    planned: power.planned_per_condition,
+    current: (power.current_by_condition || {})[condition] || 0,
+    delayed: (power.current_delayed_by_condition || {})[condition] || 0
+  }));
+  rows.push({condition:'Total', planned:power.planned_total, current:power.current_total, delayed:power.current_delayed_total});
+  return rows;
+}
+
 function openFigureModal(figure){
   const modal = document.getElementById('figure-modal');
   const content = document.getElementById('figure-modal-content');
@@ -251,7 +364,7 @@ function renderBoxplot(containerId, metricKeys, options = {}) {
       ${xLabels}
     </svg>`;
 }
-function renderMain(){ const audit=REPORT.audit; const participantHeaders=[{key:'participant_id',label:'MCID'},{key:'included',label:'Included'},{key:'condition',label:'Condition'},{key:'age',label:'Age',num:true},{key:'gender',label:'Gender'},{key:'started',label:'Started'},{key:'finished',label:'Finished'},{key:'experiment_duration',label:'Experiment duration'},{key:'completed_delayed_retention_tick',label:'Completed delayed retention'},{key:'delayed_duration',label:'Delayed duration'},{key:'logs_creature_score_label',label:'Score'}]; const conditionHeaders=[{key:'condition',label:'Condition'},{key:'n',label:'n',num:true},{key:'completed_delayed_retention_count',label:'Completed delayed retention',num:true},{key:'age_mean_sd',label:'Age Mean (SD)'},{key:'experiment_duration_mean_sd',label:'Duration Mean (SD)'},{key:'experiment_duration_min',label:'Duration min'},{key:'experiment_duration_max',label:'Duration max'},{key:'creature_score_mean_sd',label:'Score Mean (SD)'},{key:'creature_score_min',label:'Score min',num:true,fixed:true},{key:'creature_score_max',label:'Score max',num:true,fixed:true},{key:'gender_Female',label:'Female',num:true},{key:'gender_Male',label:'Male',num:true},{key:'gender_Other',label:'Other',num:true},{key:'gender_Unknown / missing',label:'Gender missing',num:true}]; const auditHeaders=[{key:'participant_id',label:'MCID'},{key:'included',label:'Included'},{key:'survey_present',label:'Survey'},{key:'survey_start',label:'Survey start'},{key:'survey_duration',label:'Survey duration'},{key:'survey_progress',label:'Progress',num:true},{key:'age',label:'Age',num:true},{key:'gender',label:'Gender'},{key:'delayed_present',label:'Delayed row'},{key:'delayed_completed',label:'Delayed complete'},{key:'delayed_duration',label:'Delayed duration'},{key:'log_present',label:'Log'},{key:'log_start',label:'Log start'},{key:'log_consent_time',label:'Agree time'},{key:'log_duration',label:'Log duration'},{key:'condition',label:'Condition'},{key:'checkpoint_decisions',label:'Checkpoint decisions'},{key:'creature_score',label:'Score'},{key:'exclusion_reasons',label:'Exclusion reasons'}]; const sourceRows=Object.entries(REPORT.sources).map(([label,path])=>({label,path})); const questionRows=REPORT.study_questions.map(item=>({id:item.id,text:item.text})); const exclusionRows=REPORT.exclusion_summary.map(item=>({reason:item.reason,n:item.n,ids:item.ids.join(', ')})); const modelHtml=REPORT.conceptual_model_data_uri?`<img class="conceptual-model" src="${REPORT.conceptual_model_data_uri}" alt="Conceptual model">`:`<p class="small status-bad">Conceptual model image was not found at generation time, so it could not be embedded.</p>`; document.getElementById('tab-main').innerHTML=`<section class="card"><h2>Overview</h2><div class="metric-grid">${metric('Included participants',audit.included_count,'Unique MCIDs after exclusions')}${metric('Excluded participants',audit.excluded_count,'Unique MCIDs with any exclusion reason')}${metric('Immediate responses',audit.included_immediate_response_count,'Included non-delayed responses')}${metric('Delayed responses',audit.included_delayed_response_count,'Included completed delayed retention responses')}</div><p class="small">Survey/log ID match: ${statusText(audit.ids_in_survey_not_logs.length===0&&audit.ids_in_logs_not_survey.length===0,'OK','Mismatch found')}.</p></section><section class="card"><h2>Distributions</h2><div class="chart-grid"><div class="chart-box"><h3>Distribution of conditions</h3><div id="condition-distribution-chart"></div></div><div class="chart-box"><h3>Distribution of age</h3><div id="age-distribution-chart"></div></div><div class="chart-box"><h3>Distribution of gender</h3><div id="gender-distribution-chart"></div></div></div></section><section class="card"><h2>Condition summary</h2>${table(conditionHeaders,REPORT.summaries.condition)}</section><section class="card"><h2>Used files</h2>${table([{key:'label',label:'Input'},{key:'path',label:'Relative path'}],sourceRows)}</section><section class="card"><h2>Conceptual model</h2>${modelHtml}</section><section class="card"><h2>Research questions, hypotheses, and exploratory questions</h2>${table([{key:'id',label:'ID'},{key:'text',label:'Content'}],questionRows)}</section><section class="card"><h2>Participants included in the current merged table</h2><div id="participant-filter-table"></div></section><section class="card"><h2>Excluded participant summary</h2>${table([{key:'reason',label:'Reason'},{key:'n',label:'n',num:true},{key:'ids',label:'MCIDs'}],exclusionRows)}</section><section class="card"><h2>Own logs and merge audit</h2><div id="audit-filter-table"></div></section><section class="card"><h2>Additional ID checks</h2><p>Survey MCIDs not found in logs: ${formatValue(audit.ids_in_survey_not_logs.join(', '))}</p><p>Log MCIDs not found in survey: ${formatValue(audit.ids_in_logs_not_survey.join(', '))}</p><p>Duplicate immediate survey MCIDs: ${formatValue(audit.survey_duplicate_immediate_ids.join(', '))}</p><p>Duplicate delayed survey MCIDs: ${formatValue(audit.survey_duplicate_delayed_ids.join(', '))}</p><p>Delayed rows without immediate row: ${formatValue(audit.delayed_without_immediate_ids.join(', '))}</p><p>Survey rows without MCID: ${formatValue(audit.survey_missing_mcid_rows.join(', '))}</p></section>`; renderFilterableTable('participant-filter-table',participantHeaders,REPORT.participants,[{key:'condition',label:'Condition'},{key:'included',label:'Included'},{key:'gender',label:'Gender'}],{summaryRow:participantSummaryRow}); renderFilterableTable('audit-filter-table',auditHeaders,REPORT.audit_rows,[{key:'condition',label:'Condition'},{key:'included',label:'Included'},{key:'survey_present',label:'Survey'},{key:'log_present',label:'Log'}]); renderDistributionCharts(); }
+function renderMain(){ const audit=REPORT.audit; const participantHeaders=[{key:'participant_id',label:'MCID'},{key:'included',label:'Included'},{key:'condition',label:'Condition'},{key:'age',label:'Age',num:true},{key:'gender',label:'Gender'},{key:'started',label:'Started'},{key:'finished',label:'Finished'},{key:'experiment_duration',label:'Experiment duration'},{key:'completed_delayed_retention_tick',label:'Completed delayed retention'},{key:'delayed_duration',label:'Delayed duration'},{key:'logs_creature_score_label',label:'Score'}]; const conditionHeaders=[{key:'condition',label:'Condition'},{key:'n',label:'n',num:true},{key:'completed_delayed_retention_count',label:'Completed delayed retention',num:true},{key:'age_mean_sd',label:'Age Mean (SD)'},{key:'experiment_duration_mean_sd',label:'Duration Mean (SD)'},{key:'experiment_duration_min',label:'Duration min'},{key:'experiment_duration_max',label:'Duration max'},{key:'creature_score_mean_sd',label:'Score Mean (SD)'},{key:'creature_score_min',label:'Score min',num:true,fixed:true},{key:'creature_score_max',label:'Score max',num:true,fixed:true},{key:'gender_Female',label:'Female',num:true},{key:'gender_Male',label:'Male',num:true},{key:'gender_Other',label:'Other',num:true},{key:'gender_Unknown / missing',label:'Gender missing',num:true}]; const auditHeaders=[{key:'participant_id',label:'MCID'},{key:'included',label:'Included'},{key:'survey_present',label:'Survey'},{key:'survey_start',label:'Survey start'},{key:'survey_duration',label:'Survey duration'},{key:'survey_progress',label:'Progress',num:true},{key:'age',label:'Age',num:true},{key:'gender',label:'Gender'},{key:'delayed_present',label:'Delayed row'},{key:'delayed_completed',label:'Delayed complete'},{key:'delayed_duration',label:'Delayed duration'},{key:'log_present',label:'Log'},{key:'log_start',label:'Log start'},{key:'log_consent_time',label:'Agree time'},{key:'log_duration',label:'Log duration'},{key:'condition',label:'Condition'},{key:'checkpoint_decisions',label:'Checkpoint decisions'},{key:'creature_score',label:'Score'},{key:'exclusion_reasons',label:'Exclusion reasons'}]; const sourceRows=Object.entries(REPORT.sources).map(([label,path])=>({label,path})); const questionRows=REPORT.study_questions.map(item=>({id:item.id,text:item.text})); const exclusionRows=REPORT.exclusion_summary.map(item=>({reason:item.reason,n:item.n,ids:item.ids.join(', ')})); const modelHtml=REPORT.conceptual_model_data_uri?`<img class="conceptual-model" src="${REPORT.conceptual_model_data_uri}" alt="Conceptual model">`:`<p class="small status-bad">Conceptual model image was not found at generation time, so it could not be embedded.</p>`; document.getElementById('tab-main').innerHTML=`<section class="card"><h2>Overview</h2><div class="metric-grid">${metric('Included participants',audit.included_count,'Unique MCIDs after exclusions')}${metric('Excluded participants',audit.excluded_count,'Unique MCIDs with any exclusion reason')}${metric('Immediate responses',audit.included_immediate_response_count,'Included non-delayed responses')}${metric('Delayed responses',audit.included_delayed_response_count,'Included completed delayed retention responses')}</div><p class="small">Survey/log ID match: ${statusText(audit.ids_in_survey_not_logs.length===0&&audit.ids_in_logs_not_survey.length===0,'OK','Mismatch found')}.</p></section><section class="card"><h2>Distributions</h2><div class="chart-grid"><div class="chart-box"><h3>Distribution of conditions</h3><div id="condition-distribution-chart"></div></div><div class="chart-box"><h3>Distribution of age</h3><div id="age-distribution-chart"></div></div><div class="chart-box"><h3>Distribution of gender</h3><div id="gender-distribution-chart"></div></div></div></section><section class="card"><h2>Condition summary</h2>${table(conditionHeaders,REPORT.summaries.condition)}</section><section class="card"><h2>Used files</h2>${table([{key:'label',label:'Input'},{key:'path',label:'Relative path'}],sourceRows)}</section><section class="card"><h2>Conceptual model</h2>${modelHtml}</section><section class="card"><h2>Research questions, hypotheses, and exploratory questions</h2>${table([{key:'id',label:'ID'},{key:'text',label:'Content'}],questionRows)}</section><section class="card"><h2>Participants included in the current merged table</h2><div id="participant-filter-table"></div></section><section class="card"><h2>Excluded participant summary</h2>${table([{key:'reason',label:'Reason'},{key:'n',label:'n',num:true},{key:'ids',label:'MCIDs'}],exclusionRows)}</section><section class="card"><h2>Own logs and merge audit</h2><div id="audit-filter-table"></div></section><section class="card"><h2>Additional ID checks</h2><p>Survey MCIDs not found in logs: ${formatValue(audit.ids_in_survey_not_logs.join(', '))}</p><p>Log MCIDs not found in survey: ${formatValue(audit.ids_in_logs_not_survey.join(', '))}</p><p>Duplicate immediate survey MCIDs: ${formatValue(audit.survey_duplicate_immediate_ids.join(', '))}</p><p>Duplicate delayed survey MCIDs: ${formatValue(audit.survey_duplicate_delayed_ids.join(', '))}</p><p>Delayed rows without immediate row: ${formatValue(audit.delayed_without_immediate_ids.join(', '))}</p><p>Survey rows without MCID: ${formatValue(audit.survey_missing_mcid_rows.join(', '))}</p></section><section class="card"><h2>Lab collection slots</h2><p class="small">Only non-remote participants are included here. Participants with REMOTE = 1 are coded as At home, so lab and shared-slot counts are irrelevant for them.</p>${table([{key:'date',label:'Date'},{key:'time',label:'Time'},{key:'lab',label:'Lab'},{key:'n_participants',label:'n participants',num:true}],((REPORT.statistics||{}).lab_slot_summary||[]),{className:'stats-table'})}</section>`; renderFilterableTable('participant-filter-table',participantHeaders,REPORT.participants,[{key:'condition',label:'Condition'},{key:'included',label:'Included'},{key:'gender',label:'Gender'}],{summaryRow:participantSummaryRow}); renderFilterableTable('audit-filter-table',auditHeaders,REPORT.audit_rows,[{key:'condition',label:'Condition'},{key:'included',label:'Included'},{key:'survey_present',label:'Survey'},{key:'log_present',label:'Log'}]); renderDistributionCharts(); }
 function renderSummaryTab(tabId,title,description,headers,rows){ document.getElementById(tabId).innerHTML=`<section class="card"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(description)}</p>${table(headers,rows)}</section>`; }
 function initialiseScopedTabs(rootId,buttonClass,panelClass){ const root=document.getElementById(rootId); if(!root) return; root.querySelectorAll(`.${buttonClass}`).forEach(button=>{ button.addEventListener('click',()=>{ const group=button.dataset.group; root.querySelectorAll(`.${buttonClass}[data-group="${group}"]`).forEach(item=>item.classList.remove('active')); root.querySelectorAll(`.${panelClass}[data-group="${group}"]`).forEach(item=>item.classList.remove('active')); button.classList.add('active'); root.querySelector(`#${button.dataset.target}`).classList.add('active'); }); }); }
 function renderScaleTables(tables){ return tables.map(block=>`<section class="card"><h3>${escapeHtml(block.title)}</h3><p class="small">${escapeHtml(block.description)}</p>${table([{key:'item',label:'Item'},{key:'n',label:'n'},{key:'ch1_mean_sd',label:'Ch1 Mean (SD)'},{key:'ch1_min',label:'Ch1 Min',num:true},{key:'ch1_max',label:'Ch1 Max',num:true},{key:'ch2_mean_sd',label:'Ch2 Mean (SD)'},{key:'ch2_min',label:'Ch2 Min',num:true},{key:'ch2_max',label:'Ch2 Max',num:true},{key:'ch3_mean_sd',label:'Ch3 Mean (SD)'},{key:'ch3_min',label:'Ch3 Min',num:true},{key:'ch3_max',label:'Ch3 Max',num:true}],block.rows,{className:'scale-table'})}</section>`).join(''); }
@@ -621,10 +734,101 @@ function renderOtherTabs() {
 
   renderInterviewsV2();
 
+  const stats = REPORT.statistics || {};
+  const power = stats.power || {};
+  const h1Immediate = statsRowsByModel(stats.focal_rows, 'H1 immediate');
+  const h1Delayed = statsRowsByModel(stats.focal_rows, 'H1 delayed');
+  const h2Rows = [...statsRowsByHypothesis(stats.focal_rows, 'H2a'), ...statsRowsByHypothesis(stats.focal_rows, 'H2b')];
+  const h3Rows = [...statsRowsByHypothesis(stats.focal_rows, 'H3a'), ...statsRowsByHypothesis(stats.focal_rows, 'H3b')];
+  const h4Rows = statsRowsByHypothesis(stats.focal_rows, 'H4');
+  const manipulationRows = statsRowsByHypothesis(stats.focal_rows, 'Manipulation check');
+  const warningHtml = (stats.warnings || []).length ? `<section class="card"><h2>Warnings / missing inputs</h2><ul>${stats.warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul></section>` : '';
+
   document.getElementById('tab-statistics').innerHTML = `
     <section class="card">
       <h2>Inferential statistics</h2>
-      <p><strong>${escapeHtml(REPORT.statistics.status)}</strong></p>
+      <p>${escapeHtml(stats.intro || '')}</p>
+      <p class="small"><strong>Status:</strong> ${escapeHtml(stats.status || '')}</p>
+    </section>
+
+    ${warningHtml}
+
+    <section class="card">
+      <h2>Power analysis and current analysis n</h2>
+      <p>The planned sample size was ${escapeHtml(power.planned_total || '')} participants (${escapeHtml(power.planned_per_condition || '')} per condition), anchored to ${escapeHtml(power.planning_effect || '')} for ${escapeHtml(power.planning_test || '')}.</p>
+      <p class="small">${escapeHtml(power.note || '')}</p>
+      ${table([{key:'condition',label:'Condition'},{key:'planned',label:'Planned n',num:true},{key:'current',label:'Current included n',num:true},{key:'delayed',label:'Current delayed scored n',num:true}], renderPowerRows(power), {className:'stats-table'})}
+    </section>
+
+    <section class="card">
+      <h2>Collection location and lab-slot context</h2>
+      <p class="small">Remote participants are coded as At home. For lab participants, the app reads resources/collection_locations.json by collection date, then counts how many included participants were in the same date, time slot, and lab location.</p>
+      ${table([
+        {key:'location',label:'Location'},
+        {key:'n',label:'Included n',num:true},
+        {key:'slot_n_mean',label:'Mean lab-slot n'},
+        {key:'slot_n_min',label:'Min lab-slot n'},
+        {key:'slot_n_max',label:'Max lab-slot n'}
+      ], stats.location_summary || [], {className:'stats-table'})}
+    </section>
+
+    <section class="card">
+      <h2>Calculation audit trail</h2>
+      <p class="small">This is intentionally placed before the results so a reviewer can verify the model coding and the reported effect estimates first.</p>
+      ${table([{key:'item',label:'Calculation'},{key:'calculation',label:'What the code does'}], stats.calculation_notes || [], {className:'stats-table'})}
+      ${detailsBlock('All model formulas and complete-case n', renderModelAudit(stats.model_rows || []))}
+    </section>
+
+    <section class="card">
+      <h2>Checkpoint Design → Retention, immediate (H1, primary)</h2>
+      <p>H1 hypothesises that Checkpoint Design affects immediate retention, with required pauses expected to outperform required continue. Inspect the planned contrast estimate, its uncertainty, and partial r²; the p-value is only one part of that judgement.</p>
+      ${renderStatsResultTable(h1Immediate)}
+    </section>
+
+    <section class="card">
+      <h2>Checkpoint Design → Retention, delayed (H1, secondary)</h2>
+      <p>Delayed retention tests the same planned contrasts, but follow-up attrition lowers the effective n and therefore the precision of the estimates.</p>
+      ${renderStatsResultTable(h1Delayed)}
+    </section>
+
+    <section class="card">
+      <h2>Checkpoint Design → Cognitive Load → Retention (H2a/H2b/H2)</h2>
+      <p>H2 is evaluated in steps: Checkpoint Design should affect the three cognitive-load dimensions (H2a), and those dimensions should relate to retention in the predicted directions (H2b). The indirect effect is then judged from the bootstrap CI, especially the required-pause paths through extraneous and germane load.</p>
+      ${renderStatsResultTable(h2Rows)}
+      ${detailsBlock('Parallel mediation, immediate retention (H2 primary)', renderIndirectTable(stats.mediation?.h2_parallel_immediate) + renderDirectMediationTable(stats.mediation?.h2_parallel_immediate), true)}
+      ${detailsBlock('Parallel mediation, delayed retention (H2 secondary)', renderIndirectTable(stats.mediation?.h2_parallel_delayed) + renderDirectMediationTable(stats.mediation?.h2_parallel_delayed))}
+      ${renderFactorAnalyses('Cognitive load')}
+    </section>
+
+    <section class="card">
+      <h2>Checkpoint Design → Engagement → Retention (H3a/H3b/H3)</h2>
+      <p>H3 tests whether optional pauses improve engagement compared with the two system-controlled checkpoint designs, and whether engagement is positively associated with retention. The indirect effect is again interpreted through the bootstrap CI rather than by requiring a significant total effect first.</p>
+      ${renderStatsResultTable(h3Rows)}
+      ${detailsBlock('Simple mediation, immediate retention (H3 primary)', renderIndirectTable(stats.mediation?.h3_simple_immediate) + renderDirectMediationTable(stats.mediation?.h3_simple_immediate), true)}
+      ${detailsBlock('Simple mediation, delayed retention (H3 secondary)', renderIndirectTable(stats.mediation?.h3_simple_delayed) + renderDirectMediationTable(stats.mediation?.h3_simple_delayed))}
+      ${renderFactorAnalyses('Engagement')}
+    </section>
+
+    <section class="card">
+      <h2>H4: Engagement → cognitive-load dimensions</h2>
+      <p>H4 tests whether higher engagement is associated with lower extraneous cognitive load and higher germane cognitive load; the intrinsic-load association is checked without a directional prediction. Interpret the sign and size of each association together with its uncertainty.</p>
+      ${renderStatsResultTable(h4Rows)}
+    </section>
+
+    <section class="card">
+      <h2>Checkpoint Design → Engagement → Cognitive Load → Retention (EQ1, exploratory serial effect)</h2>
+      <p>This exploratory check asks whether the pattern is consistent with Checkpoint Design affecting engagement, engagement relating to one cognitive-load dimension, and that load dimension relating to retention. Because engagement and cognitive load are measured in the same post-game block, this is a theory-consistency check, not strong evidence for temporal ordering.</p>
+      ${detailsBlock('Serial mediation, immediate retention', renderSerialTable(stats.mediation?.serial_immediate), true)}
+      ${detailsBlock('Serial mediation, delayed retention', renderSerialTable(stats.mediation?.serial_delayed))}
+    </section>
+
+    <section class="card">
+      <h2>Other preregistered checks and robustness</h2>
+      <p class="small">These checks help assess stability and measurement quality, but they should not replace the preregistered primary models.</p>
+      ${detailsBlock('Perceived-control manipulation check', renderStatsResultTable(manipulationRows))}
+      ${detailsBlock('Robustness: age and gender covariates', renderModelAudit(stats.robustness_age_gender || []))}
+      ${detailsBlock('Robustness: room type and shared-slot n', renderModelAudit(stats.robustness_context || []))}
+      ${renderFactorAnalyses('Perceived control')}
     </section>`;
 }
 

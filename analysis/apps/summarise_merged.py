@@ -35,7 +35,7 @@ from helpers._shared import (
     format_seconds,
     summarise,
 )
-from helpers._stats_main import stats_placeholder
+from helpers._stats_main import build_inferential_statistics
 from helpers._survey_io import load_survey_export
 
 CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
@@ -198,7 +198,7 @@ def build_report_data() -> dict[str, Any]:
         "retention_answer_rows": build_retention_question_rows(participants),
         "logs": build_log_overview(log_index, participants),
         "interviews": add_interview_comparison_summaries(interview_data, participants),
-        "statistics": stats_placeholder(),
+        "statistics": build_inferential_statistics(participants),
         "warnings": retention_warnings,
     }
 

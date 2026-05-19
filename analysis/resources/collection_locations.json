@@ -1,0 +1,26 @@
+{
+  "_instructions": "Fill in the location used for each data-collection work day. Allowed values are Creative Space and Living Room. Remove a date when no participants were received that day. Participants with REMOTE = 1 in the survey export are treated as At home automatically.",
+  "_allowed_locations": [
+    "Creative Space",
+    "Living Room"
+  ],
+  "locations_by_date": {
+    "2026-05-08": "Creative Space",
+    "2026-05-12": "Living Room",
+    "2026-05-13": "Creative Space",
+    "2026-05-18": "Creative Space",
+    "2026-05-19": "Creative Space",
+    "2026-05-20": "Living Room",
+    "2026-05-21": "Creative Space",
+    "2026-05-22": "Living Room",
+    "2026-05-26": "Creative Space",
+    "2026-05-27": "Creative Space",
+    "2026-05-28": "Living Room",
+    "2026-05-29": "Creative Space",
+    "2026-06-01": "",
+    "2026-06-02": "",
+    "2026-06-03": "",
+    "2026-06-04": "",
+    "2026-06-05": ""
+  }
+}

@@ -16,6 +16,7 @@ TEMPLATES_DIR = RESOURCES_DIR / "templates"
 
 INTERVIEW_TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 INTERVIEW_MANIFEST_PATH = RESOURCES_DIR / "interview_manifest.json"
+COLLECTION_LOCATIONS_PATH = RESOURCES_DIR / "collection_locations.json"
 CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
 
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
@@ -28,6 +29,7 @@ DISPLAY_SOURCE_PATHS = {
     "Retention scores": r".\data\retention_scores.tsv",
     "Interview transcript CSVs": r".\data\transcripts\*.csv",
     "Interview manifest": r".\resources\interview_manifest.json",
+    "Collection locations": r".\resources\collection_locations.json",
     "Study logs": r".\logs\study-*.log",
     "Conceptual model": r".\resources\static\conceptual-model-v00.06.png",
 }

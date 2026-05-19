@@ -467,3 +467,31 @@ svg { max-width:100%; height:auto; }
 .selected-extra-pill strong {
   color: var(--speaker-color, var(--focus));
 }
+.summary-details {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 10px 0;
+  background: #fbfdff;
+}
+
+.summary-details > summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.details-body {
+  border-top: 1px solid var(--line);
+  padding: 10px 12px 12px;
+}
+
+.stats-table table,
+.stats-model-table table {
+  min-width: 980px;
+}
+
+.stats-table td:last-child,
+.stats-model-table td:nth-child(2),
+.stats-model-table td:last-child {
+  min-width: 220px;
+}

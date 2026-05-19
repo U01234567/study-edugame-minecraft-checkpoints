@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import datetime as dt
+import json
 from typing import Any
 
 from ._cl_main import cl_participant_scores
@@ -9,6 +11,7 @@ from ._eng_main import eng_participant_scores
 from ._ret_main import retention_wave_summary
 from ._shared import (
     AGE_BIN_ORDER,
+    COLLECTION_LOCATIONS_PATH,
     CONDITION_ORDER,
     CREATURE_TOTAL,
     EXCLUSION_CRITERIA,
@@ -26,6 +29,8 @@ from ._shared import (
     mcid_from_row,
     normalise_gender,
     parse_age,
+    parse_datetime,
+    parse_numeric,
     progress_is_complete,
     scale_value,
     summarise,
@@ -170,9 +175,173 @@ def scale_values_from_row(row: dict[str, str]) -> dict[str, str]:
     return {column: scale_value(row, column) for column in SCALE_VALUE_COLUMNS}
 
 
+SLOT_LABELS = [
+    "09:40–10:40", "10:40–11:40", "11:40–12:40", "12:40–13:40",
+    "13:40–14:40", "14:40–15:40", "15:40–16:40", "Outside 09:40–16:40",
+]
+ALLOWED_COLLECTION_LOCATIONS = {"Creative Space", "Living Room"}
+RETENTION_START_VALUES = {"image_first", "name_first"}
+
+
 def delayed_completed(delayed_row: dict[str, str] | None) -> bool:
     """Return True when the delayed retention row exists and Progress is 100."""
     return delayed_row is not None and progress_is_complete(survey_progress(delayed_row))
+
+
+def slot_for_start(start: dt.datetime | None) -> tuple[str, int]:
+    """Return the planned lab slot used by the follow-up email app."""
+    if start is None:
+        return "Unknown start time", 999
+    t = start.time().replace(second=0, microsecond=0)
+    anchor = dt.datetime.combine(dt.date(2000, 1, 1), dt.time(9, 40))
+    for index in range(7):
+        begin = (anchor + dt.timedelta(hours=index)).time()
+        end = (anchor + dt.timedelta(hours=index + 1)).time()
+        if begin <= t < end:
+            return SLOT_LABELS[index], index
+    return SLOT_LABELS[-1], 7
+
+
+def normalise_retention_start(value: object) -> str:
+    """Return image_first/name_first when a retention-form value is present."""
+    text = clean(value).lower()
+    return text if text in RETENTION_START_VALUES else ""
+
+
+def retention_start_from_row(row: dict[str, str] | None, *, prefer_init: bool = False) -> str:
+    """Read the counterbalanced retention start value from a survey row."""
+    if row is None:
+        return ""
+    columns = ["INIT_START", "START"] if prefer_init else ["START", "INIT_START"]
+    for column in columns:
+        value = normalise_retention_start(row.get(column))
+        if value:
+            return value
+    return ""
+
+
+def opposite_retention_start(value: str) -> str:
+    if value == "image_first":
+        return "name_first"
+    if value == "name_first":
+        return "image_first"
+    return ""
+
+
+def retention_counterbalance_status(immediate_row: dict[str, str], delayed_row: dict[str, str] | None) -> dict[str, str]:
+    """Check whether immediate and delayed retention forms are counterbalanced within MCID."""
+    init_start = normalise_retention_start(immediate_row.get("INIT_START"))
+    immediate_start = retention_start_from_row(immediate_row, prefer_init=False) or init_start
+    delayed_start = retention_start_from_row(delayed_row, prefer_init=False)
+
+    if delayed_row is None:
+        return {
+            "status": "not checked; no delayed row",
+            "warning": "",
+            "immediate_start": immediate_start,
+            "delayed_start": "",
+            "init_start": init_start,
+        }
+    if not immediate_start or not delayed_start:
+        return {
+            "status": "missing START/INIT_START value",
+            "warning": "Retention counterbalance could not be checked because START or INIT_START is missing.",
+            "immediate_start": immediate_start,
+            "delayed_start": delayed_start,
+            "init_start": init_start,
+        }
+    if delayed_start != opposite_retention_start(immediate_start):
+        return {
+            "status": "mismatch",
+            "warning": f"Retention counterbalance mismatch: immediate START={immediate_start}, delayed START={delayed_start}.",
+            "immediate_start": immediate_start,
+            "delayed_start": delayed_start,
+            "init_start": init_start,
+        }
+    if init_start and init_start != immediate_start:
+        return {
+            "status": "mismatch",
+            "warning": f"INIT_START={init_start} does not match the immediate START={immediate_start}.",
+            "immediate_start": immediate_start,
+            "delayed_start": delayed_start,
+            "init_start": init_start,
+        }
+    return {
+        "status": "OK",
+        "warning": "",
+        "immediate_start": immediate_start,
+        "delayed_start": delayed_start,
+        "init_start": init_start,
+    }
+
+
+def participant_is_remote(row: dict[str, str]) -> bool:
+    return clean(first_present(row, ["REMOTE", "remote", "Remote"])).lower() in {"1", "true", "yes"}
+
+
+def load_collection_locations() -> tuple[dict[str, str], list[str]]:
+    """Load the editable date -> lab-location map."""
+    if not COLLECTION_LOCATIONS_PATH.exists():
+        return {}, [f"Collection-location template not found at {COLLECTION_LOCATIONS_PATH}."]
+    try:
+        payload = json.loads(COLLECTION_LOCATIONS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, [f"Collection-location template could not be read: {exc}"]
+
+    if not isinstance(payload, dict):
+        return {}, ["Collection-location template must be a JSON object."]
+    raw_locations = payload.get("locations_by_date", payload)
+    locations: dict[str, str] = {}
+    warnings: list[str] = []
+    if not isinstance(raw_locations, dict):
+        return {}, ["Collection-location template must contain a locations_by_date object."]
+
+    for date_key, value in raw_locations.items():
+        location = clean(value)
+        if location:
+            locations[clean(date_key)] = location
+        else:
+            locations[clean(date_key)] = ""
+    return locations, warnings
+
+
+def attach_collection_context(participants: list[dict[str, Any]]) -> list[str]:
+    """Attach room type and same-slot participant counts to included participants."""
+    locations_by_date, warnings = load_collection_locations()
+    warning_set = set(warnings)
+
+    for participant in participants:
+        participant["collection_context_warning"] = ""
+        participant["same_room_n"] = None
+        if participant.get("remote"):
+            participant["room_type"] = "At home"
+            continue
+
+        date_key = clean(participant.get("collection_date"))
+        location = locations_by_date.get(date_key)
+        if not date_key:
+            participant["room_type"] = ""
+            participant["collection_context_warning"] = "Collection date could not be parsed from survey start date."
+        elif location not in ALLOWED_COLLECTION_LOCATIONS:
+            participant["room_type"] = ""
+            missing_or_invalid = "missing" if location in {None, ""} else f"invalid value '{location}'"
+            participant["collection_context_warning"] = f"Collection location is {missing_or_invalid} for {date_key}."
+            warning_set.add(f"Collection location is {missing_or_invalid} for {date_key}. Fill resources/collection_locations.json with Creative Space or Living Room, or remove the date only if no data collection happened that day.")
+        else:
+            participant["room_type"] = location
+
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for participant in participants:
+        if participant.get("remote") or not clean(participant.get("room_type")):
+            continue
+        grouped[(participant.get("collection_date", ""), participant.get("collection_slot_label", ""), participant.get("room_type", ""))].append(participant)
+
+    for group in grouped.values():
+        shared_count = max(0, len(group) - 1)
+        for participant in group:
+            participant["same_room_n"] = shared_count
+
+    return sorted(warning_set)
 
 
 def participant_from_survey_and_log(
@@ -194,12 +363,32 @@ def participant_from_survey_and_log(
     delayed_duration_seconds = duration_seconds_between(survey_start(delayed_row), survey_end(delayed_row))
     creature_score = log.get("creature_score_of_18") if log else None
 
+    start_dt = parse_datetime(survey_start(immediate_row))
+    slot_label, slot_order = slot_for_start(start_dt)
+    remote = participant_is_remote(immediate_row)
+    retention_check = retention_counterbalance_status(immediate_row, delayed_row)
+    retention_immediate_form_order = retention_check["immediate_start"]
+    retention_delayed_form_order = retention_check["delayed_start"]
+
     participant: dict[str, Any] = {
         "participant_id": participant_id,
         "included": "True",
         "condition": log.get("condition") if log and log.get("condition") else "Missing / invalid",
         "condition_raw": log.get("condition_raw") if log else "",
         "source_log": log.get("source_log") if log else "",
+        "remote": remote,
+        "remote_raw": clean(first_present(immediate_row, ["REMOTE", "remote", "Remote"])),
+        "collection_date": start_dt.date().isoformat() if start_dt else "",
+        "collection_slot_label": slot_label,
+        "collection_slot_order": slot_order,
+        "retention_form_order": retention_immediate_form_order,
+        "retention_immediate_form_order": retention_immediate_form_order,
+        "retention_delayed_form_order": retention_delayed_form_order,
+        "retention_init_start": retention_check["init_start"],
+        "retention_counterbalance_status": retention_check["status"],
+        "retention_counterbalance_warning": retention_check["warning"],
+        "room_type": "At home" if remote else "",
+        "same_room_n": None,
         "survey_start_date": display_datetime(survey_start(immediate_row)),
         "survey_end_date": display_datetime(survey_end(immediate_row)),
         "survey_duration": survey_duration(immediate_row),
@@ -393,6 +582,8 @@ def build_merged_dataset(survey_rows: list[dict[str, str]], log_index: dict[str,
         else:
             included.append(participant)
 
+    collection_context_warnings = attach_collection_context(included)
+
     log_ids = sorted(log_index)
     survey_ids = waves["all_survey_ids"]
     included_ids = {participant["participant_id"] for participant in included}
@@ -417,6 +608,8 @@ def build_merged_dataset(survey_rows: list[dict[str, str]], log_index: dict[str,
             "excluded_count": len(excluded),
             "included_immediate_response_count": len(included),
             "included_delayed_response_count": sum(1 for participant in included if participant.get("completed_delayed_retention_test")),
+            "collection_context_warnings": collection_context_warnings,
+            "collection_locations_path": str(COLLECTION_LOCATIONS_PATH),
             "exclusion_criteria": EXCLUSION_CRITERIA,
         },
     }

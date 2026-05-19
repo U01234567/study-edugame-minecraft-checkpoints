@@ -144,13 +144,13 @@ The Game logs tab includes time-use summaries, time to sixth creature, optional-
 
 The Interviews tab reads CSV transcripts from `./data/transcripts/`. The `Speaker` column should contain either `Researcher` or an MCID. A single interview CSV can contain one or more MCID speakers. The app infers MCIDs from the CSV and uses `./resources/interview_manifest.json` only to map filenames to selection categories and notes.
 
-The Inferential statistics tab is currently a placeholder. Future modelling code should live in:
+The Inferential statistics tab is generated from:
 
 ```text
 ./helpers/_stats_main.py
 ```
 
-so that the statistics can be reviewed separately from the HTML app generator.
+It places the calculation audit trail before the results, then reports the preregistered planned-contrast models, mediation checks, factor-analysis/scale checks, collection-location context, and covariate robustness checks. Review this helper file when checking the inferential calculations. We filled `./resources/collection_locations.json` with `Creative Space` or `Living Room` for each data-collection date; `REMOTE = 1` participants are coded as `At home` automatically.
 
 ## Current inclusion checks
 
