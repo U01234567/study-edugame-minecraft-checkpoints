@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import csv
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from openpyxl import load_workbook
 from ._shared import INTERVIEW_MANIFEST_PATH, INTERVIEW_TRANSCRIPTS_DIR, clean
-from ._survey_io import detect_text_encoding
 
 DEFAULT_INTERVIEW_CATEGORIES = {
     "low_prior_game_experience": "Low prior game experience; preferably from the required continue condition.",
@@ -16,8 +16,9 @@ DEFAULT_INTERVIEW_CATEGORIES = {
     "optional_pause_chose_pause": "Optional pause participant who chose at least one 2-minute pause.",
     "many_disallowed_empty_disabled_clicks": "Participant with many disallowed, empty, or disabled clicks during instructions or gameplay.",
     "unusual_task_performance": "Participant with unusually high or low task performance.",
-    "high_total_movement_distance": "Participant with high total movement distance.",
+    "high_total_movement_distance": "Participant with high or low total movement distance.",
     "age_gender_coverage": "Participant selected to improve age and gender coverage across the interview sample.",
+    "other_intuition": "Other / intuition.",
 }
 
 
@@ -30,20 +31,57 @@ def read_manifest(path: Path = INTERVIEW_MANIFEST_PATH) -> dict[str, Any]:
     return data
 
 
-def read_transcript_csv(path: Path) -> list[dict[str, str]]:
-    encoding = detect_text_encoding(path)
-    text = path.read_text(encoding=encoding)
-    sample = text[:2048]
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
-    except csv.Error:
-        dialect = csv.excel
+def interview_no_from_filename(path: Path) -> int | None:
+    match = re.search(r"interview[_\-\s]*0*(\d+)", path.stem, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1))
 
-    rows = list(csv.DictReader(text.splitlines(), dialect=dialect))
+
+def manifest_entry_for_file(manifest: dict[str, Any], path: Path) -> dict[str, Any]:
+    interviews = manifest.get("interviews", {})
+    interview_no = interview_no_from_filename(path)
+
+    if isinstance(interviews, dict) and interview_no is not None:
+        entry = interviews.get(str(interview_no)) or interviews.get(f"{interview_no:02d}")
+        if isinstance(entry, dict):
+            return {"interview_no": interview_no, **entry}
+
+    if isinstance(interviews, list):
+        for entry in interviews:
+            if clean(entry.get("filename")).lower() == path.name.lower():
+                return entry
+
+    return {"interview_no": interview_no}
+
+
+def read_transcript_xlsx(path: Path) -> list[dict[str, str]]:
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    worksheet = workbook.active
+    rows = worksheet.iter_rows(values_only=True)
+
+    header_row = None
+    for row in rows:
+        headers = [clean(cell) for cell in row]
+        if any(headers):
+            header_row = headers
+            break
+
+    if not header_row:
+        return []
+
+    header_lookup = {
+        header.lower(): index
+        for index, header in enumerate(header_row)
+        if header
+    }
+    speaker_index = header_lookup.get("speaker")
+    transcript_index = header_lookup.get("transcript")
+
     turns: list[dict[str, str]] = []
     for row in rows:
-        speaker = clean(row.get("Speaker") or row.get("speaker"))
-        transcript = clean(row.get("Transcript") or row.get("transcript"))
+        speaker = clean(row[speaker_index]) if speaker_index is not None and speaker_index < len(row) else ""
+        transcript = clean(row[transcript_index]) if transcript_index is not None and transcript_index < len(row) else ""
         if speaker or transcript:
             turns.append({"speaker": speaker, "transcript": transcript})
     return turns
@@ -91,11 +129,6 @@ def load_interview_overview(
 ) -> dict[str, Any]:
     manifest = read_manifest(manifest_path)
     categories = manifest.get("category_definitions", DEFAULT_INTERVIEW_CATEGORIES)
-    manifest_lookup = {
-        clean(entry.get("filename")).lower(): entry
-        for entry in manifest.get("interviews", [])
-        if clean(entry.get("filename"))
-    }
     participant_lookup = {
         clean(row.get("participant_id")): row
         for row in (participants or [])
@@ -114,7 +147,7 @@ def load_interview_overview(
             "notes": ["Interview transcript directory not found."],
         }
 
-    transcript_paths = sorted(transcripts_dir.glob("*.csv"))
+    transcript_paths = sorted(path for path in transcripts_dir.glob("*.xlsx") if not path.name.startswith("~$"))
     transcripts: list[dict[str, Any]] = []
     category_to_ids: dict[str, set[str]] = defaultdict(set)
     category_to_files: dict[str, set[str]] = defaultdict(set)
@@ -125,12 +158,12 @@ def load_interview_overview(
     notes: list[str] = []
 
     for index, path in enumerate(transcript_paths, start=1):
-        turns = read_transcript_csv(path)
+        turns = read_transcript_xlsx(path)
         speaker_ids = participant_ids_from_turns(turns)
         all_participant_ids.update(speaker_ids)
         total_turns += len(turns)
 
-        manifest_entry = manifest_lookup.get(path.name.lower(), {})
+        manifest_entry = manifest_entry_for_file(manifest, path)
         selection_categories = [
             clean(item)
             for item in manifest_entry.get("selection_categories", [])
@@ -205,14 +238,16 @@ def load_interview_overview(
         ids = sorted(category_to_ids.get(category, set()))
         files = sorted(category_to_files.get(category, set()))
         transcript_ids = category_to_transcript_ids.get(category, [])
-        slots = [slot_payload(transcript_ids[index] if index < len(transcript_ids) else None) for index in range(3)]
+        assigned_slots = [slot_payload(transcript_id) for transcript_id in transcript_ids]
+        printed_slots = [slot_payload(transcript_ids[index] if index < len(transcript_ids) else None) for index in range(3)]
 
         category_rows.append({
             "category": category,
             "definition": definition,
-            "slot_1": slots[0],
-            "slot_2": slots[1],
-            "slot_3": slots[2],
+            "slots": assigned_slots,
+            "slot_1": printed_slots[0],
+            "slot_2": printed_slots[1],
+            "slot_3": printed_slots[2],
             "overflow_count": max(0, len(transcript_ids) - 3),
             "n_participants": len(ids),
             "n_interviews": len(files),

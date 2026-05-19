@@ -1,6 +1,6 @@
 {
-  "version": "2026-05-interview-manifest-v1",
-  "notes": "Do not enter MCIDs here. The app infers MCID speakers from each CSV's Speaker column. Only map filenames to selection categories and notes.",
+  "version": "2026-05-interview-manifest-v2",
+  "notes": "Do not enter MCIDs here. The app infers MCID speakers from each CSV's Speaker column. Map interview numbers to selection categories and notes. Transcript files are matched by numbers in filenames like Interview_01.csv, Interview_11.csv, or Interview_99.csv.",
   "category_definitions": {
     "low_prior_game_experience": "Low prior game experience; preferably from the required continue condition.",
     "high_prior_game_experience": "High prior game experience; preferably from the optional pauses condition.",
@@ -8,25 +8,128 @@
     "optional_pause_chose_pause": "Optional pause participant who chose at least one 2-minute pause.",
     "many_disallowed_empty_disabled_clicks": "Participant with many disallowed, empty, or disabled clicks, either during instructions or during the game.",
     "unusual_task_performance": "Participant with unusually high or low task performance.",
-    "high_total_movement_distance": "Participant with high total movement distance.",
-    "age_gender_coverage": "Participant selected to improve age and gender coverage across the interview sample."
+    "high_total_movement_distance": "Participant with high or low total movement distance.",
+    "age_gender_coverage": "Participant selected to improve age and gender coverage across the interview sample.",
+    "other_intuition": "Other / intuition."
   },
-  "interviews": [
-    {
-      "filename": "Interview_01.csv",
-      "interview_no": 1,
+  "interviews": {
+    "1": {
       "selection_categories": [
         "high_prior_game_experience"
       ],
-      "notes": "TBD."
+      "notes": "TBD"
     },
-    {
-      "filename": "Interview_02.csv",
-      "interview_no": 2,
+    "2": {
       "selection_categories": [
         "many_disallowed_empty_disabled_clicks"
       ],
-      "notes": "TBD."
+      "notes": "TBD"
+    },
+    "3": {
+      "selection_categories": [
+        "high_prior_game_experience"
+      ],
+      "notes": "TBD"
+    },
+    "4": {
+      "selection_categories": [
+        "other_intuition"
+      ],
+      "notes": "TBD"
+    },
+    "5": {
+      "selection_categories": [
+        "required_pause_chapter_change"
+      ],
+      "notes": "TBD"
+    },
+    "6": {
+      "selection_categories": [
+        "optional_pause_chose_pause"
+      ],
+      "notes": "TBD"
+    },
+    "7": {
+      "selection_categories": [
+        "high_total_movement_distance"
+      ],
+      "notes": "TBD"
+    },
+    "8": {
+      "selection_categories": [
+        "low_prior_game_experience"
+      ],
+      "notes": "TBD"
+    },
+    "9": {
+      "selection_categories": [
+        "other_intuition"
+      ],
+      "notes": "TBD"
+    },
+    "10": {
+      "selection_categories": [
+        "unusual_task_performance"
+      ],
+      "notes": "TBD"
+    },
+    "11": {
+      "selection_categories": [
+        "age_gender_coverage"
+      ],
+      "notes": "TBD"
+    },
+    "12": {
+      "selection_categories": [
+        "high_total_movement_distance"
+      ],
+      "notes": "TBD"
+    },
+    "13": {
+      "selection_categories": [
+        "required_pause_chapter_change"
+      ],
+      "notes": "TBD"
+    },
+    "14": {
+      "selection_categories": [
+        "high_total_movement_distance"
+      ],
+      "notes": "TBD"
+    },
+    "15": {
+      "selection_categories": [
+        "unusual_task_performance"
+      ],
+      "notes": "TBD"
+    },
+    "16": {
+      "selection_categories": [
+        "unusual_task_performance"
+      ],
+      "notes": "TBD"
+    },
+    "17": {
+      "selection_categories": [
+        "many_disallowed_empty_disabled_clicks"
+      ],
+      "notes": "TBD"
+    },
+    "18": {
+      "selection_categories": [],
+      "notes": "TBD"
+    },
+    "19": {
+      "selection_categories": [],
+      "notes": "TBD"
+    },
+    "20": {
+      "selection_categories": [],
+      "notes": "TBD"
+    },
+    "21": {
+      "selection_categories": [],
+      "notes": "TBD"
     }
-  ]
+  }
 }

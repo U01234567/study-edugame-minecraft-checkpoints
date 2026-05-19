@@ -675,6 +675,35 @@ function logById(participantId){
   return ((REPORT.logs || {}).logs || []).find(row => row.participant_id === participantId) || null;
 }
 
+function auditRowById(participantId){
+  return (REPORT.audit_rows || []).find(row => row.participant_id === participantId) || null;
+}
+
+function mergedStatusForParticipant(participantId){
+  if (participantById(participantId)) {
+    return {inMergedData: true, label: 'Included in merged dataset'};
+  }
+
+  const auditRow = auditRowById(participantId);
+  const reasons = String(auditRow?.exclusion_reasons || '').trim();
+
+  if (reasons) {
+    return {
+      inMergedData: false,
+      label: `Excluded from merged dataset: ${reasons}`
+    };
+  }
+
+  return {
+    inMergedData: false,
+    label: 'Not found among included merged participants'
+  };
+}
+
+function missingMergedDataIds(participantIds){
+  return (participantIds || []).filter(participantId => participantId && !mergedStatusForParticipant(participantId).inMergedData);
+}
+
 function participantIdsFromRows(rows){
   return new Set((rows || []).map(row => row.participant_id).filter(Boolean));
 }
@@ -1002,10 +1031,11 @@ function renderSelectedExtraPills(selectedIds){
     const colours = speakerColour(participantId);
 
     if (!participant) {
+      const status = mergedStatusForParticipant(participantId);
       return `
-        <div class="selected-extra-pill-group" style="--speaker-color:${escapeHtml(colours.stroke)}; --speaker-bg:${escapeHtml(colours.background)};">
+        <div class="selected-extra-pill-group missing-merged-data" style="--speaker-color:${escapeHtml(colours.stroke)}; --speaker-bg:${escapeHtml(colours.background)};">
           <div class="selected-extra-pill-heading">${escapeHtml(participantId)}</div>
-          <span class="selected-extra-pill"><strong>Status:</strong> MCID not found among included merged participants</span>
+          <span class="selected-extra-pill"><strong>Status:</strong> ${escapeHtml(status.label)}</span>
         </div>
       `;
     }
@@ -1047,39 +1077,93 @@ function renderCategorySlot(slot, slotLabel){
     return `<span class="category-slot-empty">${escapeHtml(slotLabel)}:<br>—</span>`;
   }
 
+  const missingIds = missingMergedDataIds(slot.speaker_ids || []);
+  const missingClass = missingIds.length ? ' category-slot-button-missing-data' : '';
+  const missingTitle = missingIds
+    .map(participantId => `${participantId}: ${mergedStatusForParticipant(participantId).label}`)
+    .join('; ');
+  const missingWarning = missingIds.length ? `<span class="category-slot-warning" title="${escapeHtml(missingTitle)}">Not in merged data: ${escapeHtml(missingIds.join(', '))}</span>` : '';
+
   return `
-    <button class="category-slot-button" type="button" data-transcript-id="${escapeHtml(slot.transcript_id)}">
+    <button class="category-slot-button${missingClass}" type="button" data-transcript-id="${escapeHtml(slot.transcript_id)}">
       <strong>${escapeHtml(slotLabel)}: ${escapeHtml(slot.label || slot.filename)}</strong>
       <span class="meta">${escapeHtml(slot.filename)} · ${escapeHtml(slot.n_turns)} turns</span>
+      ${missingWarning}
     </button>
   `;
 }
 
+function categorySlotsForRow(row){
+  const slots = Array.isArray(row?.slots)
+    ? row.slots
+    : [row?.slot_1, row?.slot_2, row?.slot_3];
+
+  return slots.filter(slot => slot && (slot.transcript_id || slot.filename || slot.label));
+}
+
 function renderSelectionCategoryTable(rows){
-  const body = (rows || []).map(row => `
-    <tr>
-      <td>
-        <strong>${escapeHtml(row.definition)}</strong>
-        ${row.overflow_count ? `<div class="category-overflow">+${escapeHtml(row.overflow_count)} additional assigned transcript(s) not shown in the three printed slots.</div>` : ''}
-      </td>
-      <td>${renderCategorySlot(row.slot_1, 'ID 1')}</td>
-      <td>${renderCategorySlot(row.slot_2, 'ID 2')}</td>
-      <td>${renderCategorySlot(row.slot_3, 'ID 3')}</td>
-    </tr>
-  `).join('');
+  const categoryRows = rows || [];
+
+  const idColumnCount = Math.max(
+    3,
+    ...categoryRows.map(row => categorySlotsForRow(row).length)
+  );
+
+  // Keep the whole table inside the visible page.
+  // Three slots get a wider criterion column; extra slots progressively shrink it.
+  const criterionColumnWidth = idColumnCount <= 3
+    ? 34
+    : Math.max(18, 34 - ((idColumnCount - 3) * 4));
+
+  const idColumnWidth = (100 - criterionColumnWidth) / idColumnCount;
+
+  const idHeaders = Array.from(
+    {length: idColumnCount},
+    (_, index) => `<th>ID ${index + 1}</th>`
+  ).join('');
+
+  const colgroup = `
+    <colgroup>
+      <col class="selection-criterion-col" style="width:${criterionColumnWidth.toFixed(4)}%">
+      ${Array.from(
+        {length: idColumnCount},
+        () => `<col class="selection-id-col" style="width:${idColumnWidth.toFixed(4)}%">`
+      ).join('')}
+    </colgroup>
+  `;
+
+  const body = categoryRows.map(row => {
+    const slots = categorySlotsForRow(row);
+
+    const slotCells = Array.from({length: idColumnCount}, (_, index) => `
+      <td>${renderCategorySlot(slots[index], `ID ${index + 1}`)}</td>
+    `).join('');
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(row.definition || row.category || '')}</strong>
+          ${slots.length > 3 ? `<div class="category-overflow">Expanded from 3 to ${escapeHtml(slots.length)} assigned transcript slots.</div>` : ''}
+        </td>
+        ${slotCells}
+      </tr>
+    `;
+  }).join('');
 
   return `
-    <div class="table-wrap">
-      <table class="selection-category-table">
+    <div class="table-wrap selection-category-wrap">
+      <table
+        class="selection-category-table"
+        style="--selection-id-count:${escapeHtml(idColumnCount)}; --selection-criterion-width:${criterionColumnWidth.toFixed(4)}%; --selection-id-width:${idColumnWidth.toFixed(4)}%;"
+      >
+        ${colgroup}
         <thead>
           <tr>
             <th>Selection criterion</th>
-            <th>ID 1</th>
-            <th>ID 2</th>
-            <th>ID 3</th>
+            ${idHeaders}
           </tr>
         </thead>
-        <tbody>${body || '<tr><td colspan="4">No selection categories found.</td></tr>'}</tbody>
+        <tbody>${body || `<tr><td colspan="${idColumnCount + 1}">No selection categories found.</td></tr>`}</tbody>
       </table>
     </div>
   `;
@@ -1091,7 +1175,7 @@ function renderInterviewsV2(){
   document.getElementById('tab-interviews').innerHTML = `
     <section class="card">
       <h2>Prospect interviewees / selected interviews</h2>
-      <p class="small">This mirrors the printed researcher sheet: each selection criterion has three ID slots. Click a filled slot to open the linked transcript below. Click the selected slot again to deselect it.</p>
+      <p class="small">Each selection criterion shows three ID slots by default. If a criterion has more than three assigned interviews, the table expands with equal-width ID columns. Click a filled slot to open the linked transcript below. Click the selected slot again to deselect it. Red slots are interview transcripts whose speaker MCID is not in the included merged dataset.</p>
       ${renderSelectionCategoryTable(data.category_rows || [])}
     </section>
 
@@ -1146,8 +1230,10 @@ function renderTranscriptV2(transcriptId){
   const speakers = uniqueTranscriptSpeakers(transcript);
   document.getElementById('transcript-speaker-legend').innerHTML = speakers.map(speaker => {
     const isResearcher = speaker.toLowerCase() === 'researcher';
+    const missingStatus = !isResearcher && !mergedStatusForParticipant(speaker).inMergedData;
     const colours = isResearcher ? {stroke:'#667085', background:'#f2f4f7'} : speakerColour(speaker);
-    return `<span class="speaker-chip" style="--speaker-color:${escapeHtml(colours.stroke)};">${escapeHtml(speaker)}</span>`;
+    const title = missingStatus ? ` title="${escapeHtml(mergedStatusForParticipant(speaker).label)}"` : '';
+    return `<span class="speaker-chip${missingStatus ? ' missing-merged-data' : ''}" style="--speaker-color:${escapeHtml(colours.stroke)};"${title}>${escapeHtml(speaker)}</span>`;
   }).join('');
 
   document.getElementById('transcript-turns').innerHTML = (transcript.turns || []).map(turn => {
