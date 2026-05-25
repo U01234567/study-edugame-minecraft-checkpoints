@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import base64
+import csv
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -15,109 +14,143 @@ from helpers._cl_main import cl_condition_summary, cl_overall_tables, cl_per_cha
 from helpers._ctrl_main import ctrl_condition_summary, ctrl_overall_tables, ctrl_quality_flags
 from helpers._eng_main import eng_condition_summary, eng_overall_tables, eng_per_chapter_tables, eng_quality_flags
 from helpers._interviews_main import load_interview_overview
-from helpers._logs_main import load_log_index
-from helpers._main_overview import STUDY_QUESTIONS, build_merged_dataset, condition_summary, exclusion_summary
-from helpers._ret_main import attach_retention_scores, build_retention_question_rows, load_retention_scores, ret_condition_summary, retention_reliability_summary
+from helpers._logs_main import build_game_log_report, load_log_index
+from helpers._main_overview import (
+    build_merged_dataset,
+    build_raw_inclusion_checklist,
+    condition_summary,
+    controlling_variable_tables,
+    demographic_distributions,
+)
+from helpers._raw_data_pipeline import decrypt_all_log_archives, publish_data_for_included_mcids
+from helpers._ret_main import (
+    attach_retention_scores,
+    build_retention_question_rows,
+    load_retention_scores,
+    ret_condition_summary,
+    retention_reliability_summary,
+)
 from helpers._shared import (
-    CONDITION_COLOURS,
-    CONDITION_ORDER,
-    DISPLAY_SOURCE_PATHS,
+    COLLECTION_LOCATIONS_PATH,
+    DATA_CONFIG_DIR,
+    DATA_DIR,
     INTERVIEW_MANIFEST_PATH,
     INTERVIEW_TRANSCRIPTS_DIR,
+    RETENTION_SCORES_PATH,
+    RETENTION_QUESTION_SPECS,
+    CONDITION_ORDER,
+    CONDITION_COLOURS,
+    INCLUDED_MCIDS_OUTPUT_PATH,
     LOG_DIR,
     MERGED_OUTPUT_PATH,
     OUTPUT_DIR,
+    RAW_CONFIG_DIR,
+    RAW_DIR,
+    RAW_LOG_DIR,
+    RAW_SURVEY_DIR,
+    RAW_TRANSCRIPTS_DIR,
+    RESOURCES_DIR,
     STATIC_DIR,
-    TEMPLATES_DIR,
-    RETENTION_QUESTION_SPECS,
-    RETENTION_SCORES_PATH,
     SURVEY_EXPORT_PATH,
-    format_seconds,
-    summarise,
+    TEMPLATES_DIR,
 )
 from helpers._stats_main import build_inferential_statistics
 from helpers._survey_io import load_survey_export
 
-CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
-
-# Global blinding switch for retention coding. Keep this False while either grader
-# is still scoring. Flip to True only after grading is complete and you are ready
-# to inspect retention scores, notes, and interrater agreement.
-SHOW_RETENTION_GRADES = False
+PUBLIC_ROUTE = False
 
 
-def image_as_data_uri(path: Path) -> str:
-    """Embed an image as a data URI so the HTML file remains shareable on its own."""
-    if not path.exists():
-        return ""
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+def log_step(message: str) -> None:
+    print(f"[sum_merged] {message}", flush=True)
 
 
-def optional_pause_choice_patterns(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Summarise manipulated checkpoint-choice patterns for included optional-pauses logs."""
-    patterns: Counter[str] = Counter()
-    for log in logs:
-        choices = [
-            choice.get("choice", "")
-            for choice in sorted(log.get("manipulated_checkpoint_choices", []), key=lambda item: item.get("moment", ""))
-            if choice.get("choice")
-        ]
-        patterns[" → ".join(choices) if choices else "No manipulated choice logged"] += 1
-    return [{"pattern": pattern, "n": count} for pattern, count in patterns.most_common()]
-
-
-def seconds_mean_sd(values: list[float | int | None]) -> str:
-    """Return duration Mean (SD), formatted in seconds/minutes."""
-    summary = summarise(values)
-    if summary["n"] == 0:
-        return ""
-    return f"{format_seconds(summary['mean'])} ({format_seconds(summary['sd'] or 0)})"
-
-
-def time_to_sixth_creature_summary(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Summarise time from chapter start to the sixth unique species by condition and chapter."""
-    rows: list[dict[str, Any]] = []
-    for condition in CONDITION_ORDER + ["Overall"]:
-        scoped = logs if condition == "Overall" else [log for log in logs if log.get("condition") == condition]
-        for chapter in (1, 2, 3):
-            values = [(log.get("time_to_sixth_creature_by_chapter") or {}).get(str(chapter)) for log in scoped]
-            summary = summarise(values)
-            rows.append({
-                "condition": condition,
-                "chapter": f"Ch{chapter}",
-                "n": summary["n"],
-                "mean_sd": seconds_mean_sd(values),
-                "min": format_seconds(summary["min"]),
-                "max": format_seconds(summary["max"]),
-            })
-    return rows
-
-
-def build_log_overview(log_index: dict[str, dict[str, Any]], participants: list[dict[str, Any]]) -> dict[str, Any]:
-    """Create compact log information for included participants only."""
-    included_ids = {participant["participant_id"] for participant in participants}
-    logs = sorted(
-        [log for participant_id, log in log_index.items() if participant_id in included_ids],
-        key=lambda item: str(item.get("participant_id", "")),
+def newest_file(directory: Path, pattern: str) -> Path:
+    if not directory.exists():
+        raise FileNotFoundError(f"Expected directory at {directory}")
+    candidates = sorted(
+        (path for path in directory.glob(pattern) if path.is_file()),
+        key=lambda item: (item.stat().st_mtime, item.name),
     )
-    optional_logs = [log for log in logs if log.get("condition") == "Optional pauses"]
+    if not candidates:
+        raise FileNotFoundError(f"No {pattern} files found in {directory}")
+    return candidates[-1]
+
+
+def route_paths(paths: dict[str, Path] | None = None) -> dict[str, Path]:
+    defaults: dict[str, Path] = {
+        "analysis_dir": REPO_ROOT,
+        "raw_dir": RAW_DIR,
+        "data_dir": DATA_DIR,
+        "output_dir": OUTPUT_DIR,
+        "resources_dir": RESOURCES_DIR,
+        "raw_log_dir": RAW_LOG_DIR,
+        "raw_survey_dir": RAW_SURVEY_DIR,
+        "raw_transcripts_dir": RAW_TRANSCRIPTS_DIR,
+        "raw_config_dir": RAW_CONFIG_DIR,
+        "data_log_dir": LOG_DIR,
+        "data_survey_path": SURVEY_EXPORT_PATH,
+        "data_config_dir": DATA_CONFIG_DIR,
+        "data_collection_locations_path": COLLECTION_LOCATIONS_PATH,
+        "data_transcripts_dir": INTERVIEW_TRANSCRIPTS_DIR,
+        "data_interview_manifest_path": INTERVIEW_MANIFEST_PATH,
+        "data_retention_scores_path": RETENTION_SCORES_PATH,
+        "merged_output_path": MERGED_OUTPUT_PATH,
+        "included_mcids_output_path": INCLUDED_MCIDS_OUTPUT_PATH,
+    }
+    if paths:
+        defaults.update({key: Path(value) for key, value in paths.items()})
+    return defaults
+
+
+def write_included_mcids(included_ids: list[str], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["MCID"], lineterminator="\n")
+        writer.writeheader()
+        for participant_id in sorted(included_ids):
+            writer.writerow({"MCID": participant_id})
+
+
+def load_text(path: Path) -> str:
+    if not path.exists():
+        raise FileNotFoundError(f"Expected template/static file at {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def render_html(payload: dict[str, Any], paths: dict[str, Path]) -> str:
+    template = load_text(TEMPLATES_DIR / "merged_app.html")
+    css = load_text(STATIC_DIR / "merged_app.css")
+    js = load_text(STATIC_DIR / "merged_app.js")
+    report_payload = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    return (
+        template
+        .replace("__MERGED_APP_CSS__", css)
+        .replace("__REPORT_PAYLOAD__", report_payload)
+        .replace("__MERGED_APP_JS__", js)
+    )
+
+
+def public_route_raw_block() -> dict[str, Any]:
     return {
-        "n_logs": len(logs),
-        "by_condition": {condition: sum(1 for log in logs if log.get("condition") == condition) for condition in CONDITION_ORDER},
-        "optional_pause_choice_patterns": optional_pause_choice_patterns(optional_logs),
-        "checkpoint_choices": [
-            {"participant_id": log.get("participant_id", ""), **choice}
-            for log in optional_logs
-            for choice in log.get("manipulated_checkpoint_choices", [])
+        "mode": "public",
+        "title": "Exclusion / inclusion based on /raw/",
+        "description": "This checklist is not evaluated because PUBLIC_ROUTE in main.py is set to True. This route uses the already prepared publishable /data/ files; private /raw/ files are not required and should not be published.",
+        "rows": [
+            {
+                "reason": "Raw inclusion/exclusion checklist not evaluated on the colleague/researcher/reviewer route",
+                "n": "—",
+                "mcids": "—",
+            }
         ],
-        "time_to_sixth_creature": time_to_sixth_creature_summary(logs),
-        "logs": logs,
+        "included_ids": [],
+        "diagnostics": {},
     }
 
 
+
+
 def add_interview_comparison_summaries(interview_data: dict[str, Any], participants: list[dict[str, Any]]) -> dict[str, Any]:
-    """Attach full-sample and interview-subsample condition summaries to the interview payload."""
+    """Attach full-sample and interview-subsample summaries for the interview viewer."""
     interview_ids = set(interview_data.get("unique_participant_ids") or [])
     interview_participants = [
         participant
@@ -134,97 +167,235 @@ def add_interview_comparison_summaries(interview_data: dict[str, Any], participa
     return enriched
 
 
-def build_report_data() -> dict[str, Any]:
-    """Load all current inputs and build the embedded app payload."""
-    survey_rows, survey_header = load_survey_export(SURVEY_EXPORT_PATH)
-    log_index = load_log_index(LOG_DIR)
-    dataset = build_merged_dataset(survey_rows, log_index)
-    participants = dataset["participants"]
-    if SHOW_RETENTION_GRADES:
-        retention_scores, retention_warnings = load_retention_scores(RETENTION_SCORES_PATH)
-        attach_retention_scores(participants, retention_scores)
-        retention_reliability = retention_reliability_summary(RETENTION_SCORES_PATH)
-    else:
-        retention_warnings = ["Retention grades are currently hidden because SHOW_RETENTION_GRADES is False in apps/summarise_merged.py."]
-        retention_reliability = {
-            "available": False,
-            "method": "Retention scores and agreement statistics are hidden until SHOW_RETENTION_GRADES is set to True.",
-            "rows": [],
-        }
 
-    interview_data = load_interview_overview(INTERVIEW_TRANSCRIPTS_DIR, participants, INTERVIEW_MANIFEST_PATH)
 
+def slim_interview_overview(overview: dict[str, Any]) -> dict[str, Any]:
+    """Keep the interview payload focused; do not embed full transcript turns."""
+    transcripts = []
+    for transcript in overview.get("transcripts", []):
+        transcripts.append({
+            "transcript_id": transcript.get("transcript_id", ""),
+            "filename": transcript.get("filename", ""),
+            "title": transcript.get("title", ""),
+            "speaker_ids": ", ".join(transcript.get("speaker_ids", [])),
+            "speaker_count": transcript.get("speaker_count", 0),
+            "n_turns": transcript.get("n_turns", 0),
+            "category_labels": "; ".join(transcript.get("category_labels", [])),
+            "notes": transcript.get("notes", ""),
+        })
     return {
-        "show_retention_grades": SHOW_RETENTION_GRADES,
-        "retention_reliability": retention_reliability,
-        "sources": DISPLAY_SOURCE_PATHS,
-        "survey_header_count": len(survey_header),
-        "condition_order": CONDITION_ORDER,
-        "condition_colours": CONDITION_COLOURS,
-        "study_questions": STUDY_QUESTIONS,
-        "conceptual_model_data_uri": image_as_data_uri(CONCEPTUAL_MODEL_PATH),
-        "audit": dataset["audit"],
-        "audit_rows": dataset["audit_rows"],
-        "participants": participants,
-        "excluded_participants": dataset["excluded_participants"],
-        "exclusion_summary": exclusion_summary(dataset["excluded_participants"]),
-        "summaries": {
-            "condition": condition_summary(participants),
-            "retention": ret_condition_summary(participants, CONDITION_ORDER),
-            "cognitive_load": cl_condition_summary(participants, CONDITION_ORDER),
-            "engagement": eng_condition_summary(participants, CONDITION_ORDER),
-            "control": ctrl_condition_summary(participants, CONDITION_ORDER),
-        },
-        "scale_tables": {
-            "cognitive_load": {
-                "per_chapter": cl_per_chapter_tables(participants),
-                "overall": cl_overall_tables(participants),
-                "merged": cl_condition_summary(participants, CONDITION_ORDER),
-                "flags": cl_quality_flags(participants),
-            },
-            "engagement": {
-                "per_chapter": eng_per_chapter_tables(participants),
-                "overall": eng_overall_tables(participants),
-                "merged": eng_condition_summary(participants, CONDITION_ORDER),
-                "flags": eng_quality_flags(participants),
-            },
-            "control": {
-                "overall": ctrl_overall_tables(participants),
-                "merged": ctrl_condition_summary(participants, CONDITION_ORDER),
-                "flags": ctrl_quality_flags(participants),
-            },
-        },
-        "retention_questions": [{"key": key, "label": label} for key, label in RETENTION_QUESTION_SPECS],
-        "retention_answer_rows": build_retention_question_rows(participants),
-        "logs": build_log_overview(log_index, participants),
-        "interviews": add_interview_comparison_summaries(interview_data, participants),
-        "statistics": build_inferential_statistics(participants),
-        "warnings": retention_warnings,
+        "available": overview.get("available", False),
+        "n_files": overview.get("n_files", 0),
+        "n_turns": overview.get("n_turns", 0),
+        "n_unique_participants": len(overview.get("unique_participant_ids", [])),
+        "unique_participant_ids": ", ".join(overview.get("unique_participant_ids", [])),
+        "category_rows": overview.get("category_rows", []),
+        "type_rows": overview.get("type_rows", []),
+        "transcripts": transcripts,
+        "notes": overview.get("notes", []),
     }
 
-
-def render_html(report_data: dict[str, Any]) -> str:
-    """Render a standalone HTML app from external template, CSS, and JavaScript files."""
-    payload = json.dumps(report_data, ensure_ascii=False).replace("</", "<\\/")
-    template = (TEMPLATES_DIR / "merged_app.html").read_text(encoding="utf-8")
-    css = (STATIC_DIR / "merged_app.css").read_text(encoding="utf-8")
-    script = (STATIC_DIR / "merged_app.js").read_text(encoding="utf-8")
+def route_description(public_route: bool) -> str:
+    if public_route:
+        return (
+            "The value of PUBLIC_ROUTE in main.py was set to True, which means this report uses "
+            "the colleague/researcher/reviewer route: all calculations read directly from /data/, and /raw/ is not required."
+        )
     return (
-        template
-        .replace("__REPORT_PAYLOAD__", payload)
-        .replace("__MERGED_APP_CSS__", css)
-        .replace("__MERGED_APP_JS__", script)
+        "The value of PUBLIC_ROUTE in main.py was set to False, which means this report uses "
+        "the internal research-team route: /raw/ is used only for the inclusion/exclusion block and for rebuilding /data/. "
+        "All statistics shown below are calculated from /data/."
     )
 
 
-def main() -> int:
-    """Generate output/merged_summary.html as a standalone interactive HTML file."""
-    report_data = build_report_data()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    MERGED_OUTPUT_PATH.write_text(render_html(report_data), encoding="utf-8")
-    print(f"Merged standalone summary written to {MERGED_OUTPUT_PATH.resolve()}")
-    print(f"Included participants: {report_data['audit']['included_count']}")
-    print(f"Excluded participants: {report_data['audit']['excluded_count']}")
+def private_route_prepare_data(paths: dict[str, Path]) -> dict[str, Any]:
+    log_step("Private route: checking /raw/logs/ for zipped or encrypted log archives.")
+    extraction = decrypt_all_log_archives(paths["raw_log_dir"])
+    if extraction.copied or extraction.decrypted_archives or extraction.processed_archives:
+        log_step(
+            "Archive processing complete: "
+            f"{len(extraction.processed_archives)} archive(s) processed, "
+            f"{len(extraction.decrypted_archives)} decrypted, "
+            f"{len(extraction.copied)} log(s) copied."
+        )
+    else:
+        log_step("No new archives needed extracting.")
+    for error in extraction.errors:
+        print(f"[sum_merged] WARNING: {error}", flush=True)
+
+    raw_survey_path = newest_file(paths["raw_survey_dir"], "*.tsv")
+    log_step(f"Building raw inclusion/exclusion checklist from {raw_survey_path.name} and /raw/logs/.")
+    raw_survey_rows, _headers = load_survey_export(raw_survey_path)
+    raw_checklist = build_raw_inclusion_checklist(raw_survey_rows, paths["raw_log_dir"])
+
+    diagnostics = {
+        "hidden_non_consent_log_ids": raw_checklist["hidden_non_consent_log_ids"],
+        "hidden_non_consent_in_survey": raw_checklist["hidden_non_consent_in_survey"],
+        "duplicate_log_ids": raw_checklist["duplicate_log_ids"],
+        "survey_more_than_two_rows_ids": raw_checklist["survey_more_than_two_rows_ids"],
+        "survey_missing_mcid_rows": raw_checklist["survey_missing_mcid_rows"],
+    }
+    raw_checklist["diagnostics"] = diagnostics
+    raw_checklist["mode"] = "private"
+    raw_checklist["title"] = "Exclusion / inclusion based on /raw/"
+    raw_checklist["description"] = "This is the only part of the report that uses private raw files. Non-consent logs are filtered out before this checklist because they are usually researcher/test closures rather than participant sessions."
+
+    if diagnostics["hidden_non_consent_in_survey"]:
+        print(
+            "[sum_merged] WARNING: Non-consent log MCID(s) also found in survey data: "
+            + ", ".join(diagnostics["hidden_non_consent_in_survey"]),
+            flush=True,
+        )
+    print(
+        "[sum_merged] MCID(s) found in logs more than once: "
+        + (", ".join(diagnostics["duplicate_log_ids"]) if diagnostics["duplicate_log_ids"] else "none"),
+        flush=True,
+    )
+    print(
+        "[sum_merged] MCID(s) with more than two survey rows: "
+        + (", ".join(diagnostics["survey_more_than_two_rows_ids"]) if diagnostics["survey_more_than_two_rows_ids"] else "none"),
+        flush=True,
+    )
+
+    included_ids = raw_checklist["included_ids"]
+    write_included_mcids(included_ids, paths["included_mcids_output_path"])
+    log_step(f"Publishing stripped /data/ files for {len(included_ids)} included MCID(s).")
+    publish_summary = publish_data_for_included_mcids(
+        included_ids,
+        raw_dir=paths["raw_dir"],
+        data_dir=paths["data_dir"],
+        resources_dir=paths["resources_dir"],
+    )
+    for line in publish_summary.lines():
+        print(f"[sum_merged] {line}", flush=True)
+    raw_checklist["publish_summary"] = publish_summary.lines()
+    return raw_checklist
+
+
+def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, Any]:
+    if public_route:
+        log_step("PUBLIC_ROUTE=True: using existing publishable /data/ files.")
+        raw_block = public_route_raw_block()
+    else:
+        raw_block = private_route_prepare_data(paths)
+
+    log_step("Loading /data/ survey export and /data/logs/.")
+    survey_rows, _headers = load_survey_export(paths["data_survey_path"])
+    log_index = load_log_index(paths["data_log_dir"])
+
+    log_step("Building participant-level merged dataset.")
+    merged = build_merged_dataset(
+        survey_rows,
+        log_index,
+        collection_locations_path=paths.get("data_collection_locations_path", COLLECTION_LOCATIONS_PATH),
+    )
+    participants = merged["participants"]
+
+    log_step("Building retention summaries.")
+    retention_score_path = paths.get("data_retention_scores_path", RETENTION_SCORES_PATH)
+    retention_scores, retention_warnings = load_retention_scores(retention_score_path)
+    attach_retention_scores(participants, retention_scores)
+    retention_question_rows = build_retention_question_rows(participants)
+    retention = {
+        "warnings": retention_warnings,
+        "condition_summary": ret_condition_summary(participants, CONDITION_ORDER),
+        "reliability": retention_reliability_summary(retention_score_path),
+        "answer_rows": retention_question_rows,
+        "questions": [
+            {"key": key, "label": label}
+            for key, label in RETENTION_QUESTION_SPECS
+        ],
+        "show_grades": bool(retention_scores),
+    }
+
+    log_step("Building demographic and collection-context summaries.")
+    summary_rows = condition_summary(participants)
+    distributions = demographic_distributions(participants)
+    controlling_variables = controlling_variable_tables(participants)
+
+    log_step("Building cognitive load, engagement, and perceived-control summaries.")
+    scale_tables = {
+        "cognitive_load": {
+            "per_chapter": cl_per_chapter_tables(participants),
+            "overall": cl_overall_tables(participants),
+            "merged": cl_condition_summary(participants, CONDITION_ORDER),
+            "flags": cl_quality_flags(participants),
+        },
+        "engagement": {
+            "per_chapter": eng_per_chapter_tables(participants),
+            "overall": eng_overall_tables(participants),
+            "merged": eng_condition_summary(participants, CONDITION_ORDER),
+            "flags": eng_quality_flags(participants),
+        },
+        "control": {
+            "overall": ctrl_overall_tables(participants),
+            "merged": ctrl_condition_summary(participants, CONDITION_ORDER),
+            "flags": ctrl_quality_flags(participants),
+        },
+    }
+
+    log_step("Building game-log summaries.")
+    game_logs = build_game_log_report(participants)
+
+    log_step("Building interview overview.")
+    interviews = add_interview_comparison_summaries(
+        load_interview_overview(
+            paths.get("data_transcripts_dir", INTERVIEW_TRANSCRIPTS_DIR),
+            participants=participants,
+            manifest_path=paths.get("data_interview_manifest_path", INTERVIEW_MANIFEST_PATH),
+        ),
+        participants,
+    )
+
+    log_step("Building inferential-statistics overview.")
+    inferential_statistics = build_inferential_statistics(participants, retention_score_path)
+
+    return {
+        "meta": {
+            "title": "Merged study summary",
+            "route": "PUBLIC_ROUTE=True" if public_route else "PUBLIC_ROUTE=False",
+            "route_description": route_description(public_route),
+            "data_note": "This statistics app uses /data/: publishable, stripped files used for the report calculations.",
+            "data_dir_label": "/data/",
+            "raw_dir_label": "/raw/",
+        },
+        "raw_block": raw_block,
+        "data_audit": merged["audit"],
+        "condition_summary": summary_rows,
+        "demographics": distributions,
+        "controlling_variables": controlling_variables,
+        "condition_order": CONDITION_ORDER,
+        "condition_colours": CONDITION_COLOURS,
+        "scale_tables": scale_tables,
+        "game_logs": game_logs,
+        "interviews": interviews,
+        "inferential_statistics": inferential_statistics,
+        "statistics": inferential_statistics,
+        "retention": retention,
+        "participants": participants,
+        "tabs": {
+            "main": "Main",
+            "retention": "Retention",
+            "cognitive-load": "Cognitive load",
+            "engagement": "Engagement",
+            "control": "Perceived control",
+            "logs": "Game logs",
+            "interviews": "Interviews",
+            "statistics": "Inferential statistics",
+        },
+    }
+
+
+def main(public_route: bool = PUBLIC_ROUTE, paths: dict[str, Path] | None = None) -> int:
+    resolved_paths = route_paths(paths)
+    log_step("Starting simplified merged summary.")
+    payload = build_payload(public_route=public_route, paths=resolved_paths)
+    log_step("Rendering HTML report.")
+    html = render_html(payload, resolved_paths)
+    output_path = resolved_paths["merged_output_path"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
+    log_step(f"Wrote {output_path}")
     return 0
 
 

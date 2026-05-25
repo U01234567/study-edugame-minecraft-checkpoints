@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import re
 from collections import Counter, defaultdict
@@ -87,6 +88,47 @@ def read_transcript_xlsx(path: Path) -> list[dict[str, str]]:
     return turns
 
 
+def read_transcript_csv(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.reader(handle))
+    if not rows:
+        return []
+
+    header_row: list[str] | None = None
+    header_index = 0
+    for index, row in enumerate(rows):
+        headers = [clean(cell) for cell in row]
+        if any(headers):
+            header_row = headers
+            header_index = index
+            break
+
+    if not header_row:
+        return []
+
+    header_lookup = {
+        header.lower(): index
+        for index, header in enumerate(header_row)
+        if header
+    }
+    speaker_index = header_lookup.get("speaker")
+    transcript_index = header_lookup.get("transcript")
+
+    turns: list[dict[str, str]] = []
+    for row in rows[header_index + 1:]:
+        speaker = clean(row[speaker_index]) if speaker_index is not None and speaker_index < len(row) else ""
+        transcript = clean(row[transcript_index]) if transcript_index is not None and transcript_index < len(row) else ""
+        if speaker or transcript:
+            turns.append({"speaker": speaker, "transcript": transcript})
+    return turns
+
+
+def read_transcript_file(path: Path) -> list[dict[str, str]]:
+    if path.suffix.lower() == ".csv":
+        return read_transcript_csv(path)
+    return read_transcript_xlsx(path)
+
+
 def participant_ids_from_turns(turns: list[dict[str, str]]) -> list[str]:
     ids: list[str] = []
     for turn in turns:
@@ -147,7 +189,13 @@ def load_interview_overview(
             "notes": ["Interview transcript directory not found."],
         }
 
-    transcript_paths = sorted(path for path in transcripts_dir.glob("*.xlsx") if not path.name.startswith("~$"))
+    transcript_paths = sorted(
+        path
+        for path in transcripts_dir.iterdir()
+        if path.is_file()
+        and not path.name.startswith("~$")
+        and path.suffix.lower() in {".xlsx", ".csv"}
+    )
     transcripts: list[dict[str, Any]] = []
     category_to_ids: dict[str, set[str]] = defaultdict(set)
     category_to_files: dict[str, set[str]] = defaultdict(set)
@@ -158,7 +206,7 @@ def load_interview_overview(
     notes: list[str] = []
 
     for index, path in enumerate(transcript_paths, start=1):
-        turns = read_transcript_xlsx(path)
+        turns = read_transcript_file(path)
         speaker_ids = participant_ids_from_turns(turns)
         all_participant_ids.update(speaker_ids)
         total_turns += len(turns)

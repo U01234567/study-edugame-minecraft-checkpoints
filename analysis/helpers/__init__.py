@@ -1,1 +1,1 @@
-"""Helper modules for the standalone merged summary app."""
+"""Helpers for the simplified merged-summary app."""

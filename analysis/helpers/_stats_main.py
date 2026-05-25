@@ -4,6 +4,7 @@ import copy
 import math
 import random
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -118,9 +119,9 @@ def _condition_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     return {condition: counts.get(condition, 0) for condition in CONDITION_ORDER}
 
 
-def _attach_scores(participants: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+def _attach_scores(participants: list[dict[str, Any]], retention_scores_path: Path = RETENTION_SCORES_PATH) -> tuple[list[dict[str, Any]], list[str]]:
     enriched = [copy.deepcopy(participant) for participant in participants]
-    scores, warnings = load_retention_scores(RETENTION_SCORES_PATH)
+    scores, warnings = load_retention_scores(retention_scores_path)
     if scores:
         attach_retention_scores(enriched, scores)
     return enriched, warnings
@@ -802,8 +803,11 @@ def _model_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-def build_inferential_statistics(participants: list[dict[str, Any]]) -> dict[str, Any]:
-    enriched, retention_warnings = _attach_scores(participants)
+def build_inferential_statistics(
+    participants: list[dict[str, Any]],
+    retention_scores_path: Path = RETENTION_SCORES_PATH,
+) -> dict[str, Any]:
+    enriched, retention_warnings = _attach_scores(participants, retention_scores_path)
     rows = _analysis_rows(enriched)
 
     direct_immediate = _fit_lm(rows, label="H1 immediate retention", outcome="ret_immediate_score", numeric_predictors=["required_pause_contrast", "optional_pause_contrast"], categorical_predictors=_retention_covariates(rows, "ret_immediate_score"))

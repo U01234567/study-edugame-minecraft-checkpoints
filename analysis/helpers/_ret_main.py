@@ -162,10 +162,14 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
     return rows
 
 
-def _load_plain_tsv(path: Path) -> list[dict[str, str]]:
+def _detect_delimiter(path: Path) -> str:
+    return "\t" if path.suffix.lower() == ".tsv" else ","
+
+
+def _load_plain_delimited(path: Path) -> list[dict[str, str]]:
     encoding = detect_text_encoding(path)
     with path.open("r", encoding=encoding, newline="") as handle:
-        return [dict(row) for row in csv.DictReader(handle, delimiter="\t")]
+        return [dict(row) for row in csv.DictReader(handle, delimiter=_detect_delimiter(path))]
 
 
 def _normalise_moment(value: object) -> str:
@@ -246,7 +250,7 @@ def load_retention_scores(path: Path = RETENTION_SCORES_PATH) -> tuple[dict[str,
     if not path.exists():
         return {}, [f"Retention scoring file not found: {path}"]
 
-    rows = _load_plain_tsv(path)
+    rows = _load_plain_delimited(path)
     if not rows:
         return {}, [f"Retention scoring file is empty: {path}"]
 
@@ -329,13 +333,13 @@ def _agreement_row(label: str, pairs: list[tuple[int, int]]) -> dict[str, Any]:
 
 def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[str, Any]:
     if not path.exists():
-        return {"available": False, "method": "No retention_scores.tsv file found.", "rows": []}
+        return {"available": False, "method": "No retention_scoring.csv file found.", "rows": []}
 
-    rows = _load_plain_tsv(path)
+    rows = _load_plain_delimited(path)
     if not rows or not PROMPT_SCORE_COLUMNS.issubset(set(rows[0])):
         return {
             "available": False,
-            "method": "Agreement requires the prompt-level retention_scores.tsv schema produced by score_retention.py.",
+            "method": "Agreement requires the prompt-level retention_scoring.csv schema produced by score_retention.py.",
             "rows": [],
         }
 

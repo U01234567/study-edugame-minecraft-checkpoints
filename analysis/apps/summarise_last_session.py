@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import csv
 import dataclasses
 import datetime as dt
 import html
@@ -9,6 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS_LOG_DIR = REPO_ROOT / "analysis" / "logs"
+RAW_LOG_DIR = REPO_ROOT / "analysis" / "raw" / "logs"
+DATA_LOG_DIR = REPO_ROOT / "analysis" / "data" / "logs"
 CREATURE_CARDS_PATH = (
     REPO_ROOT
     / "mods"
@@ -301,10 +304,17 @@ class SessionSummary:
         return 0.0 if total == 0 else 100.0 * self.final_score_interacted_species() / total
 
 
-def main() -> int:
-    log_path = latest_session_log_path(ANALYSIS_LOG_DIR)
+def main(public_route: bool | None = None, paths: dict[str, Path] | None = None) -> int:
+    if paths:
+        log_dir = Path(paths["data_log_dir"] if public_route else paths["raw_log_dir"])
+    elif public_route:
+        log_dir = DATA_LOG_DIR
+    else:
+        log_dir = RAW_LOG_DIR if RAW_LOG_DIR.exists() else ANALYSIS_LOG_DIR
+
+    log_path = latest_session_log_path(log_dir)
     if log_path is None:
-        print(f"No study session log found in: {ANALYSIS_LOG_DIR}")
+        print(f"No study session log found in: {log_dir}")
         return 1
 
     if not CREATURE_CARDS_PATH.exists():
@@ -536,15 +546,34 @@ def strip_numeric_text(text: str) -> str:
 def latest_session_log_path(log_dir: Path) -> Path | None:
     if not log_dir.exists():
         return None
-    candidates = sorted(log_dir.glob("study-*.log"))
-    return candidates[-1] if candidates else None
+    candidates = [
+        *log_dir.glob("study-*.log"),
+        *log_dir.glob("*.csv"),
+    ]
+    candidates = [path for path in candidates if path.is_file()]
+    return sorted(candidates, key=lambda item: (item.stat().st_mtime, item.name))[-1] if candidates else None
+
+
+def read_session_log_lines(path: Path) -> list[str]:
+    if path.suffix.lower() != ".csv":
+        return path.read_text(encoding="utf-8", errors="replace").splitlines()
+    lines: list[str] = []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            date = (row.get("Date") or "").strip()
+            time = (row.get("Time") or "").strip()
+            activity = (row.get("Activity") or "").strip()
+            if date and time and activity:
+                lines.append(f"[{date}] [{time}] | {activity}")
+    return lines
 
 
 def parse_session_log(path: Path) -> tuple[Metadata, list[ParsedEvent]]:
     metadata: dict[str, str] = {}
     events: list[ParsedEvent] = []
 
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in read_session_log_lines(path):
         line = raw_line.strip()
         if not line or line == "================================================================":
             continue

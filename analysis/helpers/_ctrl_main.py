@@ -87,9 +87,9 @@ def ctrl_condition_summary(participants: list[dict[str, Any]], condition_order: 
         rows.append({
             "condition": condition,
             "n": len(scoped),
-            "ctrl_mean_sd": mean_sd_text(values),
-            "ctrl_min": two_decimals(summary["min"]),
-            "ctrl_max": two_decimals(summary["max"]),
+            "ctrl_perceived_mean_sd": mean_sd_text(values),
+            "ctrl_perceived_min": two_decimals(summary["min"]),
+            "ctrl_perceived_max": two_decimals(summary["max"]),
         })
 
     return rows

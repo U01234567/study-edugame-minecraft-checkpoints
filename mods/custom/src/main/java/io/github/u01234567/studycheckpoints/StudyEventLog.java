@@ -24,7 +24,7 @@ public final class StudyEventLog {
 
     private static final Path PRIMARY_LOG_DIR = resolvePrimaryLogDir();
     private static final Path MIRROR_LOG_DIR =
-            GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
+            GAME_DIR.resolve("analysis").resolve("raw").resolve("logs").normalize().toAbsolutePath();
     private static final Path[] ANALYSIS_DIR_CANDIDATES = new Path[] {
             GAME_DIR.resolve("analysis").normalize().toAbsolutePath()
     };
@@ -46,7 +46,7 @@ public final class StudyEventLog {
             return Path.of(explicit).normalize().toAbsolutePath();
         }
 
-        return GAME_DIR.resolve("logs").resolve("study-checkpoints-sessions").normalize().toAbsolutePath();
+        return GAME_DIR.resolve("analysis").resolve("raw").resolve("logs").normalize().toAbsolutePath();
     }
 
     private static boolean automaticSummaryEnabled() {
@@ -710,8 +710,13 @@ public final class StudyEventLog {
 
     private static synchronized void appendLine(String line) {
         try {
-            appendLineToFile(ensurePrimaryLogFile(), line);
-            appendLineToFile(ensureMirrorLogFile(), line);
+            Path primaryLogFile = ensurePrimaryLogFile();
+            Path mirrorLogFile = ensureMirrorLogFile();
+
+            appendLineToFile(primaryLogFile, line);
+            if (!primaryLogFile.equals(mirrorLogFile)) {
+                appendLineToFile(mirrorLogFile, line);
+            }
         } catch (IOException e) {
             StudyCheckpoints.LOGGER.error("Failed to write study log file for session {}.", SESSION_ID, e);
         }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import re
 from collections import Counter
 from pathlib import Path
@@ -22,6 +23,7 @@ from ._shared import (
     parse_int,
     parse_numeric,
     rounded,
+    summarise,
 )
 
 LOG_LINE_RE = re.compile(
@@ -60,6 +62,37 @@ def parse_log_line(line: str) -> dict[str, Any] | None:
         "event": parts[0],
         "fields": fields,
     }
+
+
+def read_publishable_log_lines(path: Path) -> list[str]:
+    """Read data/logs/{MCID}.csv and reconstruct parseable event lines.
+
+    The publishable CSV intentionally omits per-line session_id and player fields;
+    the MCID is recovered from the file name by parse_log_file().
+    """
+    lines: list[str] = []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            date = clean(row.get("Date"))
+            time = clean(row.get("Time"))
+            activity = clean(row.get("Activity"))
+            if not date or not time or not activity:
+                continue
+            lines.append(f"[{date}] [{time}] | {activity}")
+    return lines
+
+
+def log_candidate_paths(log_dir: Path) -> list[Path]:
+    """Return raw study logs and publishable CSV logs from a directory."""
+    if not log_dir.exists():
+        return []
+
+    paths = [
+        *log_dir.glob("study-*.log"),
+        *log_dir.glob("*.csv"),
+    ]
+    return sorted({path for path in paths if path.is_file()}, key=lambda item: item.name)
 
 
 def chapter_from_title(title: object) -> int | None:
@@ -167,9 +200,13 @@ def choice_time_from_context(
 
 
 def parse_log_file(path: Path) -> dict[str, Any] | None:
-    """Parse one study-*.log file using exact event names emitted by the Java mod."""
+    """Parse one raw study log or one publishable data/logs/{MCID}.csv file."""
+    is_publishable_csv = path.suffix.lower() == ".csv"
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if is_publishable_csv:
+            lines = read_publishable_log_lines(path)
+        else:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return None
 
@@ -178,7 +215,7 @@ def parse_log_file(path: Path) -> dict[str, Any] | None:
         return None
 
     session_ids = [clean(event["fields"].get("session_id")) for event in events if clean(event["fields"].get("session_id"))]
-    participant_id = session_ids[0] if session_ids else ""
+    participant_id = session_ids[0] if session_ids else (path.stem if is_publishable_csv else "")
     if not participant_id:
         return None
 
@@ -195,7 +232,10 @@ def parse_log_file(path: Path) -> dict[str, Any] | None:
         for event in consent_events
         if clean(event["fields"].get("choice")) == "agree_and_continue"
     ]
-    consent_agreed_at = agreed_events[0]["timestamp"] if agreed_events else ""
+    # Publishable CSV logs intentionally start after the consent line. Treat the
+    # first retained event as the in-game start point while preserving the fact
+    # that the file was generated only from consenting, included participants.
+    consent_agreed_at = agreed_events[0]["timestamp"] if agreed_events else (events[0]["timestamp"] if is_publishable_csv else "")
 
     questionnaire_events = [event for event in events if event["event"] == "questionnaire_button_pressed"]
     survey_opened_at = questionnaire_events[0]["timestamp"] if questionnaire_events else ""
@@ -409,7 +449,7 @@ def parse_log_file(path: Path) -> dict[str, Any] | None:
         "condition": condition,
         "condition_raw": raw_condition,
         "consent_choices": [clean(event["fields"].get("choice")) for event in consent_events],
-        "agreed_to_participate": bool(agreed_events),
+        "agreed_to_participate": bool(agreed_events) or is_publishable_csv,
         "completed_chapters": sorted(completed_chapter_set),
         "completed_all_chapters": REQUIRED_COMPLETED_CHAPTERS.issubset(completed_chapter_set),
         "completed_learning_chapters": REQUIRED_INTERACTION_CHAPTERS.issubset(completed_chapter_set),
@@ -454,15 +494,215 @@ def parse_log_file(path: Path) -> dict[str, Any] | None:
 
 
 def load_log_index(log_dir: Path = LOG_DIR) -> dict[str, dict[str, Any]]:
-    """Parse all study-*.log files and return them indexed by MCID/session_id."""
-    if not log_dir.exists():
-        return {}
-
+    """Parse raw study logs or publishable CSV logs indexed by MCID/session_id."""
     parsed_logs: dict[str, dict[str, Any]] = {}
-    for path in sorted(log_dir.glob("study-*.log")):
+    for path in log_candidate_paths(log_dir):
         parsed = parse_log_file(path)
         if parsed is None:
             continue
         parsed_logs[parsed["participant_id"]] = parsed
 
     return parsed_logs
+
+
+# ---------------------------------------------------------------------------
+# Dense merged-report summaries for the Game logs tab
+# ---------------------------------------------------------------------------
+
+LOG_REPORT_CONDITIONS = ["Required continue", "Required pauses", "Optional pauses", "Overall"]
+
+LOG_THEME_SPECS: list[dict[str, Any]] = [
+    {
+        "title": "Time and Progress",
+        "description": "Durations are based on /data/logs/, where the game window starts after consent and ends at the first questionnaire-button press when available.",
+        "metrics": [
+            {"key": "game_duration_seconds", "label": "Game duration", "kind": "duration"},
+            {"key": "ch0_duration_seconds", "label": "Chapter 0 duration", "kind": "duration"},
+        ],
+    },
+    {
+        "title": "Creature Interaction",
+        "description": "Creature-card and creature-coverage metrics calculated from retained card-open/card-close events.",
+        "metrics": [
+            {"key": "logs_creature_score_of_18", "label": "Unique creature species", "kind": "number"},
+            {"key": "interacted_creature_instance_count", "label": "Creature instances interacted with", "kind": "number"},
+            {"key": "species_revisited_count", "label": "Species revisited", "kind": "number"},
+            {"key": "creatures_revisited_count", "label": "Creature instances revisited", "kind": "number"},
+            {"key": "card_open_count_learning", "label": "Learning-chapter card opens", "kind": "count"},
+            {"key": "card_close_count_learning", "label": "Learning-chapter card closes", "kind": "count"},
+            {"key": "card_reading_seconds", "label": "Total card reading time", "kind": "duration"},
+            {"key": "card_read_time_mean_ms", "label": "Mean card read time", "kind": "duration_ms"},
+        ],
+    },
+    {
+        "title": "Movement and Time Allocation",
+        "description": "Movement estimates are based on retained movement samples from the in-game interval.",
+        "metrics": [
+            {"key": "walking_seconds_estimate", "label": "Walking time", "kind": "duration"},
+            {"key": "sprinting_seconds_estimate", "label": "Sprinting time", "kind": "duration"},
+            {"key": "walking_sprinting_seconds_estimate", "label": "Walking + sprinting time", "kind": "duration"},
+            {"key": "other_seconds_estimate", "label": "Still / other time", "kind": "duration"},
+            {"key": "movement_sample_count", "label": "Movement samples", "kind": "count"},
+            {"key": "movement_total_distance", "label": "Total movement distance", "kind": "number"},
+            {"key": "movement_total_sprint_distance", "label": "Sprint distance", "kind": "number"},
+        ],
+    },
+]
+
+LOG_VISUAL_METRICS = [
+    {"key": "logs_creature_score_of_18", "label": "Creature species", "kind": "number", "min": 3, "max": 18},
+    {"key": "movement_total_distance", "label": "Movement distance", "kind": "number"},
+]
+
+
+def _metric_number(value: object) -> float | None:
+    parsed = parse_numeric(value)
+    if parsed is None:
+        return None
+    return float(parsed)
+
+
+def _format_metric_value(value: float | None, kind: str) -> str:
+    if value is None:
+        return "—"
+    if kind == "duration":
+        return format_seconds(value) or "—"
+    if kind == "duration_ms":
+        return format_seconds(value / 1000.0) or "—"
+    if kind == "percent":
+        return f"{value:.1f}%"
+    if kind == "count":
+        return str(int(round(value))) if float(value).is_integer() else f"{value:.2f}"
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
+
+
+def _metric_summary(values: list[object], kind: str) -> dict[str, Any]:
+    numeric = [_metric_number(value) for value in values]
+    summary = summarise(numeric)
+    if not summary["n"]:
+        return {"n": 0, "mean_sd": "—", "min": "—", "max": "—"}
+    return {
+        "n": summary["n"],
+        "mean_sd": f"{_format_metric_value(summary['mean'], kind)} ({_format_metric_value(summary['sd'], kind)})",
+        "min": _format_metric_value(summary["min"], kind),
+        "max": _format_metric_value(summary["max"], kind),
+    }
+
+
+def _scope_for_condition(participants: list[dict[str, Any]], condition: str) -> list[dict[str, Any]]:
+    if condition == "Overall":
+        return participants
+    return [participant for participant in participants if participant.get("condition") == condition]
+
+
+def _metric_row(participants: list[dict[str, Any]], metric: dict[str, str]) -> dict[str, Any]:
+    row: dict[str, Any] = {"metric": metric["label"]}
+    for condition in LOG_REPORT_CONDITIONS:
+        scoped = _scope_for_condition(participants, condition)
+        row[condition] = _metric_summary([participant.get(metric["key"]) for participant in scoped], metric.get("kind", "number"))
+    return row
+
+
+def _theme_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blocks = []
+    for theme in LOG_THEME_SPECS:
+        blocks.append({
+            "title": theme["title"],
+            "description": theme["description"],
+            "rows": [_metric_row(participants, metric) for metric in theme["metrics"]],
+        })
+    return blocks
+
+
+def seconds_mean_sd(values: list[float | int | None]) -> str:
+    summary = summarise(values)
+    if not summary["n"]:
+        return ""
+    return f"{format_seconds(summary['mean'])} ({format_seconds(summary['sd'] or 0)})"
+
+
+def time_to_sixth_creature_summary(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for condition in LOG_REPORT_CONDITIONS:
+        scoped = _scope_for_condition(participants, condition)
+        for chapter in (1, 2, 3):
+            key = f"time_to_sixth_creature_ch{chapter}_seconds"
+            values = [participant.get(key) for participant in scoped]
+            summary = summarise(values)
+            rows.append({
+                "condition": condition,
+                "chapter": f"Ch{chapter}",
+                "n": summary["n"],
+                "total": len(scoped),
+                "mean_sd": seconds_mean_sd(values),
+                "min": format_seconds(summary["min"]),
+                "max": format_seconds(summary["max"]),
+            })
+    return rows
+
+
+def optional_pause_choice_patterns(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    patterns: Counter[str] = Counter()
+    optional_participants = [participant for participant in participants if participant.get("condition") == "Optional pauses"]
+    for participant in optional_participants:
+        choices = [
+            clean(choice.get("choice"))
+            for choice in sorted(participant.get("manipulated_checkpoint_choices", []), key=lambda item: item.get("moment", ""))
+            if clean(choice.get("choice"))
+        ]
+        patterns[" → ".join(choices) if choices else "No manipulated choice logged"] += 1
+    return [{"pattern": pattern, "n": count} for pattern, count in patterns.most_common()]
+
+
+def optional_pause_checkpoint_choices(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for participant in participants:
+        if participant.get("condition") != "Optional pauses":
+            continue
+        for choice in participant.get("manipulated_checkpoint_choices", []):
+            rows.append({
+                "participant_id": participant.get("participant_id", ""),
+                "moment": choice.get("moment", ""),
+                "choice": choice.get("choice", ""),
+                "choice_time_label": choice.get("choice_time_label", ""),
+                "choice_time_ms": choice.get("choice_time_ms"),
+            })
+    return rows
+
+
+def _yes_no_summary(participants: list[dict[str, Any]], key: str, label: str) -> dict[str, Any]:
+    row: dict[str, Any] = {"check": label}
+    for condition in LOG_REPORT_CONDITIONS:
+        scoped = _scope_for_condition(participants, condition)
+        denominator = len(scoped)
+        numerator = sum(1 for participant in scoped if bool(participant.get(key)))
+        percentage = (100.0 * numerator / denominator) if denominator else None
+        row[condition] = "—" if percentage is None else f"{numerator}/{denominator} ({percentage:.1f}%)"
+    return row
+
+
+def _categorical_count_rows(participants: list[dict[str, Any]], key: str, label_key: str) -> list[dict[str, Any]]:
+    categories = sorted({clean(participant.get(key)) or "Missing / not set" for participant in participants})
+    rows = []
+    for category in categories:
+        row: dict[str, Any] = {label_key: category}
+        for condition in LOG_REPORT_CONDITIONS:
+            scoped = _scope_for_condition(participants, condition)
+            row[condition] = sum(1 for participant in scoped if (clean(participant.get(key)) or "Missing / not set") == category)
+        rows.append(row)
+    return rows
+
+
+def build_game_log_report(participants: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build dense per-condition summaries for the Game logs tab."""
+    log_rows = sorted((dict(participant) for participant in participants), key=lambda item: str(item.get("participant_id", "")))
+    return {
+        "theme_blocks": _theme_rows(participants),
+        "visual_metrics": LOG_VISUAL_METRICS,
+        "time_to_sixth_creature": time_to_sixth_creature_summary(participants),
+        "optional_pause_choice_patterns": optional_pause_choice_patterns(participants),
+        "checkpoint_choices": optional_pause_checkpoint_choices(participants),
+        "logs": log_rows,
+    }

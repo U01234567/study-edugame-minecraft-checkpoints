@@ -22,10 +22,10 @@ if str(REPO_ROOT) not in sys.path:
 from helpers._logs_main import load_log_index
 from helpers._main_overview import build_merged_dataset
 from helpers._ret_main import build_retention_question_rows
-from helpers._shared import DATA_DIR, LOG_DIR, RETENTION_QUESTION_SPECS, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
+from helpers._shared import DATA_DIR, LOG_DIR, RETENTION_QUESTION_SPECS, RETENTION_RUBRICS_PATH, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
 from helpers._survey_io import detect_text_encoding, load_survey_export
 
-RUBRIC_PATH = REPO_ROOT / "resources" / "retention_rubrics.json"
+RUBRIC_PATH = RETENTION_RUBRICS_PATH
 SCORE_BACKUP_DIR = REPO_ROOT / "score_backups"
 GRADER_SCORE_TEMPLATE = "retention_scores_grader{grader}.tsv"
 HOST = "127.0.0.1"
@@ -82,13 +82,21 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
         return [dict(row) for row in csv.DictReader(handle, delimiter="\t")]
 
 
-def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
+def write_delimited(path: Path, fieldnames: list[str], rows: list[dict[str, Any]], *, delimiter: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t", extrasaction="ignore", lineterminator="\n")
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter=delimiter, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({field: clean(row.get(field)) for field in fieldnames})
+
+
+def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
+    write_delimited(path, fieldnames, rows, delimiter="\t")
+
+
+def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
+    write_delimited(path, fieldnames, rows, delimiter=",")
 
 
 def load_grader_scores(grader: int) -> dict[str, dict[str, str]]:
@@ -215,7 +223,7 @@ def merge_score_files(all_tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         rows.append(base)
 
-    write_tsv(RETENTION_SCORES_PATH, MERGED_SCORE_FIELDNAMES, rows)
+    write_csv(RETENTION_SCORES_PATH, MERGED_SCORE_FIELDNAMES, rows)
     SCORE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     backup_path = SCORE_BACKUP_DIR / f"retention_scores-{backup_timestamp()}.tsv"
     write_tsv(backup_path, MERGED_SCORE_FIELDNAMES, rows)

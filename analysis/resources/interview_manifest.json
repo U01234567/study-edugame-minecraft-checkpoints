@@ -105,29 +105,29 @@
     },
     "16": {
       "selection_categories": [
-        "unusual_task_performance"
+        "many_disallowed_empty_disabled_clicks"
       ],
       "notes": "TBD"
     },
     "17": {
       "selection_categories": [
-        "many_disallowed_empty_disabled_clicks"
+        "low_prior_game_experience"
       ],
       "notes": "TBD"
     },
     "18": {
-      "selection_categories": [],
+      "selection_categories": [
+        "age_gender_coverage"
+      ],
       "notes": "TBD"
     },
     "19": {
-      "selection_categories": [],
+      "selection_categories": [
+        "unusual_task_performance"
+      ],
       "notes": "TBD"
     },
     "20": {
-      "selection_categories": [],
-      "notes": "TBD"
-    },
-    "21": {
       "selection_categories": [],
       "notes": "TBD"
     }

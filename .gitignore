@@ -27,6 +27,7 @@ world/players/
 
 # Data for analysis
 analysis/data/
+analysis/raw/
 analysis/score_backups/
 
 # Node / Tauri frontend

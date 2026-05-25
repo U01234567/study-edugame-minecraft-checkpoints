@@ -11,6 +11,7 @@ DATA_DIR = REPO_ROOT / "data"
 OUTPUT_DIR = REPO_ROOT / "output"
 OUTPUT_PATH = OUTPUT_DIR / "survey_summary.html"
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
+RAW_SURVEY_DIR = REPO_ROOT / "raw" / "survey"
 
 CREATURES: list[tuple[str, str]] = [
     ("abyss_deer", "Abyss deer"),
@@ -1339,14 +1340,17 @@ refreshDerivedTabs();
 </html>"""
 
 
-def main() -> int:
-    if not DATA_DIR.exists():
-        print(f"Expected a ./data/ directory at {DATA_DIR.resolve()}, but it was not found.")
-        return 1
+def main(public_route: bool | None = None, paths: dict[str, Path] | None = None) -> int:
+    if paths:
+        tsv_path = Path(paths["data_survey_path"] if public_route else newest_tsv_file(Path(paths["raw_survey_dir"])))
+    elif public_route:
+        tsv_path = SURVEY_EXPORT_PATH
+    else:
+        tsv_path = newest_tsv_file(RAW_SURVEY_DIR)
 
-    tsv_path = SURVEY_EXPORT_PATH
-    if not tsv_path.exists():
-        print(f"Expected survey export at {tsv_path.resolve()}, but it was not found.")
+    if tsv_path is None or not tsv_path.exists():
+        route = "/data/survey_export.tsv" if public_route else "the newest /raw/survey/*.tsv"
+        print(f"Expected {route}, but it was not found.")
         return 1
 
     rows, header, _labels = load_rows(tsv_path)

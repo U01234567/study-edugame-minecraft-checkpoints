@@ -10,6 +10,18 @@ These scripts only work after you have run the experiment locally and exported t
 
 Do not commit local participant data, study logs, survey exports, retention scores, interview transcripts, or generated participant-level HTML outputs unless the repository is explicitly intended to store those files under the approved data-management plan.
 
+## Data route toggle
+
+Set the global route toggle near the top of `main.py`:
+
+```python
+PUBLIC_ROUTE = False
+```
+
+Use `PUBLIC_ROUTE = False` for the internal research-team route. In this mode, apps read from `./raw/` where applicable, and `sum_merged` first rebuilds the stripped `./data/` folder from eligible raw records before generating the rest of the report from `./data/`.
+
+Use `PUBLIC_ROUTE = True` for the colleague/researcher/reviewer route. In this mode, apps read directly from the publishable `./data/` files, and raw files are not required.
+
 ## Current commands
 
 
@@ -39,14 +51,6 @@ You can override it:
 
 ```bash
 python main.py decrypt_logs identity=C:/Users/YOU/.minecraft-study/minecraft-study-logs-age-key.txt
-```
-
-### Follow-up email helper
-
-Run this from the `analysis` folder:
-
-```bash
-python main.py followup_email
 ```
 
 ### Summarise the last session
