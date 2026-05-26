@@ -333,13 +333,13 @@ def _agreement_row(label: str, pairs: list[tuple[int, int]]) -> dict[str, Any]:
 
 def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[str, Any]:
     if not path.exists():
-        return {"available": False, "method": "No retention_scoring.csv file found.", "rows": []}
+        return {"available": False, "method": "No retention_scoring.tsv file found.", "rows": []}
 
     rows = _load_plain_delimited(path)
     if not rows or not PROMPT_SCORE_COLUMNS.issubset(set(rows[0])):
         return {
             "available": False,
-            "method": "Agreement requires the prompt-level retention_scoring.csv schema produced by score_retention.py.",
+            "method": "Agreement requires the prompt-level retention_scoring.tsv schema produced by score_retention.py.",
             "rows": [],
         }
 

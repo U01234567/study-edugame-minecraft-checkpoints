@@ -25,14 +25,14 @@ COLLECTION_LOCATIONS_PATH = DATA_CONFIG_DIR / "collection_locations.json"
 RETENTION_RUBRICS_PATH = DATA_CONFIG_DIR / "retention_rubrics.json"
 CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
-RETENTION_SCORES_PATH = DATA_DIR / "retention_scoring.csv"
+RETENTION_SCORES_PATH = DATA_DIR / "retention_scoring.tsv"
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"
 INTERVIEW_TRANSCRIPTS_PATH = INTERVIEW_TRANSCRIPTS_DIR
 
 DISPLAY_SOURCE_PATHS = {
     "Survey export": r".\data\survey_export.tsv",
-    "Retention scoring": r".\data\retention_scoring.csv",
+    "Retention scoring": r".\data\retention_scoring.tsv",
     "Interview transcript CSVs": r".\data\transcripts\*.csv",
     "Interview manifest": r".\data\config\interview_manifest.json",
     "Collection locations": r".\data\config\collection_locations.json",

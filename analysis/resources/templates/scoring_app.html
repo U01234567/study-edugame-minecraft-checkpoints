@@ -4,11 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blind retention scoring</title>
-  <link rel="stylesheet" href="/static/scoring_app.css">
+  <link rel="stylesheet" href="/static/scoring_app.css?v=score-ret-rubric-ui-20260526-final-v5">
 </head>
 <body>
   <main id="app">
-    <section id="loading">Loading retention answers…</section>
+    <section id="loading" aria-live="polite">
+      <div class="loading-card">
+        <p class="eyebrow">Blind retention scoring</p>
+        <h1>Loading retention answers…</h1>
+        <div class="loading-bar" aria-hidden="true"><span id="loading-bar-fill"></span></div>
+        <p id="loading-message">Starting scoring interface.</p>
+        <p id="loading-detail" class="small">The terminal now prints the server-side task-building progress.</p>
+        <ol id="loading-log" class="loading-log"></ol>
+      </div>
+    </section>
 
     <section id="done" hidden>
       <div class="checkmark">✓</div>
@@ -17,47 +26,93 @@
       <button id="review" type="button">Review previous grades</button>
     </section>
 
-    <section id="screen" hidden>
-      <aside id="left">
-        <p id="grader-label" class="eyebrow"></p>
-        <h1 id="creature-name"></h1>
-        <button id="creature-image-button" type="button" aria-label="Enlarge creature image">
-          <img id="creature-image" alt="Creature image">
-        </button>
-        <p id="creature-meta" class="small"></p>
-        <ul id="creature-facts"></ul>
-
-        <section class="card">
-          <p id="rubric-key" class="eyebrow"></p>
-          <h2 id="rubric-title"></h2>
-          <div id="score-options"></div>
-        </section>
-      </aside>
-
-      <section id="right">
-        <nav id="nav">
-          <button id="previous" type="button">Previous</button>
-          <select id="task-select"></select>
-          <button id="next" type="button">Next</button>
+    <section id="workspace" hidden>
+      <header id="topbar">
+        <div>
+          <p id="app-eyebrow" class="eyebrow">Blind retention scoring</p>
+          <h1 id="app-title">Retention scoring</h1>
+        </div>
+        <nav id="tabs" aria-label="Retention scoring tabs">
+          <button class="tab-button active" type="button" data-tab="instructions">Instructions</button>
+          <button class="tab-button" type="button" data-tab="score">Score</button>
+          <button class="tab-button" type="button" data-tab="overview">Overview</button>
+          <button class="tab-button" type="button" data-tab="full-rubric">All rubrics</button>
         </nav>
+      </header>
 
-        <article class="answer-card">
-          <h2>Question</h2>
-          <p id="question"></p>
-          <h2>Answer</h2>
-          <p id="answer"></p>
+      <section id="tab-instructions" class="tab-panel active" data-panel="instructions">
+        <article class="doc-card">
+          <div id="instructions-content"></div>
         </article>
       </section>
 
-      <footer id="actions">
-        <label>
-          Grader note
-          <textarea id="note" rows="2" placeholder="Optional short note"></textarea>
-        </label>
-        <button id="skip" type="button">Skip</button>
-        <button id="grade" type="button">Save grade</button>
-        <div id="progress"></div>
-      </footer>
+      <section id="tab-score" class="tab-panel" data-panel="score">
+        <div id="screen">
+          <aside id="left">
+            <p id="grader-label" class="eyebrow"></p>
+            <h1 id="creature-name"></h1>
+            <button id="creature-image-button" type="button" aria-label="Enlarge creature image">
+              <img id="creature-image" alt="Creature image">
+            </button>
+            <p id="creature-meta" class="small"></p>
+            <ul id="creature-facts"></ul>
+
+            <section class="card">
+              <p id="rubric-key" class="eyebrow"></p>
+              <h2 id="rubric-title"></h2>
+              <div id="score-options"></div>
+            </section>
+          </aside>
+
+          <section id="right">
+            <nav id="score-nav" aria-label="Score navigation">
+              <button id="previous" type="button">Previous</button>
+              <div id="local-status-strip" aria-label="Nearby answer status"></div>
+              <button id="next" type="button">Next</button>
+            </nav>
+
+            <article class="answer-card">
+              <h2>Question</h2>
+              <p id="question"></p>
+              <h2>Answer</h2>
+              <p id="answer"></p>
+            </article>
+          </section>
+        </div>
+
+        <footer id="actions">
+          <label>
+            Grader note
+            <textarea id="note" rows="2" placeholder="Optional short note"></textarea>
+          </label>
+          <button id="flag" type="button">Flag</button>
+          <button id="skip" type="button">Skip</button>
+          <button id="grade" type="button">Save grade</button>
+          <div id="progress"></div>
+        </footer>
+      </section>
+
+      <section id="tab-overview" class="tab-panel" data-panel="overview">
+        <article class="doc-card">
+          <div class="overview-header">
+            <h2>Scoring overview</h2>
+            <div class="legend" aria-label="Status legend">
+              <span><i class="legend-square scored"></i> Green = scored</span>
+              <span><i class="legend-square todo"></i> Gray = todo / skipped</span>
+              <span><i class="legend-square flagged"></i> Amber = flagged</span>
+              <span><i class="legend-square note"></i> Dot = note present</span>
+            </div>
+          </div>
+          <div id="overview-grid"></div>
+        </article>
+      </section>
+
+      <section id="tab-full-rubric" class="tab-panel" data-panel="full-rubric">
+        <article class="doc-card">
+          <h2>All rubrics</h2>
+          <div id="full-rubric-content"></div>
+        </article>
+      </section>
     </section>
   </main>
 
@@ -66,6 +121,6 @@
     <img id="image-modal-img" alt="Enlarged creature image">
   </div>
 
-  <script src="/static/scoring_app.js"></script>
+  <script src="/static/scoring_app.js?v=score-ret-rubric-ui-20260526-final-v5"></script>
 </body>
 </html>

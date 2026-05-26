@@ -48,9 +48,10 @@ CONFIG_FILENAMES = [
     "retention_rubrics.json",
 ]
 RETENTION_SOURCE_NAMES = [
+    "retention_scoring.tsv",
     "retention_scoring.csv",
-    "retention_scores.csv",
     "retention_scores.tsv",
+    "retention_scores.csv",
 ]
 
 
@@ -694,10 +695,10 @@ def retention_source_path(*, raw_config_dir: Path, raw_dir: Path, data_dir: Path
 
 def publish_retention_scoring(*, raw_config_dir: Path, raw_dir: Path, data_dir: Path, included_mcids: set[str], summary: PublishSummary) -> None:
     source = retention_source_path(raw_config_dir=raw_config_dir, raw_dir=raw_dir, data_dir=data_dir)
-    target = data_dir / "retention_scoring.csv"
+    target = data_dir / "retention_scoring.tsv"
     if source is None:
         summary.retention_rows_written = None
-        summary.warnings.append("No retention scoring file found to publish; score_retention.py can create data/retention_scoring.csv later.")
+        summary.warnings.append("No retention scoring file found to publish; score_retention.py can create data/retention_scoring.tsv later.")
         return
     rows, delimiter = read_delimited_rows(source)
     if not rows:
@@ -716,12 +717,12 @@ def publish_retention_scoring(*, raw_config_dir: Path, raw_dir: Path, data_dir: 
     output_rows = [row for row in rows[1:] if mcid_column < len(row) and clean(row[mcid_column]) in included_mcids]
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, delimiter=",", lineterminator="\n")
+        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(header)
         writer.writerows(output_rows)
     summary.retention_rows_written = len(output_rows)
-    if delimiter != ",":
-        summary.warnings.append(f"Converted retention scoring source {source.name} to CSV.")
+    if delimiter != "\t":
+        summary.warnings.append(f"Converted retention scoring source {source.name} to TSV.")
 
 
 def publish_data_for_included_mcids(

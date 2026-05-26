@@ -39,7 +39,7 @@ DATA_TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 DATA_CONFIG_DIR = DATA_DIR / "config"
 DATA_INTERVIEW_MANIFEST_PATH = DATA_CONFIG_DIR / "interview_manifest.json"
 DATA_COLLECTION_LOCATIONS_PATH = DATA_CONFIG_DIR / "collection_locations.json"
-DATA_RETENTION_SCORES_PATH = DATA_DIR / "retention_scoring.csv"
+DATA_RETENTION_SCORES_PATH = DATA_DIR / "retention_scoring.tsv"
 
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"
