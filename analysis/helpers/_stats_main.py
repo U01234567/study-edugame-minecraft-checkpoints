@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ast
 import copy
+import inspect
+import json
 import math
 import random
 from collections import Counter
@@ -53,6 +56,72 @@ DISPLAY_NAMES = {
     "room_type": "Room type",
     "same_room_n": "Shared-slot n",
 }
+
+
+CALCULATION_SOURCE_SPEC = [
+    {
+        "id": "constants",
+        "title": "Fixed constants and planned contrasts",
+        "kind": "assignments",
+        "symbols": ["BOOTSTRAP_SAMPLES", "BOOTSTRAP_SEED", "ALPHA", "CONTRASTS", "CONTRAST_MULTIPLIERS", "DISPLAY_NAMES"],
+        "notes": [
+            "These are module-level constants read by the inferential functions. The current run used [calc:alpha], [calc:bootstrap_samples], and [calc:bootstrap_seed].",
+            "Contrast coding and contrast multipliers come from the source block on the left; the notes do not restate the formulas separately.",
+        ],
+    },
+    {
+        "id": "filtering",
+        "title": "Retention-score attachment, condition filtering, and analysis rows",
+        "kind": "objects",
+        "objects": ["_attach_scores", "_analysis_rows", "_levels", "_numeric_has_variation", "_retention_covariates", "_complete_rows"],
+        "notes": [
+            "Rows enter the inferential pipeline only through _analysis_rows after retention scores are attached. The current analysis row count is [calc:analysis_n].",
+            "The condition distribution after that filter is [calc:included_by_condition].",
+            "Retention-form covariates are selected from observed levels: immediate [calc:immediate_retention_covariates], delayed [calc:delayed_retention_covariates].",
+        ],
+    },
+    {
+        "id": "linear-models",
+        "title": "Linear model, HC3 covariance, confidence intervals, and Holm adjustment",
+        "kind": "objects",
+        "objects": ["_p_two_tailed", "_t_critical", "_holm_adjust", "_fit_lm", "_term", "_focal_row"],
+        "notes": [
+            "Every direct/association model shown in the results is fitted through _fit_lm. Main model count in this run: [calc:direct_model_count].",
+            "The displayed b, HC3 SE, t, p, CI, standardised beta, partial r², and planned-contrast fields are produced inside this source block.",
+        ],
+    },
+    {
+        "id": "mediation",
+        "title": "Design matrices and mediation bootstrap calculations",
+        "kind": "objects",
+        "objects": ["_categorical_matrix", "_fast_design", "_coef_vector", "_bootstrap_ci", "_mediation_parallel", "_mediation_simple", "_serial_mediation"],
+        "notes": [
+            "Parallel, simple, and serial mediation all build design matrices through _fast_design and estimate coefficients through _coef_vector.",
+            "Complete-case n values in this run: H2 immediate [calc:h2_parallel_immediate_n], H2 delayed [calc:h2_parallel_delayed_n], H3 immediate [calc:h3_simple_immediate_n], H3 delayed [calc:h3_simple_delayed_n].",
+            "Serial mediation complete-case n values are [calc:serial_immediate_ns] for immediate retention and [calc:serial_delayed_ns] for delayed retention.",
+        ],
+    },
+    {
+        "id": "factor-checks",
+        "title": "Scale reliability and one-factor checks",
+        "kind": "objects",
+        "objects": ["_score_control", "_item_matrix", "_alpha", "_factor_summary", "_factor_analyses"],
+        "notes": [
+            "These checks are generated from complete item rows and do not replace the construct scores used in the models.",
+            "Number of factor/scale-check summaries produced in this run: [calc:factor_check_count].",
+        ],
+    },
+    {
+        "id": "model-execution",
+        "title": "Final model execution and report payload assembly",
+        "kind": "objects",
+        "objects": ["build_inferential_statistics"],
+        "notes": [
+            "This is the single function called by the merged report. It shows the exact _fit_lm, mediation, robustness, warning, and return-payload steps used for the Inferential statistics tab.",
+            "Robustness models in this run: age/gender [calc:robustness_age_gender_model_count], context [calc:robustness_context_model_count]. Context covariates selected: categorical [calc:context_categorical_covariates], numeric [calc:context_numeric_covariates].",
+        ],
+    },
+]
 
 
 def _num(value: object) -> float | None:
@@ -803,6 +872,157 @@ def _model_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def _target_names(target: ast.AST) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[str] = []
+        for element in target.elts:
+            names.extend(_target_names(element))
+        return names
+    return []
+
+
+def _module_source_text() -> str:
+    try:
+        return Path(__file__).read_text(encoding="utf-8")
+    except Exception:
+        return inspect.getsource(inspect.getmodule(build_inferential_statistics))
+
+
+def _source_for_assignments(symbols: list[str]) -> str:
+    source = _module_source_text()
+    lines = source.splitlines()
+    wanted = set(symbols)
+    snippets: list[str] = []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return "# Source unavailable: _stats_main.py could not be parsed."
+
+    for node in tree.body:
+        assigned: list[str] = []
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                assigned.extend(_target_names(target))
+        elif isinstance(node, ast.AnnAssign):
+            assigned.extend(_target_names(node.target))
+        if wanted.intersection(assigned) and hasattr(node, "lineno") and hasattr(node, "end_lineno"):
+            snippets.append("\n".join(lines[node.lineno - 1:node.end_lineno]))
+    return "\n\n".join(snippets) if snippets else "# Source unavailable: requested assignment(s) not found."
+
+
+def _source_for_objects(object_names: list[str]) -> str:
+    snippets: list[str] = []
+    for name in object_names:
+        obj = globals().get(name)
+        if obj is None:
+            snippets.append(f"# Source unavailable: {name} is not defined in _stats_main.py.")
+            continue
+        try:
+            snippets.append(inspect.getsource(obj).rstrip())
+        except Exception as exc:
+            snippets.append(f"# Source unavailable for {name}: {exc}")
+    return "\n\n".join(snippets)
+
+
+def _source_for_spec(spec: dict[str, Any]) -> str:
+    if spec.get("kind") == "assignments":
+        return _source_for_assignments(list(spec.get("symbols", [])))
+    return _source_for_objects(list(spec.get("objects", [])))
+
+
+def _calculation_value_text(value: Any) -> str:
+    if value is None:
+        return "None"
+    if isinstance(value, float):
+        return _fmt(value, 6)
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def _model_ledger_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "model": model.get("label", ""),
+            "formula": model.get("formula", ""),
+            "n": model.get("n", 0),
+            "df_residual": model.get("df_residual", ""),
+            "r2": model.get("r2_display", ""),
+            "status": model.get("status", ""),
+        }
+        for model in models
+    ]
+
+
+def _calculation_source_report(
+    *,
+    rows: list[dict[str, Any]],
+    direct_models: list[dict[str, Any]],
+    robustness_age_gender: list[dict[str, Any]],
+    robustness_context: list[dict[str, Any]],
+    context_cats: list[str],
+    context_nums: list[str],
+    mediation: dict[str, Any],
+    factor_analyses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    values: dict[str, Any] = {
+        "alpha": ALPHA,
+        "bootstrap_samples": BOOTSTRAP_SAMPLES,
+        "bootstrap_seed": BOOTSTRAP_SEED,
+        "analysis_n": len(rows),
+        "included_by_condition": _condition_counts(rows),
+        "immediate_retention_covariates": _retention_covariates(rows, "ret_immediate_score"),
+        "delayed_retention_covariates": _retention_covariates(rows, "ret_delayed_score"),
+        "retention_immediate_form_levels": _levels(rows, "retention_immediate_form_order"),
+        "retention_delayed_form_levels": _levels(rows, "retention_delayed_form_order"),
+        "gender_levels": _levels(rows, "gender"),
+        "room_type_levels": _levels(rows, "room_type"),
+        "direct_model_count": len(direct_models),
+        "robustness_age_gender_model_count": len(robustness_age_gender),
+        "robustness_context_model_count": len(robustness_context),
+        "context_categorical_covariates": context_cats,
+        "context_numeric_covariates": context_nums,
+        "h2_parallel_immediate_n": mediation.get("h2_parallel_immediate", {}).get("n", 0),
+        "h2_parallel_delayed_n": mediation.get("h2_parallel_delayed", {}).get("n", 0),
+        "h3_simple_immediate_n": mediation.get("h3_simple_immediate", {}).get("n", 0),
+        "h3_simple_delayed_n": mediation.get("h3_simple_delayed", {}).get("n", 0),
+        "serial_immediate_ns": [item.get("n", 0) for item in mediation.get("serial_immediate", [])],
+        "serial_delayed_ns": [item.get("n", 0) for item in mediation.get("serial_delayed", [])],
+        "factor_check_count": len(factor_analyses),
+    }
+    value_text = {key: _calculation_value_text(value) for key, value in values.items()}
+    ledger = [
+        {"name": "analysis_n", "value": value_text["analysis_n"], "meaning": "Rows after retention-score attachment and condition filtering."},
+        {"name": "included_by_condition", "value": value_text["included_by_condition"], "meaning": "Condition counts for the inferential analysis rows."},
+        {"name": "immediate_retention_covariates", "value": value_text["immediate_retention_covariates"], "meaning": "Retention-form covariates selected for immediate-retention models."},
+        {"name": "delayed_retention_covariates", "value": value_text["delayed_retention_covariates"], "meaning": "Retention-form covariates selected for delayed-retention models."},
+        {"name": "context_categorical_covariates", "value": value_text["context_categorical_covariates"], "meaning": "Contextual categorical covariates selected for robustness models."},
+        {"name": "context_numeric_covariates", "value": value_text["context_numeric_covariates"], "meaning": "Contextual numeric covariates selected for robustness models."},
+        {"name": "bootstrap_samples", "value": value_text["bootstrap_samples"], "meaning": "Bootstrap iterations requested for indirect-effect intervals."},
+        {"name": "bootstrap_seed", "value": value_text["bootstrap_seed"], "meaning": "Base random seed used for mediation bootstrap resampling."},
+        {"name": "factor_check_count", "value": value_text["factor_check_count"], "meaning": "Number of scale-check summaries produced."},
+    ]
+    return {
+        "title": "Inferential calculation source",
+        "intro": "This hidden page displays the Python source snippets used to transform report data into the inferential-statistics payload. The snippets are extracted from analysis/helpers/_stats_main.py when the report is built, so changing the implementation changes what is shown here.",
+        "legend": "Cobalt-blue bracketed values are calculated during the current report build. They are shown as [name = value] when the value exists in the payload.",
+        "values": value_text,
+        "ledger": ledger,
+        "model_ledger": _model_ledger_rows([*direct_models, *robustness_age_gender, *robustness_context]),
+        "sections": [
+            {
+                "id": spec.get("id", ""),
+                "title": spec.get("title", ""),
+                "code": _source_for_spec(spec),
+                "notes": list(spec.get("notes", [])),
+            }
+            for spec in CALCULATION_SOURCE_SPEC
+        ],
+    }
+
+
 def build_inferential_statistics(
     participants: list[dict[str, Any]],
     retention_scores_path: Path = RETENTION_SCORES_PATH,
@@ -884,6 +1104,25 @@ def build_inferential_statistics(
     warnings = list(dict.fromkeys(warnings))
 
     direct_models = [direct_immediate, direct_delayed, cl_intrinsic, cl_extraneous, cl_germane, engagement, control, retention_paths_immediate, retention_paths_delayed, h4_intrinsic, h4_extraneous, h4_germane]
+    mediation_results = {
+        "h2_parallel_immediate": h2_parallel_immediate,
+        "h2_parallel_delayed": h2_parallel_delayed,
+        "h3_simple_immediate": h3_simple_immediate,
+        "h3_simple_delayed": h3_simple_delayed,
+        "serial_immediate": serial_immediate,
+        "serial_delayed": serial_delayed,
+    }
+    factor_analyses = _factor_analyses(enriched)
+    calculation_source = _calculation_source_report(
+        rows=rows,
+        direct_models=direct_models,
+        robustness_age_gender=robustness_age_gender,
+        robustness_context=robustness_context,
+        context_cats=context_cats,
+        context_nums=context_nums,
+        mediation=mediation_results,
+        factor_analyses=factor_analyses,
+    )
 
     return {
         "status": "ready" if rows else "No included participants available yet.",
@@ -905,13 +1144,7 @@ def build_inferential_statistics(
         "models": direct_models,
         "robustness_age_gender": _model_rows(robustness_age_gender),
         "robustness_context": _model_rows(robustness_context),
-        "mediation": {
-            "h2_parallel_immediate": h2_parallel_immediate,
-            "h2_parallel_delayed": h2_parallel_delayed,
-            "h3_simple_immediate": h3_simple_immediate,
-            "h3_simple_delayed": h3_simple_delayed,
-            "serial_immediate": serial_immediate,
-            "serial_delayed": serial_delayed,
-        },
-        "factor_analyses": _factor_analyses(enriched),
+        "mediation": mediation_results,
+        "factor_analyses": factor_analyses,
+        "calculation_source": calculation_source,
     }
