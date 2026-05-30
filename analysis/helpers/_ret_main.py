@@ -11,8 +11,11 @@ from ._shared import (
     MAX_RETENTION_SLOTS,
     RETENTION_QUESTION_SPECS,
     RETENTION_SCORES_PATH,
+    canonical_condition,
     clean,
+    delayed_flag,
     first_present,
+    mcid_from_row,
     mean_sd_text,
     parse_numeric,
 )
@@ -22,6 +25,75 @@ RETENTION_SCORE_COLUMNS = {
     "ret_immediate_score": "ret_immediate_score",
     "ret_delayed_score": "ret_delayed_score",
 }
+
+
+SURVEY_CONDITION_COLUMNS = ("condition", "Condition", "CONDITION", "experiment_condition", "condition_raw")
+
+
+def condition_from_retention_survey_row(row: dict[str, str] | None) -> str:
+    """Return the retention condition carried by survey_export.tsv."""
+    if row is None:
+        return "Missing / invalid"
+
+    for column in SURVEY_CONDITION_COLUMNS:
+        raw_condition = clean(row.get(column))
+        if raw_condition:
+            return canonical_condition(raw_condition) or raw_condition
+
+    return "Missing / invalid"
+
+
+def split_retention_survey_waves(rows: list[dict[str, str]]) -> dict[str, dict[str, list[dict[str, str]]]]:
+    """Split survey rows into immediate and delayed retention waves by MCID."""
+    waves: dict[str, dict[str, list[dict[str, str]]]] = {
+        "immediate": defaultdict(list),
+        "delayed": defaultdict(list),
+    }
+
+    for row in rows:
+        participant_id = mcid_from_row(row)
+        if not participant_id:
+            continue
+        wave_key = "delayed" if delayed_flag(row) else "immediate"
+        waves[wave_key][participant_id].append(row)
+
+    return {
+        "immediate": dict(waves["immediate"]),
+        "delayed": dict(waves["delayed"]),
+    }
+
+
+def build_retention_participants_from_survey(survey_rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Build the minimal participant records needed by the retention scoring app.
+
+    The scoring app now uses survey_export.tsv as the source of truth for both
+    retention answers and experimental condition. It deliberately does not read
+    or merge game-log metadata.
+    """
+    waves = split_retention_survey_waves(survey_rows)
+    participants: list[dict[str, Any]] = []
+
+    for participant_id in sorted(waves["immediate"]):
+        immediate_row = waves["immediate"][participant_id][0]
+        delayed_row = (waves["delayed"].get(participant_id) or [None])[0]
+        immediate_retention = retention_wave_summary(immediate_row)
+        delayed_retention = retention_wave_summary(delayed_row)
+
+        participants.append({
+            "participant_id": participant_id,
+            "condition": condition_from_retention_survey_row(immediate_row),
+            "ret_immediate_seen_count": immediate_retention["seen_creature_count"],
+            "ret_immediate_answer_count": immediate_retention["answer_count"],
+            "ret_immediate_answers": immediate_retention["answers"],
+            "ret_immediate_seen_invalid": immediate_retention["seen_invalid"],
+            "ret_delayed_available": delayed_retention["available"],
+            "ret_delayed_seen_count": delayed_retention["seen_creature_count"],
+            "ret_delayed_answer_count": delayed_retention["answer_count"],
+            "ret_delayed_answers": delayed_retention["answers"],
+            "ret_delayed_seen_invalid": delayed_retention["seen_invalid"],
+        })
+
+    return participants
 
 PROMPT_SCORE_COLUMNS = {
     "task_id",

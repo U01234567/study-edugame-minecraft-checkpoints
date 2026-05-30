@@ -11,6 +11,10 @@ let saveInProgress = false;
 const ACTION_FLASH_MS = 170;
 let TASKS_BY_QUESTION = {};
 let RUBRIC_ROWS_BY_KEY = {};
+const UI_STATE_STORAGE_KEY = 'retentionScoringUiState:v1';
+const SCROLL_STATE_SAVE_DELAY_MS = 120;
+let scrollSaveTimer = null;
+let allowScrollStateSaving = false;
 
 const $ = (id) => document.getElementById(id);
 const COMPLETED_STATUSES = new Set(['graded', 'skipped', 'flagged']);
@@ -30,9 +34,128 @@ function lineBreaks(value) {
   return escapeHtml(value).replace(/\n/g, '<br>');
 }
 
-function rubricNoteHtml(row) {
-  return row && row.html ? row.html : lineBreaks(row && row.note ? row.note : '');
+function loadUiState() {
+  try {
+    const rawState = window.localStorage.getItem(UI_STATE_STORAGE_KEY);
+    return rawState ? JSON.parse(rawState) || {} : {};
+  } catch (_error) {
+    return {};
+  }
 }
+
+function saveUiState(patch) {
+  try {
+    const currentState = loadUiState();
+    window.localStorage.setItem(UI_STATE_STORAGE_KEY, JSON.stringify({
+      ...currentState,
+      ...patch
+    }));
+  } catch (_error) {
+    // Ignore storage errors: the scoring UI should still work if localStorage is unavailable.
+  }
+}
+
+function saveScrollPosition() {
+  saveUiState({
+    scrollX: window.scrollX,
+    scrollY: window.scrollY
+  });
+}
+
+function scheduleSaveScrollPosition() {
+  if (!allowScrollStateSaving) return;
+
+  if (scrollSaveTimer) {
+    window.clearTimeout(scrollSaveTimer);
+  }
+
+  scrollSaveTimer = window.setTimeout(() => {
+    scrollSaveTimer = null;
+    saveScrollPosition();
+  }, SCROLL_STATE_SAVE_DELAY_MS);
+}
+
+function restoreScrollPosition(savedState) {
+  const scrollX = Number(savedState && savedState.scrollX);
+  const scrollY = Number(savedState && savedState.scrollY);
+  const hasSavedScroll = Number.isFinite(scrollX) && Number.isFinite(scrollY);
+
+  allowScrollStateSaving = false;
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (hasSavedScroll) {
+        window.scrollTo(scrollX, scrollY);
+      }
+
+      window.setTimeout(() => {
+        allowScrollStateSaving = true;
+        saveScrollPosition();
+      }, 100);
+    });
+  });
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cobaltTokenHtml(value) {
+  return lineBreaks(value).replace(/\[(SRC|FAN)\]/g, '<span class="rubric-token-cobalt">[$1]</span>');
+}
+
+function rubricContentHtml(row) {
+  if (!row) return '';
+
+  // Backward-compatible fallback for old local rubric files. New bundled rubrics
+  // use structured `content` rather than pre-rendered mini-table HTML.
+  if (row.html) return row.html;
+
+  const note = row.note ? `<p class="rubric-content-title">${escapeHtml(row.note)}</p>` : '';
+  const content = row.content;
+  let contentHtml = '';
+
+  if (isPlainObject(content)) {
+    const entries = Object.entries(content);
+    if (entries.length) {
+      contentHtml = `
+        <table class="rubric-inner-table generated-rubric-inner-table">
+          <tbody>
+            ${entries.map(([left, right]) => `
+              <tr>
+                <td>${lineBreaks(left)}</td>
+                <td>${cobaltTokenHtml(right)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+  } else if (Array.isArray(content)) {
+    const items = content
+      .map(item => {
+        if (isPlainObject(item)) {
+          return Object.entries(item).map(([left, right]) => `${left}: ${right}`).join('\n');
+        }
+        return item;
+      })
+      .map(item => String(item ?? '').trim())
+      .filter(Boolean);
+
+    if (items.length) {
+      contentHtml = `
+        <ul class="rubric-content-list">
+          ${items.map(item => `<li>${cobaltTokenHtml(item)}</li>`).join('')}
+        </ul>
+      `;
+    }
+  } else if (content) {
+    contentHtml = `<p class="rubric-content-text">${lineBreaks(content)}</p>`;
+  }
+
+  return note || contentHtml ? `${note}${contentHtml}` : lineBreaks(row.note || '');
+}
+
 
 function decorateRubricScoreBadges(root) {
   if (!root) return;
@@ -132,7 +255,7 @@ function prepareClientIndexes() {
   RUBRIC_ROWS_BY_KEY = {};
   const tables = STATE.rubric.question_rubric_tables || {};
   for (const [questionKey, table] of Object.entries(tables)) {
-    for (const row of table.rows || []) {
+    for (const row of expandedRubricRows(table)) {
       const lookupKey = `${questionKey}\u0000${row.creature_id || ''}`;
       if (!RUBRIC_ROWS_BY_KEY[lookupKey]) RUBRIC_ROWS_BY_KEY[lookupKey] = [];
       RUBRIC_ROWS_BY_KEY[lookupKey].push(row);
@@ -144,6 +267,47 @@ function getQuestionShortLabel(questionKey) {
   return (STATE.rubric.question_short_labels || {})[questionKey]
     || (STATE.questionLabels || {})[questionKey]
     || questionKey;
+}
+
+function expandedRubricRows(table) {
+  const rows = [];
+  const scoreOrder = ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2, 3, 4]).map(score => String(score));
+
+  const appendScoreRows = (scoresByValue, baseRow) => {
+    const remainingScores = Object.keys(scoresByValue).filter(score => !scoreOrder.includes(score));
+    const scores = [
+      ...scoreOrder.filter(score => Object.prototype.hasOwnProperty.call(scoresByValue, score)),
+      ...remainingScores
+    ];
+
+    for (const score of scores) {
+      rows.push({
+        ...baseRow,
+        score,
+        content: scoresByValue[score]
+      });
+    }
+  };
+
+  if (isPlainObject(table.scores)) {
+    appendScoreRows(table.scores, {
+      creature_id: table.creature_id || '',
+      creature: table.creature || 'All creatures'
+    });
+  }
+
+  for (const entry of table.rows || []) {
+    if (isPlainObject(entry.scores)) {
+      appendScoreRows(entry.scores, {
+        creature_id: entry.creature_id || '',
+        creature: entry.creature || ''
+      });
+    } else {
+      rows.push(entry);
+    }
+  }
+
+  return rows;
 }
 
 function getCreature(task) {
@@ -214,8 +378,28 @@ function firstOpenTaskIndex() {
   return index === -1 ? 0 : index;
 }
 
+function restoredTaskIndex(savedState) {
+  const savedTaskId = savedState && savedState.taskId;
+  if (!savedTaskId) return firstOpenTaskIndex();
+
+  const index = STATE.tasks.findIndex(task => task.task_id === savedTaskId);
+  return index === -1 ? firstOpenTaskIndex() : index;
+}
+
+function restoredTab(savedState) {
+  const candidate = savedState && savedState.activeTab;
+  return document.querySelector(`.tab-button[data-tab="${candidate}"]`) ? candidate : 'instructions';
+}
+
+function restoredRubricQuestion(questionOrder, savedState) {
+  const candidate = savedState && savedState.rubricQuestion;
+  return questionOrder.includes(candidate) ? candidate : questionOrder[0];
+}
+
 function switchTab(tabName) {
   activeTab = tabName;
+  saveUiState({activeTab: tabName});
+
   document.querySelectorAll('.tab-button').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === tabName);
   });
@@ -230,6 +414,8 @@ function switchTab(tabName) {
 function updateProgress() {
   const p = progress();
   const task = STATE.tasks[currentIndex];
+  saveUiState({taskId: task.task_id});
+
   const block = task ? blockProgress(task.question_key) : {left: 0, total: 0};
 
   requireElement('progress').innerHTML = `
@@ -254,14 +440,32 @@ function getRubricRows(task) {
   const rows = RUBRIC_ROWS_BY_KEY[lookupKey];
   if (rows && rows.length) return rows;
 
+  const questionDefaultKey = `${task.question_key || ''}\u0000`;
+  const questionDefaultRows = RUBRIC_ROWS_BY_KEY[questionDefaultKey];
+  if (questionDefaultRows && questionDefaultRows.length) return questionDefaultRows;
+
   return (STATE.rubric.score_scale || [0, 1, 2, 3, 4]).map(score => ({
     score,
     note: ''
   }));
 }
 
+function isNaRubricRow(row) {
+  return String(row && row.content !== undefined ? row.content : '').trim().toUpperCase() === 'NA';
+}
+
 function renderScoreOptions(task) {
   const rows = getRubricRows(task);
+  const selectableScores = new Set(
+    rows
+      .filter(row => !isNaRubricRow(row))
+      .map(row => String(row.score))
+  );
+
+  if (selectedScore !== null && !selectableScores.has(String(selectedScore))) {
+    selectedScore = null;
+  }
+
   requireElement('score-options').innerHTML = `
     <table class="score-table">
       <thead>
@@ -270,10 +474,12 @@ function renderScoreOptions(task) {
       <tbody>
         ${rows.map(row => {
           const score = String(row.score);
+          const isDisabled = isNaRubricRow(row);
+          const isSelected = !isDisabled && score === selectedScore;
           return `
-            <tr class="rubric-score-row ${score === selectedScore ? 'selected' : ''}" data-score="${escapeHtml(score)}" tabindex="0">
+            <tr class="rubric-score-row ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}" data-score="${escapeHtml(score)}" tabindex="${isDisabled ? '-1' : '0'}" aria-disabled="${isDisabled ? 'true' : 'false'}">
               <td><span class="score-number">${escapeHtml(score)}</span></td>
-              <td class="rubric-note">${rubricNoteHtml(row)}</td>
+              <td class="rubric-note">${rubricContentHtml(row)}</td>
             </tr>
           `;
         }).join('')}
@@ -281,7 +487,7 @@ function renderScoreOptions(task) {
     </table>
   `;
 
-  document.querySelectorAll('.rubric-score-row').forEach(row => {
+  document.querySelectorAll('.rubric-score-row:not(.disabled)').forEach(row => {
     const selectRow = () => {
       selectedScore = row.dataset.score;
       document.querySelectorAll('.rubric-score-row').forEach(item => item.classList.remove('selected'));
@@ -364,7 +570,7 @@ function renderCurrentTask() {
   modalImage.src = image.src;
   modalImage.alt = `Enlarged ${creature.name || task.creature_name}`;
 
-  setText('creature-meta', [creature.chapter, creature.environment, creature.appearance_placeholder].filter(Boolean).join(' · '));
+  setText('creature-meta', [creature.chapter, creature.environment, creature.appearance].filter(Boolean).join(' · '));
   requireElement('creature-facts').innerHTML = (creature.facts || []).map(fact => `<li>${escapeHtml(fact)}</li>`).join('')
     || '<li>Placeholder: add creature facts in resources/retention_rubrics.json.</li>';
 
@@ -402,6 +608,43 @@ function createOverviewButton(task, index, questionKey) {
   return button;
 }
 
+function overviewCreatureOrder(items) {
+  const seen = new Set();
+  const ordered = [];
+
+  for (const creatureId of Object.keys(STATE.rubric.creatures || {})) {
+    seen.add(creatureId);
+    ordered.push(creatureId);
+  }
+
+  for (const {task} of items) {
+    const creatureId = task.creature_id || '';
+    if (!seen.has(creatureId)) {
+      seen.add(creatureId);
+      ordered.push(creatureId);
+    }
+  }
+
+  return ordered;
+}
+
+function groupOverviewItemsByCreature(items) {
+  const groups = {};
+  for (const item of items) {
+    const creatureId = item.task.creature_id || '';
+    if (!groups[creatureId]) groups[creatureId] = [];
+    groups[creatureId].push(item);
+  }
+  return groups;
+}
+
+function overviewCreatureLabel(creatureId, items) {
+  const creature = (STATE.rubric.creatures || {})[creatureId];
+  if (creature && creature.name) return creature.name;
+  const firstTask = items && items[0] && items[0].task;
+  return firstTask ? (firstTask.creature_name || creatureId || 'Unknown creature') : (creatureId || 'Unknown creature');
+}
+
 function renderOverview() {
   if (!STATE) return;
   const token = ++overviewRenderToken;
@@ -426,6 +669,8 @@ function renderOverview() {
     questionPosition += 1;
     const items = TASKS_BY_QUESTION[questionKey] || [];
     const block = blockProgress(questionKey);
+    const groupsByCreature = groupOverviewItemsByCreature(items);
+    const creatureOrder = overviewCreatureOrder(items).filter(creatureId => (groupsByCreature[creatureId] || []).length);
 
     const section = document.createElement('section');
     section.className = 'overview-question-block';
@@ -433,13 +678,12 @@ function renderOverview() {
 
     const label = document.createElement('div');
     label.className = 'overview-question-label';
-    label.textContent = `${getQuestionShortLabel(questionKey)} · ${block.total.toLocaleString('en-GB')} answers`;
+    label.textContent = `${getQuestionShortLabel(questionKey)} · ${block.total.toLocaleString('en-GB')} answers · ${creatureOrder.length.toLocaleString('en-GB')} creatures`;
     section.appendChild(label);
 
-    const row = document.createElement('div');
-    row.className = 'overview-square-row';
-    row.setAttribute('aria-label', getQuestionShortLabel(questionKey));
-    section.appendChild(row);
+    const creatureGrid = document.createElement('div');
+    creatureGrid.className = 'overview-creature-grid';
+    section.appendChild(creatureGrid);
 
     if (questionPosition < questionOrder.length) {
       const divider = document.createElement('hr');
@@ -447,45 +691,187 @@ function renderOverview() {
       table.appendChild(divider);
     }
 
-    let offset = 0;
-    function renderChunk() {
-      if (token !== overviewRenderToken) return;
-      const fragment = document.createDocumentFragment();
-      const startOffset = offset;
-      const end = Math.min(offset + OVERVIEW_CHUNK_SIZE, items.length);
-      for (; offset < end; offset += 1) {
-        const {task, index} = items[offset];
-        fragment.appendChild(createOverviewButton(task, index, questionKey));
-      }
-      row.appendChild(fragment);
-      rendered += end - startOffset;
-      status.textContent = `Preparing overview squares: ${Math.min(rendered, total).toLocaleString('en-GB')} / ${total.toLocaleString('en-GB')}.`;
+    let creaturePosition = 0;
 
-      if (offset < items.length) {
-        window.requestAnimationFrame(renderChunk);
-      } else {
-        rendered = questionOrder
-          .slice(0, questionPosition)
-          .reduce((sum, key) => sum + (TASKS_BY_QUESTION[key] || []).length, 0);
+    function renderNextCreature() {
+      if (token !== overviewRenderToken) return;
+      if (creaturePosition >= creatureOrder.length) {
         window.requestAnimationFrame(renderNextQuestion);
+        return;
       }
+
+      const creatureId = creatureOrder[creaturePosition];
+      creaturePosition += 1;
+      const creatureItems = groupsByCreature[creatureId] || [];
+
+      const creatureBlock = document.createElement('section');
+      creatureBlock.className = 'overview-creature-block';
+      creatureGrid.appendChild(creatureBlock);
+
+      const creatureHeader = document.createElement('div');
+      creatureHeader.className = 'overview-creature-header';
+      creatureHeader.textContent = `${overviewCreatureLabel(creatureId, creatureItems)} · ${creatureItems.length.toLocaleString('en-GB')}`;
+      creatureBlock.appendChild(creatureHeader);
+
+      const row = document.createElement('div');
+      row.className = 'overview-square-row overview-creature-square-row';
+      row.setAttribute('aria-label', `${getQuestionShortLabel(questionKey)} · ${overviewCreatureLabel(creatureId, creatureItems)}`);
+      creatureBlock.appendChild(row);
+
+      let offset = 0;
+
+      function renderChunk() {
+        if (token !== overviewRenderToken) return;
+        const fragment = document.createDocumentFragment();
+        const startOffset = offset;
+        const end = Math.min(offset + OVERVIEW_CHUNK_SIZE, creatureItems.length);
+
+        for (; offset < end; offset += 1) {
+          const {task, index} = creatureItems[offset];
+          fragment.appendChild(createOverviewButton(task, index, questionKey));
+        }
+
+        row.appendChild(fragment);
+        rendered += end - startOffset;
+        status.textContent = `Preparing overview squares: ${Math.min(rendered, total).toLocaleString('en-GB')} / ${total.toLocaleString('en-GB')}.`;
+
+        if (offset < creatureItems.length) {
+          window.requestAnimationFrame(renderChunk);
+        } else {
+          window.requestAnimationFrame(renderNextCreature);
+        }
+      }
+
+      renderChunk();
     }
 
-    renderChunk();
+    renderNextCreature();
   }
 
   renderNextQuestion();
+}
+
+function bindRubricSubtabs(container) {
+  container.querySelectorAll('.rubric-subtab-button').forEach(button => {
+    button.addEventListener('click', () => {
+      activateRubricSubtab(container, button.dataset.rubricQuestion);
+    });
+  });
+}
+
+function activateRubricSubtab(container, questionKey, {persist = true} = {}) {
+  if (!questionKey) return;
+
+  container.querySelectorAll('.rubric-subtab-button').forEach(item => {
+    const isActive = item.dataset.rubricQuestion === questionKey;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  container.querySelectorAll('.rubric-subtab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.rubricQuestionPanel === questionKey);
+  });
+
+  if (persist) {
+    saveUiState({rubricQuestion: questionKey});
+  }
+}
+
+function groupedFullRubricRowsHtml(rows) {
+  const groups = [];
+
+  for (const row of rows || []) {
+    const creatureKey = row.creature_id || row.creature || '';
+    let group = groups[groups.length - 1];
+
+    if (!group || group.key !== creatureKey) {
+      group = {
+        key: creatureKey,
+        creature: row.creature || '',
+        rows: []
+      };
+      groups.push(group);
+    }
+
+    group.rows.push(row);
+  }
+
+  return groups.map(group => {
+    const rowSpan = Math.max(1, group.rows.length);
+    return group.rows.map((row, rowIndex) => `
+      <tr>
+        ${rowIndex === 0 ? `<td rowspan="${rowSpan}">${escapeHtml(group.creature)}</td>` : ''}
+        <td><span class="score-number">${escapeHtml(row.score)}</span></td>
+        <td class="rubric-note">${rubricContentHtml(row)}</td>
+      </tr>
+    `).join('');
+  }).join('');
 }
 
 function renderFullRubric() {
   if (fullRubricRendered) return;
 
   const container = requireElement('full-rubric-content');
-  const questionOrder = STATE.questionOrder || Object.keys(STATE.rubric.question_rubric_html || STATE.rubric.question_rubric_tables || {});
+  const tables = STATE.rubric.question_rubric_tables || {};
+  const questionOrder = STATE.questionOrder || Object.keys(Object.keys(tables).length ? tables : (STATE.rubric.question_rubric_html || {}));
+
+  if (Object.keys(tables).length) {
+    const availableQuestions = questionOrder.filter(questionKey => tables[questionKey]);
+    const firstQuestion = restoredRubricQuestion(availableQuestions, loadUiState());
+
+    if (!firstQuestion) {
+      container.innerHTML = '<p class="small">No rubric tables are configured yet.</p>';
+      fullRubricRendered = true;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
+        ${availableQuestions.map(questionKey => `
+          <button class="rubric-subtab-button ${questionKey === firstQuestion ? 'active' : ''}" type="button" role="tab" data-rubric-question="${escapeHtml(questionKey)}" aria-selected="${questionKey === firstQuestion ? 'true' : 'false'}">
+            ${escapeHtml(getQuestionShortLabel(questionKey))}
+          </button>
+        `).join('')}
+      </div>
+      <div class="rubric-subtab-panels">
+        ${availableQuestions.map(questionKey => {
+          const table = tables[questionKey];
+          return `
+            <section class="rubric-subtab-panel ${questionKey === firstQuestion ? 'active' : ''}" role="tabpanel" data-rubric-question-panel="${escapeHtml(questionKey)}">
+              <section class="full-rubric-section">
+                <h3>${escapeHtml(table.short_title || getQuestionShortLabel(questionKey))}</h3>
+                <p class="small">${escapeHtml(table.title || '')}</p>
+                ${table.intro ? `<p>${escapeHtml(table.intro)}</p>` : ''}
+                <table class="full-rubric-table">
+                  <colgroup>
+                    <col class="full-rubric-creature-col">
+                    <col class="full-rubric-score-col">
+                    <col>
+                  </colgroup>
+                  <thead>
+                    <tr><th>Creature</th><th>Score</th><th>Label / Content</th></tr>
+                  </thead>
+                  <tbody>
+                    ${groupedFullRubricRowsHtml(expandedRubricRows(table))}
+                  </tbody>
+                </table>
+              </section>
+            </section>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    bindRubricSubtabs(container);
+    activateRubricSubtab(container, firstQuestion, {persist: false});
+    fullRubricRendered = true;
+    return;
+  }
+
   const questionHtml = STATE.rubric.question_rubric_html || {};
 
   if (questionOrder.length && Object.keys(questionHtml).length) {
-    const firstQuestion = questionOrder[0];
+    const firstQuestion = restoredRubricQuestion(questionOrder, loadUiState());
     container.innerHTML = `
       <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
         ${questionOrder.map(questionKey => `
@@ -505,19 +891,8 @@ function renderFullRubric() {
 
     decorateRubricScoreBadges(container);
 
-    container.querySelectorAll('.rubric-subtab-button').forEach(button => {
-      button.addEventListener('click', () => {
-        const questionKey = button.dataset.rubricQuestion;
-        container.querySelectorAll('.rubric-subtab-button').forEach(item => {
-          const isActive = item === button;
-          item.classList.toggle('active', isActive);
-          item.setAttribute('aria-selected', isActive ? 'true' : 'false');
-        });
-        container.querySelectorAll('.rubric-subtab-panel').forEach(panel => {
-          panel.classList.toggle('active', panel.dataset.rubricQuestionPanel === questionKey);
-        });
-      });
-    });
+    bindRubricSubtabs(container);
+    activateRubricSubtab(container, firstQuestion, {persist: false});
 
     fullRubricRendered = true;
     return;
@@ -530,34 +905,10 @@ function renderFullRubric() {
     return;
   }
 
-  const tables = STATE.rubric.question_rubric_tables || {};
-  container.innerHTML = questionOrder.map(questionKey => {
-    const table = tables[questionKey];
-    if (!table) return '';
-    return `
-      <section class="full-rubric-section">
-        <h3>${escapeHtml(table.short_title || getQuestionShortLabel(questionKey))}</h3>
-        <p class="small">${escapeHtml(table.title || '')}</p>
-        ${table.intro ? `<p>${escapeHtml(table.intro)}</p>` : ''}
-        <table class="full-rubric-table">
-          <thead>
-            <tr><th>Creature</th><th>Score</th><th>Label / Note</th></tr>
-          </thead>
-          <tbody>
-            ${(table.rows || []).map(row => `
-              <tr>
-                <td>${escapeHtml(row.creature || '')}</td>
-                <td><span class="score-number">${escapeHtml(row.score)}</span></td>
-                <td class="rubric-note">${rubricNoteHtml(row)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </section>
-    `;
-  }).join('');
+  container.innerHTML = '<p class="small">No rubric tables are configured yet.</p>';
   fullRubricRendered = true;
 }
+
 
 function flashAnswerCard(action) {
   const card = document.querySelector('.answer-card');
@@ -622,6 +973,8 @@ function bindEvents() {
   document.querySelectorAll('.tab-button').forEach(button => {
     button.addEventListener('click', () => switchTab(button.dataset.tab));
   });
+
+  window.addEventListener('scroll', scheduleSaveScrollPosition, {passive: true});
 
   requireElement('creature-image-button').addEventListener('click', () => {
     requireElement('image-modal-img').src = requireElement('creature-image').src;
@@ -736,7 +1089,8 @@ async function init() {
     setLoading('Indexing tasks for fast scoring.', 82, `${STATE.tasks.length.toLocaleString('en-GB')} task(s) loaded.`);
     addLoadingLog(`Indexing ${STATE.tasks.length.toLocaleString('en-GB')} task(s).`);
     prepareClientIndexes();
-    currentIndex = firstOpenTaskIndex();
+    const savedUiState = loadUiState();
+    currentIndex = restoredTaskIndex(savedUiState);
 
     stage = 'rendering first scoring screen';
     setLoading('Preparing first screen.', 92, 'Instructions open first; scoring, overview, and full rubric are ready from the tabs.')
@@ -748,8 +1102,9 @@ async function init() {
     setHidden('done', true);
     setHidden('workspace', false);
 
-    switchTab('instructions');
+    switchTab(restoredTab(savedUiState));
     renderCurrentTask();
+    restoreScrollPosition(savedUiState);
   } catch (error) {
     showLoadingError(error, stage);
   }

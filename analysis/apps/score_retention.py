@@ -19,15 +19,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from helpers._logs_main import load_log_index
-from helpers._main_overview import build_merged_dataset
-from helpers._ret_main import build_retention_question_rows
-from helpers._shared import DATA_DIR, LOG_DIR, RESOURCES_DIR, RETENTION_QUESTION_SPECS, RETENTION_RUBRICS_PATH, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
+from helpers._ret_main import build_retention_participants_from_survey, build_retention_question_rows
+from helpers._shared import DATA_DIR, RESOURCES_DIR, RETENTION_QUESTION_SPECS, RETENTION_RUBRICS_PATH, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
 from helpers._survey_io import detect_text_encoding, load_survey_export
 
 RUBRIC_RESOURCE_PATH = RESOURCES_DIR / "retention_rubrics.json"
 RUBRIC_PATH = RETENTION_RUBRICS_PATH
 SCORE_BACKUP_DIR = REPO_ROOT / "score_backups"
+OUTPUT_DIR = REPO_ROOT / "output"
 GRADER_SCORE_TEMPLATE = "retention_scores_grader{grader}.tsv"
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -83,20 +82,19 @@ def load_json(path: Path) -> dict[str, Any]:
 def load_scoring_rubric() -> dict[str, Any]:
     """Load the bundled scoring-rubric resource used by the browser UI.
 
-    Historically this app also looked in data/config/retention_rubrics.json. That
-    made local stale config files silently override the bundled source-rubric HTML,
-    which left the Instructions and All rubrics pages empty even when the updated
-    app files were present. The scoring UI now uses the bundled resource as the
-    source of truth so the copied Google-doc-style rubric tables always travel
-    with the app code.
+    The scoring UI uses the bundled resource as the source of truth so the
+    structured rubric content always travels with the app code.
     """
     if RUBRIC_RESOURCE_PATH.exists():
         rubric = load_json(RUBRIC_RESOURCE_PATH)
         instructions_len = len(clean(rubric.get("instructions_html")))
-        full_len = len(clean(rubric.get("full_rubric_html")))
+        table_count = sum(
+            len((table or {}).get("rows", []))
+            for table in (rubric.get("question_rubric_tables") or {}).values()
+        )
         log_step(
             f"Loaded bundled rubric from {RUBRIC_RESOURCE_PATH} "
-            f"({instructions_len:,} instruction chars; {full_len:,} full-rubric chars)."
+            f"({instructions_len:,} instruction chars; {table_count:,} structured rubric row(s))."
         )
         return rubric
 
@@ -141,16 +139,81 @@ def write_grader_scores(grader: int, rows_by_task_id: dict[str, dict[str, Any]])
     write_tsv(DATA_DIR / GRADER_SCORE_TEMPLATE.format(grader=grader), GRADER_SCORE_FIELDNAMES, rows)
 
 
+def single_line_answer(value: object) -> str:
+    """Flatten an answer so each exported answer occupies exactly one line."""
+    return " ".join(clean(value).split())
+
+
+def write_question_answer_exports(tasks: list[dict[str, Any]]) -> None:
+    """Write simple grouped answer dumps for manual inspection.
+
+    Creates:
+      output/Q1_answers.txt
+      output/Q2_answers.txt
+      output/Q3_answers.txt
+      output/Q4_answers.txt
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    question_labels = {
+        question_key: label
+        for question_key, label in RETENTION_QUESTION_SPECS
+    }
+    moment_order = {"Immediate": 0, "Delayed": 1}
+
+    for question_index, (question_key, fallback_label) in enumerate(RETENTION_QUESTION_SPECS, start=1):
+        question_tasks = [
+            task for task in tasks
+            if clean(task.get("question_key")) == question_key and clean(task.get("answer"))
+        ]
+        question_tasks = sorted(
+            question_tasks,
+            key=lambda task: (
+                clean(task.get("creature_name")).lower(),
+                moment_order.get(clean(task.get("moment")), 999),
+                clean(task.get("participant_id")),
+                clean(task.get("task_id")),
+            ),
+        )
+
+        lines: list[str] = [
+            "=======",
+            f"Answers for question: \"{question_labels.get(question_key, fallback_label)}\"",
+            "=======",
+        ]
+
+        current_creature = ""
+        for task in question_tasks:
+            creature_name = clean(task.get("creature_name")).upper()
+            if creature_name != current_creature:
+                if current_creature:
+                    lines.append("")
+                lines.extend([
+                    "+++++++",
+                    creature_name,
+                    "+++++++",
+                ])
+                current_creature = creature_name
+
+            answer = single_line_answer(task.get("answer"))
+            if answer:
+                lines.append(answer)
+
+        output_path = OUTPUT_DIR / f"Q{question_index}_answers.txt"
+        output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+        log_step(f"Wrote answer export: {output_path} ({len(question_tasks):,} answer(s)).")
+
+
 def load_scoring_tasks() -> list[dict[str, Any]]:
     started = time.perf_counter()
     log_step(f"Loading survey export from {SURVEY_EXPORT_PATH}...")
     survey_rows, _survey_header = load_survey_export(SURVEY_EXPORT_PATH)
-    log_step(f"Loaded {len(survey_rows):,} survey row(s). Loading log index from {LOG_DIR}...")
-    log_index = load_log_index(LOG_DIR)
-    log_step(f"Loaded {len(log_index):,} log-index entries. Building merged participant dataset...")
-    dataset = build_merged_dataset(survey_rows, log_index)
-    participants = dataset["participants"]
-    log_step(f"Merged dataset contains {len(participants):,} participant(s). Building retention answer rows...")
+    log_step(
+        f"Loaded {len(survey_rows):,} survey row(s). "
+        "Building survey-only retention participant dataset from survey_export.tsv, including its condition column..."
+    )
+    participants = build_retention_participants_from_survey(survey_rows)
+    log_step(f"Survey-only dataset contains {len(participants):,} participant(s). Building retention answer rows...")
     answer_rows = build_retention_question_rows(participants)
     log_step(f"Retention builder returned {len(answer_rows):,} candidate answer row(s). Converting to scoring tasks...")
 
@@ -196,6 +259,7 @@ def load_scoring_tasks() -> list[dict[str, Any]]:
     deduped = list(by_task_id.values())
     elapsed = time.perf_counter() - started
     log_step(f"Scoring task build complete: {len(deduped):,} unique task(s) from {len(tasks):,} non-empty answer(s) in {elapsed:.1f}s.")
+    write_question_answer_exports(deduped)
     return deduped
 
 
@@ -337,7 +401,7 @@ class RetentionScoringServer:
         started = time.perf_counter()
         log_step(f"Initialising retention scoring server for grader {grader}...")
         self.grader = grader
-        log_step("Loading bundled source rubric JSON...")
+        log_step("Loading bundled structured rubric JSON...")
         self.rubric = load_scoring_rubric()
         self.all_tasks = load_scoring_tasks()
         self.tasks = select_grader_tasks(self.all_tasks, grader)
