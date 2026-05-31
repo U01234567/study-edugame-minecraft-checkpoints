@@ -14,6 +14,7 @@ from typing import Iterable, Any
 
 from openpyxl import load_workbook
 
+from ._delayed_response_filter import DELAYED_INCLUDED_COLUMN, annotate_survey_rows_with_delayed_inclusion, build_delayed_response_checklist
 from ._logs_main import LOG_LINE_RE
 from ._shared import clean, canonical_condition
 from ._survey_io import detect_text_encoding, looks_like_qualtrics_label_row
@@ -642,9 +643,16 @@ def publish_survey(raw_survey_dir: Path, data_survey_path: Path, included_mcids:
     raw_survey_path = newest_tsv_file(raw_survey_dir)
     header, rows = load_qualtrics_rows_without_metadata(raw_survey_path)
     mcid_index = index_of_column(header, "MCID")
-    keep_indexes = [index for index in selected_column_indexes(header) if clean(header[index]).lower() != "condition"]
+    excluded_publish_columns = {"condition", DELAYED_INCLUDED_COLUMN.lower()}
+    keep_indexes = [
+        index
+        for index in selected_column_indexes(header)
+        if clean(header[index]).lower() not in excluded_publish_columns
+    ]
     output_header = [header[index] for index in keep_indexes] + ["condition"]
     output_rows: list[list[str]] = []
+    delayed_source_rows: list[dict[str, str]] = []
+
     for row in rows:
         padded = row + [""] * max(0, len(header) - len(row))
         mcid = clean(padded[mcid_index])
@@ -653,11 +661,17 @@ def publish_survey(raw_survey_dir: Path, data_survey_path: Path, included_mcids:
         output_row = [padded[index] for index in keep_indexes]
         output_row.append(condition_lookup.get(mcid, ""))
         output_rows.append(output_row)
+        delayed_source_rows.append({output_header[index]: value for index, value in enumerate(output_row)})
+
+    delayed_checklist = build_delayed_response_checklist(delayed_source_rows)
+    annotated_rows = annotate_survey_rows_with_delayed_inclusion(delayed_source_rows, delayed_checklist)
+
     data_survey_path.parent.mkdir(parents=True, exist_ok=True)
     with data_survey_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(output_header)
-        writer.writerows(output_rows)
+        writer.writerow(output_header + [DELAYED_INCLUDED_COLUMN])
+        for output_row, annotated_row in zip(output_rows, annotated_rows):
+            writer.writerow(output_row + [annotated_row.get(DELAYED_INCLUDED_COLUMN, "")])
     output_text = data_survey_path.read_text(encoding="utf-8")
     if "@" in output_text:
         raise ValueError(f"{data_survey_path} contains '@' after removing known personal-data columns")

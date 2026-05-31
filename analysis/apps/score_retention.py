@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from helpers._delayed_response_filter import DELAYED_INCLUDED_COLUMN, build_delayed_response_checklist_from_annotations, delayed_included_column_present, delayed_included_values_missing
 from helpers._ret_main import build_retention_participants_from_survey, build_retention_question_rows
 from helpers._shared import DATA_DIR, RESOURCES_DIR, RETENTION_QUESTION_SPECS, RETENTION_RUBRICS_PATH, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
 from helpers._survey_io import detect_text_encoding, load_survey_export
@@ -144,6 +145,23 @@ def single_line_answer(value: object) -> str:
     return " ".join(clean(value).split())
 
 
+def require_delayed_included_column(survey_rows: list[dict[str, str]], header: list[str], survey_path: Path) -> None:
+    if not delayed_included_column_present(header):
+        raise RuntimeError(
+            f"{survey_path} is missing the required {DELAYED_INCLUDED_COLUMN!r} column. "
+            "score_ret only reads /data/, so run sum_merged once with PUBLIC_ROUTE=False to regenerate "
+            "/data/survey_export.tsv with persisted delayed-response inclusion flags."
+        )
+    missing_flags = delayed_included_values_missing(survey_rows)
+    if missing_flags:
+        preview = ", ".join(missing_flags[:20])
+        suffix = "..." if len(missing_flags) > 20 else ""
+        raise RuntimeError(
+            f"{survey_path} has DELAYED row(s) without a true/false {DELAYED_INCLUDED_COLUMN!r} value: "
+            f"{preview}{suffix}. Regenerate /data/ with PUBLIC_ROUTE=False."
+        )
+    
+
 def write_question_answer_exports(tasks: list[dict[str, Any]]) -> None:
     """Write simple grouped answer dumps for manual inspection.
 
@@ -207,10 +225,21 @@ def write_question_answer_exports(tasks: list[dict[str, Any]]) -> None:
 def load_scoring_tasks() -> list[dict[str, Any]]:
     started = time.perf_counter()
     log_step(f"Loading survey export from {SURVEY_EXPORT_PATH}...")
-    survey_rows, _survey_header = load_survey_export(SURVEY_EXPORT_PATH)
+    survey_rows, survey_header = load_survey_export(SURVEY_EXPORT_PATH)
+    require_delayed_included_column(survey_rows, survey_header, SURVEY_EXPORT_PATH)
+    log_step(f"Loaded {len(survey_rows):,} survey row(s). Reading persisted delayed-response inclusion...")
+    delayed_block = build_delayed_response_checklist_from_annotations(survey_rows)
+    delayed_diagnostics = delayed_block.get("diagnostics", {})
     log_step(
-        f"Loaded {len(survey_rows):,} survey row(s). "
-        "Building survey-only retention participant dataset from survey_export.tsv, including its condition column..."
+        "Delayed-response filter complete: "
+        f"{len(delayed_diagnostics.get('included_ids') or [])} included delayed response(s); "
+        f"{len(delayed_diagnostics.get('unverifiable_ids') or [])} unverifiable; "
+        f"{len(delayed_diagnostics.get('early_ids') or [])} early; "
+        f"{len(delayed_diagnostics.get('late_ids') or [])} late."
+    )
+    log_step(
+        f"Dataset contains {len(survey_rows):,} survey row(s). "
+        "Building survey-only retention participant dataset from /data/survey_export.tsv, including its condition column..."
     )
     participants = build_retention_participants_from_survey(survey_rows)
     log_step(f"Survey-only dataset contains {len(participants):,} participant(s). Building retention answer rows...")
@@ -332,7 +361,7 @@ def merge_score_files(all_tasks: list[dict[str, Any]], *, create_backup: bool = 
     grader1 = load_grader_scores(1)
     grader2 = load_grader_scores(2)
     task_lookup = {task["task_id"]: task for task in all_tasks}
-    all_task_ids = sorted(set(task_lookup) | set(grader1) | set(grader2))
+    all_task_ids = sorted(task_lookup)
     rows: list[dict[str, Any]] = []
     last_logged = 0
 

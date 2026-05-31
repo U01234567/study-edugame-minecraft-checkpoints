@@ -22,6 +22,7 @@ from ._shared import (
     clean,
     date_is_outside_official_window,
     delayed_flag,
+    delayed_included_flag,
     duration_seconds_between,
     first_present,
     format_seconds,
@@ -59,7 +60,8 @@ def split_survey_waves(rows: list[dict[str, str]]) -> dict[str, Any]:
             missing_mcid_rows.append(f"survey-row-{row_number}")
             continue
         if delayed_flag(row):
-            delayed[participant_id].append(row)
+            if delayed_included_flag(row):
+                delayed[participant_id].append(row)
         else:
             immediate[participant_id].append(row)
 

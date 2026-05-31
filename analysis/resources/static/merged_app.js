@@ -33,11 +33,21 @@ function table(headers, rows, options = {}) {
   }).join('')}</tr></thead>`;
   const bodyRows = (rows || []).map(row => `<tr>${headers.map(header => {
     const rawValue = row[header.key] ?? '—';
-    const value = header.html ? String(rawValue) : escapeHtml(rawValue);
+    const value = typeof header.render === 'function'
+      ? header.render(row)
+      : header.html ? String(rawValue) : escapeHtml(rawValue);
     return `<td${header.num ? ' class="num"' : ''}>${value}</td>`;
   }).join('')}</tr>`).join('');
   const emptyRow = `<tr><td colspan="${headers.length}">No rows.</td></tr>`;
   return `<div class="table-wrap"><table${className}>${head}<tbody>${bodyRows || emptyRow}</tbody></table></div>`;
+}
+
+function renderMcidListCell(row) {
+  const items = row.mcid_items || [];
+  if (!items.length) return escapeHtml(row.mcids || '—');
+  return `<ul class="mcid-list">${items.map(item => (
+    `<li>${escapeHtml(item.mcid)} <span class="mcid-offset">(${escapeHtml(item.offset)})</span></li>`
+  )).join('')}</ul>`;
 }
 
 function renderWarnings(warnings) {
@@ -476,6 +486,17 @@ function renderScaleTabs(data) {
 
 function renderMain(data) {
   const rawBlock = data.raw_block || {};
+  const delayedBlock = data.delayed_block || {};
+  const rawInclusionHeaders = [
+    { key: 'reason', label: 'Reason' },
+    { key: 'n', labelHtml: '<em>n</em>', num: true },
+    { key: 'mcids', label: 'MCIDs' },
+  ];
+  const delayedInclusionHeaders = [
+    { key: 'reason', label: 'Reason' },
+    { key: 'n', labelHtml: '<em>n</em>', num: true },
+    { key: 'mcids', label: 'MCIDs', render: renderMcidListCell },
+  ];
   const conditionRows = data.condition_summary || [];
   const controlling = data.controlling_variables || {};
   const main = document.getElementById('tab-main');
@@ -495,16 +516,19 @@ function renderMain(data) {
       <h1>${escapeHtml(data.meta?.title || 'Merged study summary')}</h1>
       <p>${escapeHtml(data.meta?.data_note || 'This statistics app uses /data/.')}</p>
       <p class="small">${escapeHtml(data.meta?.route_description || '')}</p>
+      <p class="small">${escapeHtml(data.meta?.delayed_filter_note || '')}</p>
     </section>
 
     <section class="card raw-card">
       <h2>${escapeHtml(rawBlock.title || 'Exclusion / inclusion based on /raw/')}</h2>
       <p>${escapeHtml(rawBlock.description || '')}</p>
-      ${table([
-        { key: 'reason', label: 'Reason' },
-        { key: 'n', labelHtml: '<em>n</em>', num: true },
-        { key: 'mcids', label: 'MCIDs' },
-      ], rawBlock.rows || [])}
+      ${table(rawInclusionHeaders, rawBlock.rows || [], { className: 'inclusion-checklist-table' })}
+    </section>
+
+    <section class="card delayed-card">
+      <h2>${escapeHtml(delayedBlock.title || 'Exclusion / inclusion based on delayed response')}</h2>
+      <p>${escapeHtml(delayedBlock.description || '')}</p>
+      ${table(delayedInclusionHeaders, delayedBlock.rows || [], { className: 'inclusion-checklist-table' })}
     </section>
 
     <section class="card">

@@ -14,6 +14,7 @@ from ._shared import (
     canonical_condition,
     clean,
     delayed_flag,
+    delayed_included_flag,
     first_present,
     mcid_from_row,
     mean_sd_text,
@@ -54,8 +55,11 @@ def split_retention_survey_waves(rows: list[dict[str, str]]) -> dict[str, dict[s
         participant_id = mcid_from_row(row)
         if not participant_id:
             continue
-        wave_key = "delayed" if delayed_flag(row) else "immediate"
-        waves[wave_key][participant_id].append(row)
+        if delayed_flag(row):
+            if delayed_included_flag(row):
+                waves["delayed"][participant_id].append(row)
+        else:
+            waves["immediate"][participant_id].append(row)
 
     return {
         "immediate": dict(waves["immediate"]),

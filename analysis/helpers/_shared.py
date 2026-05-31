@@ -341,6 +341,13 @@ def delayed_flag(row: dict[str, Any] | None) -> bool:
     return clean(first_present(row, ["DELAYED", "Delayed", "delayed"])).lower() in {"1", "true", "yes", "delayed"}
 
 
+def delayed_included_flag(row: dict[str, Any] | None) -> bool:
+    value = clean(first_present(row, ["delayed_included", "DELAYED_INCLUDED", "DelayedIncluded"]))
+    if not value:
+        return True
+    return value.lower() in {"1", "true", "yes", "included"}
+
+
 def normalise_gender(value: object) -> str:
     text = clean(value).lower()
     if not text:
