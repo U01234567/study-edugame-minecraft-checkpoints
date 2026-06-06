@@ -419,7 +419,7 @@ function updateProgress() {
   const block = task ? blockProgress(task.question_key) : {left: 0, total: 0};
 
   requireElement('progress').innerHTML = `
-    <div><strong>${p.total}</strong> total answers (<strong>${block.total}</strong> in this block)</div>
+    <div><strong>${p.total}</strong> review tasks (<strong>${block.total}</strong> in this block)</div>
     <div><strong>${p.graded}</strong> graded · <strong>${p.skipped}</strong> skipped · <strong>${p.flagged}</strong> flagged · <strong>${p.to_be_graded}</strong> to do</div>
     <div><strong>${block.left}</strong> left in this block</div>
   `;
@@ -546,8 +546,8 @@ function renderCurrentTask() {
     setHidden('workspace', true);
     setHidden('done', false);
     const done = requireElement('done');
-    done.querySelector('h1').textContent = 'No answers to grade';
-    done.querySelector('p').textContent = 'No eligible retention answers were found for this grader.';
+    done.querySelector('h1').textContent = 'No review tasks to grade';
+    done.querySelector('p').textContent = 'No eligible retention review tasks were found for this grader.';
     return;
   }
 
@@ -578,8 +578,25 @@ function renderCurrentTask() {
   setText('rubric-title', rubric.title || task.question_label);
   renderScoreOptions(task);
 
-  setText('question', task.question_label);
-  setText('answer', task.answer);
+  const answerCard = document.querySelector('.answer-card');
+  const comparisonHtml = saved.status ? `
+    <section class="post-save-comparison">
+      <h2>GenAI comparison</h2>
+      <p class="small">Shown only after this item has been saved by you.</p>
+      <dl class="task-meta-list">
+        <dt>GenAI score</dt><dd>${escapeHtml(task.genai_score || '')}</dd>
+        <dt>GenAI confidence</dt><dd>${escapeHtml(task.genai_confidence ? `${task.genai_confidence}%` : '')}</dd>
+        <dt>GenAI note</dt><dd>${escapeHtml(task.genai_note || '') || '—'}</dd>
+      </dl>
+    </section>
+  ` : '';
+  answerCard.innerHTML = `
+    <h2>Question</h2>
+    <p id="question">${escapeHtml(task.question_label || '')}</p>
+    <h2>Standardised answer to score</h2>
+    <p id="answer">${escapeHtml(task.answer_std || task.answer || '')}</p>
+    ${comparisonHtml}
+  `;
   requireElement('note').value = saved.note || '';
   requireElement('grade').disabled = selectedScore === null;
   requireElement('previous').disabled = currentIndex === 0;
@@ -678,7 +695,7 @@ function renderOverview() {
 
     const label = document.createElement('div');
     label.className = 'overview-question-label';
-    label.textContent = `${getQuestionShortLabel(questionKey)} · ${block.total.toLocaleString('en-GB')} answers · ${creatureOrder.length.toLocaleString('en-GB')} creatures`;
+    label.textContent = `${getQuestionShortLabel(questionKey)} · ${block.total.toLocaleString('en-GB')} review tasks · ${creatureOrder.length.toLocaleString('en-GB')} creatures`;
     section.appendChild(label);
 
     const creatureGrid = document.createElement('div');

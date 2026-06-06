@@ -605,8 +605,10 @@ function renderRetention(data) {
       <h2>Interrater agreement</h2>
       <p>${escapeHtml(reliability.method || 'Reliability summary not available.')}</p>
       ${table([
-        { key: 'group', label: 'Question group' },
-        { key: 'n_double_scored', label: 'Double-scored prompts', num: true },
+        { key: 'group', label: 'Agreement group' },
+        { key: 'n_double_scored', label: 'n used', num: true },
+        { key: 'n_unique_double_scored', label: 'Unique reviewed n', num: true },
+        { key: 'n_weighted_occurrences', label: 'Occurrence-weighted n', num: true },
         { key: 'exact_agreement_percent', label: 'Exact agreement %', num: true },
         { key: 'quadratic_weighted_kappa', label: 'Quadratic weighted κ', num: true },
       ], reliabilityRows)}
@@ -635,9 +637,14 @@ function renderRetention(data) {
   const answerHeadersWithGrades = [
     { key: 'participant_id', label: 'MCID' },
     { key: 'moment', label: 'Moment' },
-    { key: 'answer', label: 'Answer' },
+    { key: 'answer', label: 'Original answer' },
+    { key: 'answer_std', label: 'Standardised answer' },
+    { key: 'genai_score', label: 'GenAI score', num: true },
+    { key: 'genai_confidence', label: 'GenAI confidence', num: true },
     { key: 'grader1_score', label: 'Grader 1 score', num: true },
     { key: 'grader2_score', label: 'Grader 2 score', num: true },
+    { key: 'final_score', label: 'Final score', num: true },
+    { key: 'final_status', label: 'Final source' },
     { key: 'grader_notes_html', label: 'Grader notes', html: true },
   ];
 
@@ -655,8 +662,13 @@ function renderRetention(data) {
         .map(row => {
           const output = { participant_id: row.participant_id, moment: row.moment, answer: row.answer };
           if (showGrades) {
+            output.answer_std = row.answer_std;
+            output.genai_score = row.genai_score;
+            output.genai_confidence = row.genai_confidence;
             output.grader1_score = row.grader1_score;
             output.grader2_score = row.grader2_score;
+            output.final_score = row.final_score;
+            output.final_status = row.final_status;
             output.grader_notes_html = row.grader_notes_html;
           }
           return output;

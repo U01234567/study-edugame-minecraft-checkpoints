@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import csv
 import datetime as dt
-import hashlib
 import json
+import mimetypes
 import sys
 import threading
 import time
@@ -12,40 +11,46 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-import mimetypes
 from urllib.parse import unquote, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from helpers._delayed_response_filter import DELAYED_INCLUDED_COLUMN, build_delayed_response_checklist_from_annotations, delayed_included_column_present, delayed_included_values_missing
-from helpers._ret_main import build_retention_participants_from_survey, build_retention_question_rows
-from helpers._shared import DATA_DIR, RESOURCES_DIR, RETENTION_QUESTION_SPECS, RETENTION_RUBRICS_PATH, RETENTION_SCORES_PATH, SURVEY_EXPORT_PATH, STATIC_DIR, TEMPLATES_DIR, clean
-from helpers._survey_io import detect_text_encoding, load_survey_export
+from helpers._delayed_response_filter import (  # noqa: E402
+    DELAYED_INCLUDED_COLUMN,
+    build_delayed_response_checklist_from_annotations,
+    delayed_included_column_present,
+    delayed_included_values_missing,
+)
+from helpers._retention_coding import (  # noqa: E402
+    CREATURE_INFO_HTML_PATH,
+    GENAI_PROMPT_PATH,
+    GENAI_SCORES_PATH,
+    GRADER1_SCORES_PATH,
+    GRADER2_SCORES_PATH,
+    LOW_CONFIDENCE_THRESHOLD,
+    SCORING_RUBRICS_HTML_PATH,
+    VALIDATION_SAMPLE_FRACTION,
+    build_prompt_rows_from_survey,
+    build_review_tasks,
+    load_genai_scores,
+    load_grader_scores,
+    score_is_valid,
+    score_text,
+    write_grader_scores,
+)
+from helpers._shared import RESOURCES_DIR, RETENTION_QUESTION_SPECS, STATIC_DIR, SURVEY_EXPORT_PATH, TEMPLATES_DIR, clean  # noqa: E402
+from helpers._survey_io import load_survey_export  # noqa: E402
 
 RUBRIC_RESOURCE_PATH = RESOURCES_DIR / "retention_rubrics.json"
-RUBRIC_PATH = RETENTION_RUBRICS_PATH
-SCORE_BACKUP_DIR = REPO_ROOT / "score_backups"
-OUTPUT_DIR = REPO_ROOT / "output"
-GRADER_SCORE_TEMPLATE = "retention_scores_grader{grader}.tsv"
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-TASK_LOG_BATCH_SIZE = 100
 
-GRADER_SCORE_FIELDNAMES = [
-    "task_id", "participant_id", "moment", "creature_id", "creature_name",
-    "question_key", "question_label", "answer_hash", "grader", "score",
-    "status", "note", "updated_at",
-]
-
-MERGED_SCORE_FIELDNAMES = [
-    "task_id", "participant_id", "moment", "creature_id", "creature_name",
-    "question_key", "question_label", "answer_hash",
-    "grader1_score", "grader1_status", "grader1_note", "grader1_updated_at",
-    "grader2_score", "grader2_status", "grader2_note", "grader2_updated_at",
-    "final_score", "final_status",
-]
+GRADER_PATHS = {
+    1: GRADER1_SCORES_PATH,
+    2: GRADER2_SCORES_PATH,
+}
 
 
 def log_step(message: str) -> None:
@@ -56,24 +61,6 @@ def utc_timestamp() -> str:
     return dt.datetime.now(dt.timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def backup_timestamp() -> str:
-    return dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-
-
-def short_hash(value: object) -> str:
-    return hashlib.sha256(clean(value).encode("utf-8")).hexdigest()[:16]
-
-
-def stable_task_id(row: dict[str, Any]) -> str:
-    raw = "|".join([
-        clean(row.get("participant_id")),
-        clean(row.get("moment")),
-        clean(row.get("creature_id")),
-        clean(row.get("question")),
-    ])
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
-
-
 def load_json(path: Path) -> dict[str, Any]:
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -81,68 +68,8 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def load_scoring_rubric() -> dict[str, Any]:
-    """Load the bundled scoring-rubric resource used by the browser UI.
-
-    The scoring UI uses the bundled resource as the source of truth so the
-    structured rubric content always travels with the app code.
-    """
-    if RUBRIC_RESOURCE_PATH.exists():
-        rubric = load_json(RUBRIC_RESOURCE_PATH)
-        instructions_len = len(clean(rubric.get("instructions_html")))
-        table_count = sum(
-            len((table or {}).get("rows", []))
-            for table in (rubric.get("question_rubric_tables") or {}).values()
-        )
-        log_step(
-            f"Loaded bundled rubric from {RUBRIC_RESOURCE_PATH} "
-            f"({instructions_len:,} instruction chars; {table_count:,} structured rubric row(s))."
-        )
-        return rubric
-
-    # Development fallback only. In normal use resources/retention_rubrics.json
-    # should exist and should not be overridden by data/config.
-    log_step(f"Bundled rubric missing; falling back to {RUBRIC_PATH}.")
-    return load_json(RUBRIC_PATH)
-
-
-def read_tsv(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
-        return []
-    encoding = detect_text_encoding(path)
-    with path.open("r", encoding=encoding, newline="") as handle:
-        return [dict(row) for row in csv.DictReader(handle, delimiter="\t")]
-
-
-def write_delimited(path: Path, fieldnames: list[str], rows: list[dict[str, Any]], *, delimiter: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter=delimiter, extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: clean(row.get(field)) for field in fieldnames})
-
-
-def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
-    write_delimited(path, fieldnames, rows, delimiter="\t")
-
-
-def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
-    write_delimited(path, fieldnames, rows, delimiter=",")
-
-
-def load_grader_scores(grader: int) -> dict[str, dict[str, str]]:
-    rows = read_tsv(DATA_DIR / GRADER_SCORE_TEMPLATE.format(grader=grader))
-    return {clean(row.get("task_id")): row for row in rows if clean(row.get("task_id"))}
-
-
-def write_grader_scores(grader: int, rows_by_task_id: dict[str, dict[str, Any]]) -> None:
-    rows = sorted(rows_by_task_id.values(), key=lambda row: clean(row.get("task_id")))
-    write_tsv(DATA_DIR / GRADER_SCORE_TEMPLATE.format(grader=grader), GRADER_SCORE_FIELDNAMES, rows)
-
-
-def single_line_answer(value: object) -> str:
-    """Flatten an answer so each exported answer occupies exactly one line."""
-    return " ".join(clean(value).split())
+    rubric = load_json(RUBRIC_RESOURCE_PATH)
+    return rubric
 
 
 def require_delayed_included_column(survey_rows: list[dict[str, str]], header: list[str], survey_path: Path) -> None:
@@ -160,269 +87,89 @@ def require_delayed_included_column(survey_rows: list[dict[str, str]], header: l
             f"{survey_path} has DELAYED row(s) without a true/false {DELAYED_INCLUDED_COLUMN!r} value: "
             f"{preview}{suffix}. Regenerate /data/ with PUBLIC_ROUTE=False."
         )
-    
 
-def write_question_answer_exports(tasks: list[dict[str, Any]]) -> None:
-    """Write simple grouped answer dumps for manual inspection.
 
-    Creates:
-      output/Q1_answers.txt
-      output/Q2_answers.txt
-      output/Q3_answers.txt
-      output/Q4_answers.txt
-    """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def required_prompt_files_message() -> str:
+    return (
+        "score_ret cannot start yet: GenAI scoring is not ready. "
+        "Fill data/retention_scores_genai.tsv first. Use data/config/genai_prompt.txt and attach "
+        "retention_scores_genai.tsv, data/config/scoring_rubrics.html, and data/config/creature_info.html."
+    )
 
-    question_labels = {
-        question_key: label
-        for question_key, label in RETENTION_QUESTION_SPECS
-    }
-    moment_order = {"Immediate": 0, "Delayed": 1}
 
-    for question_index, (question_key, fallback_label) in enumerate(RETENTION_QUESTION_SPECS, start=1):
-        question_tasks = [
-            task for task in tasks
-            if clean(task.get("question_key")) == question_key and clean(task.get("answer"))
-        ]
-        question_tasks = sorted(
-            question_tasks,
-            key=lambda task: (
-                clean(task.get("creature_name")).lower(),
-                moment_order.get(clean(task.get("moment")), 999),
-                clean(task.get("participant_id")),
-                clean(task.get("task_id")),
-            ),
+def human_readable_genai_error(problems: list[str]) -> str:
+    if not problems:
+        return required_prompt_files_message()
+
+    if any(problem.startswith("Missing ") for problem in problems):
+        return required_prompt_files_message() + " Run sum_merged with PUBLIC_ROUTE=False if the prompt files do not exist yet."
+
+    if any(" is empty" in problem for problem in problems):
+        return required_prompt_files_message() + " The file exists, but it is empty."
+
+    score_confidence_problem_count = sum(
+        1
+        for problem in problems
+        if "score (0-4) must be" in problem or "confidence (0-100%) must be" in problem
+    )
+    mostly_unfilled = score_confidence_problem_count >= max(1, len(problems) * 0.8)
+    if mostly_unfilled:
+        return (
+            required_prompt_files_message()
+            + " The file exists, but the score/confidence columns appear to be empty or unfinished."
         )
 
-        lines: list[str] = [
-            "=======",
-            f"Answers for question: \"{question_labels.get(question_key, fallback_label)}\"",
-            "=======",
-        ]
-
-        current_creature = ""
-        for task in question_tasks:
-            creature_name = clean(task.get("creature_name")).upper()
-            if creature_name != current_creature:
-                if current_creature:
-                    lines.append("")
-                lines.extend([
-                    "+++++++",
-                    creature_name,
-                    "+++++++",
-                ])
-                current_creature = creature_name
-
-            answer = single_line_answer(task.get("answer"))
-            if answer:
-                lines.append(answer)
-
-        output_path = OUTPUT_DIR / f"Q{question_index}_answers.txt"
-        output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-        log_step(f"Wrote answer export: {output_path} ({len(question_tasks):,} answer(s)).")
-
-
-def load_scoring_tasks() -> list[dict[str, Any]]:
-    started = time.perf_counter()
-    log_step(f"Loading survey export from {SURVEY_EXPORT_PATH}...")
-    survey_rows, survey_header = load_survey_export(SURVEY_EXPORT_PATH)
-    require_delayed_included_column(survey_rows, survey_header, SURVEY_EXPORT_PATH)
-    log_step(f"Loaded {len(survey_rows):,} survey row(s). Reading persisted delayed-response inclusion...")
-    delayed_block = build_delayed_response_checklist_from_annotations(survey_rows)
-    delayed_diagnostics = delayed_block.get("diagnostics", {})
-    log_step(
-        "Delayed-response filter complete: "
-        f"{len(delayed_diagnostics.get('included_ids') or [])} included delayed response(s); "
-        f"{len(delayed_diagnostics.get('unverifiable_ids') or [])} unverifiable; "
-        f"{len(delayed_diagnostics.get('early_ids') or [])} early; "
-        f"{len(delayed_diagnostics.get('late_ids') or [])} late."
+    preview = " | ".join(problems[:5])
+    suffix = "" if len(problems) <= 5 else f" | ... plus {len(problems) - 5} more problem(s)."
+    return (
+        required_prompt_files_message()
+        + " The file has invalid values: "
+        + preview
+        + suffix
     )
-    log_step(
-        f"Dataset contains {len(survey_rows):,} survey row(s). "
-        "Building survey-only retention participant dataset from /data/survey_export.tsv, including its condition column..."
-    )
-    participants = build_retention_participants_from_survey(survey_rows)
-    log_step(f"Survey-only dataset contains {len(participants):,} participant(s). Building retention answer rows...")
-    answer_rows = build_retention_question_rows(participants)
-    log_step(f"Retention builder returned {len(answer_rows):,} candidate answer row(s). Converting to scoring tasks...")
-
-    tasks: list[dict[str, Any]] = []
-    last_logged = 0
-    for row in answer_rows:
-        answer = clean(row.get("answer"))
-        if not answer:
-            continue
-
-        task = {
-            "participant_id": clean(row.get("participant_id")),
-            "moment": clean(row.get("moment")),
-            "creature_id": clean(row.get("creature_id")),
-            "creature_name": clean(row.get("creature_name")),
-            "question_key": clean(row.get("question")),
-            "question_label": clean(row.get("question_label")),
-            "answer": answer,
-            "answer_hash": short_hash(answer),
-        }
-        task["task_id"] = stable_task_id({
-            "participant_id": task["participant_id"],
-            "moment": task["moment"],
-            "creature_id": task["creature_id"],
-            "question": task["question_key"],
-        })
-        tasks.append(task)
-
-        if len(tasks) - last_logged >= TASK_LOG_BATCH_SIZE:
-            start = last_logged + 1
-            end = len(tasks)
-            log_step(f"Tasks {start:,} - {end:,} done.")
-            last_logged = end
-
-    if len(tasks) and len(tasks) != last_logged:
-        start = last_logged + 1
-        end = len(tasks)
-        log_step(f"Tasks {start:,} - {end:,} done.")
-
-    by_task_id: dict[str, dict[str, Any]] = {}
-    for task in tasks:
-        by_task_id.setdefault(task["task_id"], task)
-    deduped = list(by_task_id.values())
-    elapsed = time.perf_counter() - started
-    log_step(f"Scoring task build complete: {len(deduped):,} unique task(s) from {len(tasks):,} non-empty answer(s) in {elapsed:.1f}s.")
-    write_question_answer_exports(deduped)
-    return deduped
 
 
-def deterministic_key(seed: str, task: dict[str, Any]) -> str:
-    return hashlib.sha256((seed + "|" + task["task_id"]).encode("utf-8")).hexdigest()
+def append_scoring_workflow_instructions(rubric: dict[str, Any], task_count: int, stats: dict[str, Any]) -> dict[str, Any]:
+    copy = dict(rubric)
+    existing = clean(copy.get("instructions_html"))
+    workflow = f"""
+    <section class="workflow-instructions">
+      <h1>Human validation workflow</h1>
+      <p>You are scoring a blinded review queue of unique standardised retention answers. GenAI scores, confidence values, and notes are hidden while you score so that the validation remains independent.</p>
+      <ul>
+        <li>The queue contains a deterministic stratified {int(VALIDATION_SAMPLE_FRACTION * 100)}% validation sample of unique non-empty answers.</li>
+        <li>It also contains extra GenAI answers below the low-confidence threshold ({LOW_CONFIDENCE_THRESHOLD:g}%).</li>
+        <li>It also contains every answer for which GenAI added a note, because those notes should signal ambiguity, uncertainty, a borderline score, or a possible rubric issue.</li>
+        <li>If an answer belongs to multiple review groups, it still appears only once.</li>
+        <li>Duplicates are collapsed before human scoring: normally by question + standardised answer, but split by creature when the same question + answer occurs for multiple creatures.</li>
+        <li>Blank administered answers are not shown here; they are automatically scored 0.</li>
+        <li>Do not worry about whether an item is from the validation sample, the low-confidence extra-check set, or the GenAI-note extra-check set. Score each row using the rubric only.</li>
+      </ul>
+      <p><strong>Current queue:</strong> {task_count:,} review task(s) for this grader. Source data: {stats.get('prompt_rows', 0):,} administered prompt row(s), {stats.get('unique_nonblank_answers', 0):,} unique non-empty GenAI row(s), {stats.get('blank_prompt_rows', 0):,} blank administered prompt row(s).</p>
+    </section>
+    """
+    copy["instructions_html"] = workflow + existing
+    return copy
 
 
 def scoring_display_key(task: dict[str, Any]) -> tuple[Any, ...]:
     question_order = {key: index for index, (key, _label) in enumerate(RETENTION_QUESTION_SPECS)}
-    moment_order = {"Immediate": 0, "Delayed": 1}
     return (
         question_order.get(clean(task.get("question_key")), 999),
-        clean(task.get("creature_name")).lower(),
-        moment_order.get(clean(task.get("moment")), 999),
-        clean(task.get("participant_id")),
+        clean(task.get("creature_name") or task.get("creature")).lower(),
+        clean(task.get("answer_std")),
         clean(task.get("task_id")),
     )
 
 
-def sort_for_scoring_display(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(tasks, key=scoring_display_key)
-
-
-def select_grader_tasks(tasks: list[dict[str, Any]], grader: int) -> list[dict[str, Any]]:
-    started = time.perf_counter()
-    log_step(f"Selecting display tasks for grader {grader} from {len(tasks):,} task(s)...")
-    if grader == 1:
-        selected_for_grader_1 = sort_for_scoring_display(tasks)
-        log_step(f"Grader 1 task selection complete: {len(selected_for_grader_1):,} task(s) in {time.perf_counter() - started:.1f}s.")
-        return selected_for_grader_1
-
-    if grader != 2:
-        raise ValueError("grader must be 1 or 2")
-
-    # Grader 2 receives a deterministic 25% sample stratified by both
-    # retention wave (Immediate/Delayed) and prompt type (img1/img2/name1/name2).
-    # The sample selection remains deterministic, but the display order is grouped
-    # by question so graders complete all Q1 answers before moving to Q2, etc.
-    selected: list[dict[str, Any]] = []
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    moments: set[str] = set()
-    for task in tasks:
-        moment = clean(task.get("moment"))
-        question_key = clean(task.get("question_key"))
-        if moment:
-            moments.add(moment)
-        grouped.setdefault((moment, question_key), []).append(task)
-
-    for moment in sorted(moments):
-        for question_key, _label in RETENTION_QUESTION_SPECS:
-            group = grouped.get((moment, question_key), [])
-            group = sorted(
-                group,
-                key=lambda task: deterministic_key(f"retention-grader2-{moment}-{question_key}-v2", task),
-            )
-            if not group:
-                continue
-            n_to_take = max(1, round(len(group) * 0.25))
-            selected.extend(group[:n_to_take])
-            log_step(f"Grader 2 sample {moment} / {question_key}: selected {n_to_take:,} of {len(group):,} task(s).")
-
-    selected_for_grader_2 = sort_for_scoring_display(selected)
-    log_step(f"Grader 2 task selection complete: {len(selected_for_grader_2):,} task(s) in {time.perf_counter() - started:.1f}s.")
-    return selected_for_grader_2
-
-
-def merge_score_files(all_tasks: list[dict[str, Any]], *, create_backup: bool = True) -> list[dict[str, Any]]:
-    started = time.perf_counter()
-    log_step("Merging grader score files into retention_scoring.tsv...")
-    grader1 = load_grader_scores(1)
-    grader2 = load_grader_scores(2)
-    task_lookup = {task["task_id"]: task for task in all_tasks}
-    all_task_ids = sorted(task_lookup)
-    rows: list[dict[str, Any]] = []
-    last_logged = 0
-
-    for index, task_id in enumerate(all_task_ids, start=1):
-        task = task_lookup.get(task_id, {})
-        row1 = grader1.get(task_id, {})
-        row2 = grader2.get(task_id, {})
-        base = {
-            "task_id": task_id,
-            "participant_id": task.get("participant_id") or row1.get("participant_id") or row2.get("participant_id") or "",
-            "moment": task.get("moment") or row1.get("moment") or row2.get("moment") or "",
-            "creature_id": task.get("creature_id") or row1.get("creature_id") or row2.get("creature_id") or "",
-            "creature_name": task.get("creature_name") or row1.get("creature_name") or row2.get("creature_name") or "",
-            "question_key": task.get("question_key") or row1.get("question_key") or row2.get("question_key") or "",
-            "question_label": task.get("question_label") or row1.get("question_label") or row2.get("question_label") or "",
-            "answer_hash": task.get("answer_hash") or row1.get("answer_hash") or row2.get("answer_hash") or "",
-            "grader1_score": row1.get("score", ""),
-            "grader1_status": row1.get("status", ""),
-            "grader1_note": row1.get("note", ""),
-            "grader1_updated_at": row1.get("updated_at", ""),
-            "grader2_score": row2.get("score", ""),
-            "grader2_status": row2.get("status", ""),
-            "grader2_note": row2.get("note", ""),
-            "grader2_updated_at": row2.get("updated_at", ""),
-        }
-
-        if clean(base["grader1_status"]) == "graded" and clean(base["grader1_score"]):
-            base["final_score"] = base["grader1_score"]
-            base["final_status"] = "graded_from_grader1"
-        elif clean(base["grader2_status"]) == "graded" and clean(base["grader2_score"]):
-            base["final_score"] = base["grader2_score"]
-            base["final_status"] = "graded_from_grader2_only"
-        else:
-            base["final_score"] = ""
-            base["final_status"] = ""
-
-        rows.append(base)
-
-        if index - last_logged >= TASK_LOG_BATCH_SIZE:
-            start = last_logged + 1
-            end = index
-            log_step(f"Merge rows {start:,} - {end:,} done.")
-            last_logged = index
-
-    if len(all_task_ids) and len(all_task_ids) != last_logged:
-        start = last_logged + 1
-        end = len(all_task_ids)
-        log_step(f"Merge rows {start:,} - {end:,} done.")
-
-    write_tsv(RETENTION_SCORES_PATH, MERGED_SCORE_FIELDNAMES, rows)
-    if create_backup:
-        SCORE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        backup_path = SCORE_BACKUP_DIR / f"retention_scores-{backup_timestamp()}.tsv"
-        write_tsv(backup_path, MERGED_SCORE_FIELDNAMES, rows)
-        log_step(f"Backup written: {backup_path}")
-    log_step(f"Score merge complete: {len(rows):,} row(s) in {time.perf_counter() - started:.1f}s.")
-    return rows
-
-
-def has_any_existing_grader_scores() -> bool:
-    return bool(load_grader_scores(1) or load_grader_scores(2))
+def public_score_row(row: dict[str, Any]) -> dict[str, str]:
+    return {
+        "task_id": clean(row.get("task_id")),
+        "score": clean(row.get("score (0-4)")),
+        "status": clean(row.get("status")),
+        "note": clean(row.get("note (optional)")),
+        "updated_at": clean(row.get("updated_at")),
+    }
 
 
 class RetentionScoringServer:
@@ -430,29 +177,45 @@ class RetentionScoringServer:
         started = time.perf_counter()
         log_step(f"Initialising retention scoring server for grader {grader}...")
         self.grader = grader
-        log_step("Loading bundled structured rubric JSON...")
-        self.rubric = load_scoring_rubric()
-        self.all_tasks = load_scoring_tasks()
-        self.tasks = select_grader_tasks(self.all_tasks, grader)
+        self.grader_path = GRADER_PATHS[grader]
+
+        log_step(f"Loading survey export from {SURVEY_EXPORT_PATH}...")
+        self.survey_rows, survey_header = load_survey_export(SURVEY_EXPORT_PATH)
+        require_delayed_included_column(self.survey_rows, survey_header, SURVEY_EXPORT_PATH)
+        delayed_block = build_delayed_response_checklist_from_annotations(self.survey_rows)
+        delayed_diagnostics = delayed_block.get("diagnostics", {})
+        log_step(
+            "Delayed-response filter complete: "
+            f"{len(delayed_diagnostics.get('included_ids') or [])} included delayed response(s); "
+            f"{len(delayed_diagnostics.get('unverifiable_ids') or [])} unverifiable; "
+            f"{len(delayed_diagnostics.get('early_ids') or [])} early; "
+            f"{len(delayed_diagnostics.get('late_ids') or [])} late."
+        )
+
+        prompt_rows = build_prompt_rows_from_survey(self.survey_rows)
+        genai_lookup, genai_problems = load_genai_scores(GENAI_SCORES_PATH)
+        if genai_problems:
+            raise RuntimeError(human_readable_genai_error(genai_problems))
+
+        self.tasks = sorted(build_review_tasks(prompt_rows, genai_lookup), key=scoring_display_key)
         self.task_by_id = {task["task_id"]: task for task in self.tasks}
-        log_step(f"Loading existing score file for grader {grader}...")
-        self.scores_by_task_id = load_grader_scores(grader)
+        self.scores_by_task_id = load_grader_scores(self.grader_path)
         self.lock = threading.RLock()
         self._task_payload_cache: bytes | None = None
         self._task_payload_cache_dirty = True
 
-        if has_any_existing_grader_scores():
-            log_step("Existing grader score file(s) found; refreshing merged score CSV without creating a launch backup.")
-            merge_score_files(self.all_tasks, create_backup=False)
-        else:
-            log_step("No existing grader score file rows found; skipping startup score merge/write.")
-
+        stats = {
+            "prompt_rows": len(prompt_rows),
+            "blank_prompt_rows": sum(1 for row in prompt_rows if not clean(row.get("answer_std"))),
+            "unique_nonblank_answers": len(genai_lookup),
+        }
+        self.rubric = append_scoring_workflow_instructions(load_scoring_rubric(), len(self.tasks), stats)
         self.rebuild_task_payload_cache()
-        log_step(f"Server state ready in {time.perf_counter() - started:.1f}s.")
+        log_step(f"Server state ready in {time.perf_counter() - started:.1f}s with {len(self.tasks):,} review task(s).")
 
     def task_payload(self) -> dict[str, Any]:
         with self.lock:
-            scores = {task_id: self.public_score_row(row) for task_id, row in self.scores_by_task_id.items()}
+            scores = {task_id: public_score_row(row) for task_id, row in self.scores_by_task_id.items()}
         return {
             "grader": self.grader,
             "tasks": self.tasks,
@@ -460,33 +223,23 @@ class RetentionScoringServer:
             "rubric": self.rubric,
             "questionOrder": [key for key, _label in RETENTION_QUESTION_SPECS],
             "questionLabels": {key: label for key, label in RETENTION_QUESTION_SPECS},
+            "metadata": {
+                "validation_sample_fraction": VALIDATION_SAMPLE_FRACTION,
+                "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
+            },
         }
 
     def rebuild_task_payload_cache(self) -> None:
-        started = time.perf_counter()
         payload = self.task_payload()
         payload["progress"] = self.progress()
         self._task_payload_cache = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self._task_payload_cache_dirty = False
-        log_step(
-            f"Prepared /api/tasks payload: {len(self.tasks):,} task(s), "
-            f"{len(self._task_payload_cache):,} byte(s), {time.perf_counter() - started:.1f}s."
-        )
 
     def task_payload_bytes(self) -> bytes:
         with self.lock:
             if self._task_payload_cache is None or self._task_payload_cache_dirty:
                 self.rebuild_task_payload_cache()
             return self._task_payload_cache or b"{}"
-
-    def public_score_row(self, row: dict[str, Any]) -> dict[str, str]:
-        return {
-            "task_id": clean(row.get("task_id")),
-            "score": clean(row.get("score")),
-            "status": clean(row.get("status")),
-            "note": clean(row.get("note")),
-            "updated_at": clean(row.get("updated_at")),
-        }
 
     def progress(self) -> dict[str, int]:
         relevant = [self.scores_by_task_id.get(task["task_id"], {}) for task in self.tasks]
@@ -505,56 +258,38 @@ class RetentionScoringServer:
     def save_score(self, payload: dict[str, Any]) -> dict[str, Any]:
         task_id = clean(payload.get("task_id"))
         action = clean(payload.get("action"))
-
         if task_id not in self.task_by_id:
             raise ValueError("Unknown task_id")
         if action not in {"grade", "skip", "flag"}:
             raise ValueError("Action must be grade, skip, or flag")
 
         task = self.task_by_id[task_id]
-        now = utc_timestamp()
-        score_text = clean(payload.get("score"))
-
+        score = ""
+        status = {"grade": "graded", "skip": "skipped", "flag": "flagged"}[action]
         if action == "grade":
-            try:
-                score_int = int(score_text)
-            except ValueError as exc:
-                raise ValueError("Score must be 0, 1, 2, 3, or 4") from exc
-            if score_int not in {0, 1, 2, 3, 4}:
+            if not score_is_valid(payload.get("score")):
                 raise ValueError("Score must be 0, 1, 2, 3, or 4")
-            status = "graded"
-            score = str(score_int)
-        elif action == "skip":
-            status = "skipped"
-            score = ""
-        else:
-            status = "flagged"
-            score = ""
+            score = score_text(payload.get("score"))
 
         row = {
             "task_id": task_id,
-            "participant_id": task["participant_id"],
-            "moment": task["moment"],
-            "creature_id": task["creature_id"],
-            "creature_name": task["creature_name"],
+            "question": task["question"],
             "question_key": task["question_key"],
-            "question_label": task["question_label"],
-            "answer_hash": task["answer_hash"],
-            "grader": str(self.grader),
-            "score": score,
+            "creature": task["creature"],
+            "creature_id": task["creature_id"],
+            "answer_std": task["answer_std"],
+            "score (0-4)": score,
             "status": status,
-            "note": clean(payload.get("note")),
-            "updated_at": now,
+            "note (optional)": clean(payload.get("note")),
+            "updated_at": utc_timestamp(),
         }
 
         with self.lock:
             self.scores_by_task_id[task_id] = row
-            log_step(f"Saving {status} score for task {task_id} ({task['question_key']} / {task['creature_name']}).")
-            write_grader_scores(self.grader, self.scores_by_task_id)
+            write_grader_scores(self.grader_path, self.scores_by_task_id)
             self._task_payload_cache_dirty = True
-            merge_score_files(self.all_tasks)
-
-        return {"ok": True, "score": self.public_score_row(row), "progress": self.progress()}
+        return {"ok": True, "score": public_score_row(row), "progress": self.progress()}
+    
 
 def send_no_cache_headers(handler: BaseHTTPRequestHandler) -> None:
     handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -580,7 +315,6 @@ def file_response(handler: BaseHTTPRequestHandler, path: Path) -> None:
     if not path.exists() or not path.is_file():
         handler.send_error(HTTPStatus.NOT_FOUND, "File not found")
         return
-
     content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
     body = path.read_bytes()
     handler.send_response(HTTPStatus.OK)
@@ -599,52 +333,32 @@ def build_handler(state: RetentionScoringServer) -> type[BaseHTTPRequestHandler]
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             path = parsed.path
-
             if path in {"/", "/index.html"}:
-                template_path = TEMPLATES_DIR / "scoring_app.html"
-                body = template_path.read_text(encoding="utf-8").encode("utf-8")
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                send_no_cache_headers(self)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                file_response(self, TEMPLATES_DIR / "scoring_app.html")
                 return
-
             if path == "/api/tasks":
-                started = time.perf_counter()
-                body = state.task_payload_bytes()
-                log_step(f"Serving /api/tasks: {len(body):,} byte(s).")
-                json_bytes_response(self, body)
-                log_step(f"Finished /api/tasks in {time.perf_counter() - started:.2f}s.")
+                json_bytes_response(self, state.task_payload_bytes())
                 return
-
             if path == "/favicon.ico":
                 self.send_response(HTTPStatus.NO_CONTENT)
                 self.end_headers()
                 return
-
             if path.startswith("/static/"):
                 relative = Path(unquote(path.removeprefix("/static/")))
                 safe_path = (STATIC_DIR / relative).resolve()
                 static_root = STATIC_DIR.resolve()
-
                 if static_root not in safe_path.parents and safe_path != static_root:
                     self.send_error(HTTPStatus.FORBIDDEN, "Forbidden")
                     return
-
                 file_response(self, safe_path)
                 return
-
             self.send_error(HTTPStatus.NOT_FOUND, "Unknown route")
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-
             if parsed.path != "/api/score":
                 self.send_error(HTTPStatus.NOT_FOUND, "Unknown route")
                 return
-
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
@@ -658,7 +372,6 @@ def build_handler(state: RetentionScoringServer) -> type[BaseHTTPRequestHandler]
 def parse_args(argv: list[str]) -> tuple[int | None, int]:
     grader: int | None = None
     port = DEFAULT_PORT
-
     for arg in argv:
         if arg.startswith("grader="):
             try:
@@ -667,7 +380,6 @@ def parse_args(argv: list[str]) -> tuple[int | None, int]:
                 grader = None
         elif arg.startswith("port="):
             port = int(arg.split("=", 1)[1])
-
     return grader, port
 
 
@@ -681,29 +393,27 @@ def print_usage() -> None:
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     grader, port = parse_args(args)
-
     if grader not in {1, 2}:
         print_usage()
         return 1
-
-    state = RetentionScoringServer(grader)
+    try:
+        state = RetentionScoringServer(grader)
+    except Exception as exc:
+        print(f"[score_ret] ERROR: {exc}", file=sys.stderr)
+        return 1
     handler = build_handler(state)
     server = ThreadingHTTPServer((HOST, port), handler)
     url = f"http://{HOST}:{port}/"
-
     print(f"Retention scoring app for grader {grader}: {url}")
     print(f"Tasks available: {len(state.tasks)}")
     print("Press Ctrl+C to stop the server.")
-
     webbrowser.open(url)
-
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopping retention scoring server.")
     finally:
         server.server_close()
-
     return 0
 
 

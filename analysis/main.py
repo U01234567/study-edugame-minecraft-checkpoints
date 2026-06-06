@@ -20,7 +20,7 @@ from apps.summarise_survey import main as summarise_survey_main
 # all raw logs, builds the inclusion/exclusion checklist from /raw/, regenerates
 # /data/ for included MCIDs, and then performs the full report calculations from
 # /data/ only.
-PUBLIC_ROUTE = True
+PUBLIC_ROUTE = False
 
 ANALYSIS_DIR = Path(__file__).resolve().parent
 RAW_DIR = ANALYSIS_DIR / "raw"
@@ -39,7 +39,7 @@ DATA_TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 DATA_CONFIG_DIR = DATA_DIR / "config"
 DATA_INTERVIEW_MANIFEST_PATH = DATA_CONFIG_DIR / "interview_manifest.json"
 DATA_COLLECTION_LOCATIONS_PATH = DATA_CONFIG_DIR / "collection_locations.json"
-DATA_RETENTION_SCORES_PATH = DATA_DIR / "retention_scoring.tsv"
+DATA_RETENTION_SCORES_PATH = DATA_DIR / "retention_scores_merged.tsv"
 
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"

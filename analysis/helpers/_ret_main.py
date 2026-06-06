@@ -100,8 +100,11 @@ def build_retention_participants_from_survey(survey_rows: list[dict[str, str]]) 
     return participants
 
 PROMPT_SCORE_COLUMNS = {
-    "task_id",
-    "participant_id",
+    "MCID",
+    "creature",
+    "question",
+    "answer",
+    "answer_std",
     "moment",
     "creature_id",
     "question_key",
@@ -111,6 +114,8 @@ PROMPT_SCORE_COLUMNS = {
     "grader2_score",
     "grader2_status",
     "grader2_note",
+    "final_score",
+    "final_status",
 }
 
 
@@ -218,9 +223,9 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
             for creature_id, answers in wave_data.items():
                 for suffix, label in RETENTION_QUESTION_SPECS:
                     answer = clean(answers.get(suffix))
-                    if not answer:
-                        continue
                     score_info = _prompt_score_for_participant(participant, moment, creature_id, suffix)
+                    if not answer and not score_info:
+                        continue
                     rows.append({
                         "participant_id": participant_id,
                         "condition": condition,
@@ -230,8 +235,13 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
                         "question": suffix,
                         "question_label": label,
                         "answer": answer,
+                        "answer_std": score_info.get("answer_std"),
+                        "genai_score": score_info.get("genai_score"),
+                        "genai_confidence": score_info.get("genai_confidence"),
                         "grader1_score": score_info.get("grader1_score"),
                         "grader2_score": score_info.get("grader2_score"),
+                        "final_score": score_info.get("final_score"),
+                        "final_status": score_info.get("final_status"),
                         "grader_notes_html": _format_grader_note(score_info),
                     })
 
@@ -266,33 +276,44 @@ def _score_from_row(row: dict[str, str], grader_prefix: str) -> float | None:
     return score
 
 
+def _final_score_from_row(row: dict[str, str]) -> float | None:
+    score = parse_numeric(row.get("final_score"))
+    if score is None or score < 0 or score > 4:
+        return None
+    return score
+
+
 def _load_prompt_level_scores(rows: list[dict[str, str]]) -> dict[str, Any]:
     participant_scores: dict[str, dict[str, Any]] = defaultdict(dict)
     prompt_scores_by_participant: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     values_by_participant_wave: dict[tuple[str, str], list[float]] = defaultdict(list)
 
     for row in rows:
-        participant_id = clean(row.get("participant_id"))
+        participant_id = clean(row.get("MCID"))
         moment = _normalise_moment(row.get("moment"))
         creature_id = clean(row.get("creature_id"))
         question_key = clean(row.get("question_key"))
         if not participant_id or not moment or not creature_id or not question_key:
             continue
 
-        g1 = _score_from_row(row, "grader1")
-        g2 = _score_from_row(row, "grader2")
+        final_score = _final_score_from_row(row)
         score_info = {
-            "grader1_score": g1,
+            "answer_std": clean(row.get("answer_std")),
+            "genai_score": parse_numeric(row.get("genai_score")),
+            "genai_confidence": parse_numeric(clean(row.get("genai_confidence")).replace("%", "")),
+            "genai_note": clean(row.get("genai_note")),
+            "grader1_score": _score_from_row(row, "grader1"),
             "grader1_status": clean(row.get("grader1_status")),
             "grader1_note": clean(row.get("grader1_note")),
-            "grader2_score": g2,
+            "grader2_score": _score_from_row(row, "grader2"),
             "grader2_status": clean(row.get("grader2_status")),
             "grader2_note": clean(row.get("grader2_note")),
+            "final_score": final_score,
+            "final_status": clean(row.get("final_status")),
         }
         prompt_scores_by_participant[participant_id][prompt_score_key(moment, creature_id, question_key)] = score_info
-        
-        if g1 is not None:
-            values_by_participant_wave[(participant_id, moment)].append(g1)
+        if final_score is not None:
+            values_by_participant_wave[(participant_id, moment)].append(final_score)
 
     for (participant_id, moment), values in values_by_participant_wave.items():
         proportion = sum(values) / (len(values) * 4)
@@ -324,11 +345,11 @@ def _load_legacy_participant_scores(rows: list[dict[str, str]]) -> dict[str, dic
 
 def load_retention_scores(path: Path = RETENTION_SCORES_PATH) -> tuple[dict[str, dict[str, Any]], list[str]]:
     if not path.exists():
-        return {}, [f"Retention scoring file not found: {path}"]
-
+        return {}, [f"Retention scores merged file not found: {path}"]
+    
     rows = _load_plain_delimited(path)
     if not rows:
-        return {}, [f"Retention scoring file is empty: {path}"]
+        return {}, [f"Retention scores merged file is empty: {path}"]
 
     header = set(rows[0])
     if PROMPT_SCORE_COLUMNS.issubset(header):
@@ -337,7 +358,7 @@ def load_retention_scores(path: Path = RETENTION_SCORES_PATH) -> tuple[dict[str,
     required = {"MCID", *RETENTION_SCORE_COLUMNS.values()}
     missing = sorted(required - header)
     if missing:
-        return {}, [f"Retention scoring file is missing required column(s): {', '.join(missing)}"]
+        return {}, [f"Retention scores merged file is missing required column(s): {', '.join(missing)}"]
 
     return _load_legacy_participant_scores(rows), []
 
@@ -407,39 +428,107 @@ def _agreement_row(label: str, pairs: list[tuple[int, int]]) -> dict[str, Any]:
     }
 
 
+def _agreement_row_weighted(label: str, pairs: list[tuple[int, int]], weights: list[int] | None = None) -> dict[str, Any]:
+    if weights is None:
+        return _agreement_row(label, pairs)
+    expanded: list[tuple[int, int]] = []
+    for pair, weight in zip(pairs, weights):
+        expanded.extend([pair] * max(1, int(weight)))
+    row = _agreement_row(label, expanded)
+    row["n_unique_double_scored"] = len(pairs)
+    row["n_weighted_occurrences"] = len(expanded)
+    return row
+
+
+def _row_weight(row: dict[str, str]) -> int:
+    number = parse_numeric(row.get("occurrence_weight"))
+    if number is None or number < 1:
+        return 1
+    return int(number)
+
+
+def _unique_rows_by_task(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for row in rows:
+        key = clean(row.get("task_id")) or "|".join([
+            clean(row.get("question_key")),
+            clean(row.get("creature_id")),
+            clean(row.get("answer_std")),
+        ])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
+
+
 def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[str, Any]:
     if not path.exists():
-        return {"available": False, "method": "No retention_scoring.tsv file found.", "rows": []}
+        return {"available": False, "method": "No retention_scores_merged.tsv file found.", "rows": []}
 
     rows = _load_plain_delimited(path)
     if not rows or not PROMPT_SCORE_COLUMNS.issubset(set(rows[0])):
         return {
             "available": False,
-            "method": "Agreement requires the prompt-level retention_scoring.tsv schema produced by score_retention.py.",
+            "method": "Agreement requires the prompt-level retention_scores_merged.tsv schema produced by sum_merged.",
             "rows": [],
         }
 
-    pairs_by_group: dict[str, list[tuple[int, int]]] = defaultdict(list)
-    all_pairs: list[tuple[int, int]] = []
+    unique_rows = _unique_rows_by_task([row for row in rows if clean(row.get("task_id"))])
 
-    for row in rows:
+    def human_pair(row: dict[str, str]) -> tuple[int, int] | None:
         if clean(row.get("grader1_status")) != "graded" or clean(row.get("grader2_status")) != "graded":
-            continue
+            return None
         g1 = _valid_int_score(row.get("grader1_score"))
         g2 = _valid_int_score(row.get("grader2_score"))
         if g1 is None or g2 is None:
-            continue
-        pair = (g1, g2)
-        all_pairs.append(pair)
-        pairs_by_group[clean(row.get("question_key")) or "Unknown"].append(pair)
+            return None
+        return g1, g2
 
-    summary_rows = [_agreement_row("Overall", all_pairs)]
-    for question_key, _label in RETENTION_QUESTION_SPECS:
-        summary_rows.append(_agreement_row(question_key, pairs_by_group.get(question_key, [])))
+    def genai_human_pair(row: dict[str, str]) -> tuple[int, int] | None:
+        if clean(row.get("final_status")) != "human_agreement":
+            return None
+        genai = _valid_int_score(row.get("genai_score"))
+        final = _valid_int_score(row.get("final_score"))
+        if genai is None or final is None:
+            return None
+        return genai, final
+
+    summary_rows: list[dict[str, Any]] = []
+    for label, pair_getter in (
+        ("Human-human unique answers", human_pair),
+        ("Human-human occurrence-weighted", human_pair),
+        ("GenAI-human unique answers", genai_human_pair),
+        ("GenAI-human occurrence-weighted", genai_human_pair),
+    ):
+        source_rows = unique_rows if "unique" in label else rows
+        pairs: list[tuple[int, int]] = []
+        weights: list[int] = []
+        pairs_by_group: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        weights_by_group: dict[str, list[int]] = defaultdict(list)
+        for row in source_rows:
+            pair = pair_getter(row)
+            if pair is None:
+                continue
+            weight = _row_weight(row) if "weighted" in label else 1
+            pairs.append(pair)
+            weights.append(weight)
+            question_key = clean(row.get("question_key")) or clean(row.get("question")) or "Unknown"
+            pairs_by_group[question_key].append(pair)
+            weights_by_group[question_key].append(weight)
+        overall = _agreement_row_weighted(label + " · Overall", pairs, weights if "weighted" in label else None)
+        summary_rows.append(overall)
+        for question_key, _label in RETENTION_QUESTION_SPECS:
+            summary_rows.append(_agreement_row_weighted(
+                label + f" · {question_key}",
+                pairs_by_group.get(question_key, []),
+                weights_by_group.get(question_key, []) if "weighted" in label else None,
+            ))
 
     return {
-        "available": bool(all_pairs),
-        "method": "Agreement is calculated on prompt-level rows where both graders have status=graded. Percent exact agreement is exact matching divided by double-scored prompts. Quadratic weighted Cohen's kappa uses ordinal categories 0, 1, 2, 3, 4 and squared-distance weights w_ij=(i-j)^2/(4^2).",
+        "available": any(row.get("n_double_scored", 0) for row in summary_rows),
+        "method": "Reliability is reported for human-human agreement and GenAI-human agreement. Unique-answer rows count each reviewed standardised answer once. Occurrence-weighted rows expand each reviewed unique answer by its frequency in the original prompt-level data. Percent exact agreement and quadratic weighted Cohen's kappa use ordinal categories 0, 1, 2, 3, 4.",
         "rows": summary_rows,
     }
 

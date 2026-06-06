@@ -48,12 +48,6 @@ CONFIG_FILENAMES = [
     "interview_manifest.json",
     "retention_rubrics.json",
 ]
-RETENTION_SOURCE_NAMES = [
-    "retention_scoring.tsv",
-    "retention_scoring.csv",
-    "retention_scores.tsv",
-    "retention_scores.csv",
-]
 
 
 @dataclass
@@ -82,7 +76,6 @@ class PublishSummary:
     transcripts_written: int = 0
     survey_rows_written: int = 0
     configs_written: int = 0
-    retention_rows_written: int | None = None
     warnings: list[str] = field(default_factory=list)
 
     def lines(self) -> list[str]:
@@ -93,8 +86,6 @@ class PublishSummary:
             f"Publishable survey rows written: {self.survey_rows_written}",
             f"Config files written: {self.configs_written}",
         ]
-        if self.retention_rows_written is not None:
-            rows.append(f"Retention scoring rows written: {self.retention_rows_written}")
         rows.extend(f"WARNING: {warning}" for warning in self.warnings)
         return rows
 
@@ -698,47 +689,6 @@ def publish_config(*, raw_config_dir: Path, data_config_dir: Path, resources_dir
         summary.configs_written += 1
 
 
-def retention_source_path(*, raw_config_dir: Path, raw_dir: Path, data_dir: Path) -> Path | None:
-    for directory in (raw_config_dir, raw_dir, data_dir):
-        for filename in RETENTION_SOURCE_NAMES:
-            path = directory / filename
-            if path.exists():
-                return path
-    return None
-
-
-def publish_retention_scoring(*, raw_config_dir: Path, raw_dir: Path, data_dir: Path, included_mcids: set[str], summary: PublishSummary) -> None:
-    source = retention_source_path(raw_config_dir=raw_config_dir, raw_dir=raw_dir, data_dir=data_dir)
-    target = data_dir / "retention_scoring.tsv"
-    if source is None:
-        summary.retention_rows_written = None
-        summary.warnings.append("No retention scoring file found to publish; score_retention.py can create data/retention_scoring.tsv later.")
-        return
-    rows, delimiter = read_delimited_rows(source)
-    if not rows:
-        summary.retention_rows_written = 0
-        return
-    header = [clean(cell) for cell in rows[0]]
-    lower_header = [cell.lower() for cell in header]
-    mcid_column = None
-    for candidate in ("participant_id", "mcid"):
-        if candidate in lower_header:
-            mcid_column = lower_header.index(candidate)
-            break
-    if mcid_column is None:
-        summary.warnings.append(f"Skipped retention scoring file without participant_id/MCID column: {source}")
-        return
-    output_rows = [row for row in rows[1:] if mcid_column < len(row) and clean(row[mcid_column]) in included_mcids]
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(header)
-        writer.writerows(output_rows)
-    summary.retention_rows_written = len(output_rows)
-    if delimiter != "\t":
-        summary.warnings.append(f"Converted retention scoring source {source.name} to TSV.")
-
-
 def publish_data_for_included_mcids(
     included_mcids: list[str],
     *,
@@ -767,5 +717,4 @@ def publish_data_for_included_mcids(
     publish_logs(included_mcids, raw_log_index, data_log_dir, summary)
     publish_transcripts(raw_transcripts_dir, data_transcripts_dir, included_set, summary)
     publish_config(raw_config_dir=raw_config_dir, data_config_dir=data_config_dir, resources_dir=resources_dir, summary=summary)
-    publish_retention_scoring(raw_config_dir=raw_config_dir, raw_dir=raw_dir, data_dir=data_dir, included_mcids=included_set, summary=summary)
     return summary

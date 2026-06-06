@@ -31,6 +31,16 @@ from helpers._ret_main import (
     ret_condition_summary,
     retention_reliability_summary,
 )
+from helpers._retention_coding import (
+    CREATURE_INFO_HTML_PATH,
+    GENAI_PROMPT_PATH,
+    GENAI_SCORES_PATH,
+    GRADER1_SCORES_PATH,
+    GRADER2_SCORES_PATH,
+    SCORING_RUBRICS_HTML_PATH,
+    prepare_retention_answer_files,
+    write_prompt_score_file,
+)
 from helpers._shared import (
     COLLECTION_LOCATIONS_PATH,
     DATA_CONFIG_DIR,
@@ -155,6 +165,56 @@ def _relative_data_label(path: Path, paths: dict[str, Path]) -> str:
         return str(path)
 
 
+def _retention_scoring_problem_message(problems: list[str], paths: dict[str, Path], *, final_stats: bool) -> str:
+    """Return a concise terminal message for common retention-scoring setup states."""
+    if not problems:
+        return ""
+
+    score_problem = "score (0-4) must be an integer from 0 to 4"
+    confidence_problem = "confidence (0-100%) must be a number from 0 to 100"
+    unfinished_score_confidence_rows = sum(
+        1
+        for problem in problems
+        if score_problem in problem or confidence_problem in problem
+    )
+
+    genai_path = _relative_data_label(GENAI_SCORES_PATH, paths)
+    prompt_path = _relative_data_label(GENAI_PROMPT_PATH, paths)
+    rubrics_path = _relative_data_label(SCORING_RUBRICS_HTML_PATH, paths)
+    creature_path = _relative_data_label(CREATURE_INFO_HTML_PATH, paths)
+
+    if unfinished_score_confidence_rows >= 4:
+        prefix = (
+            "Cannot calculate final retention statistics yet: "
+            if final_stats
+            else "Retention scores merged file not rebuilt yet: "
+        )
+        return (
+            prefix
+            + f"GenAI scoring is not ready. Fill {genai_path} first. "
+            + f"Use {prompt_path} and attach {genai_path}, {rubrics_path}, and {creature_path}. "
+            + "The score/confidence columns appear to be empty or unfinished."
+        )
+
+    preview = " | ".join(problems[:5])
+    suffix = f" ({len(problems) - 5} more not shown)" if len(problems) > 5 else ""
+
+    if final_stats:
+        return (
+            "Cannot calculate final retention statistics yet. "
+            "Resolve retention scoring first. Problems: "
+            + preview
+            + suffix
+        )
+
+    return (
+        "Retention scores merged file not rebuilt yet. This is okay before GenAI/human scoring is complete. "
+        "Problems: "
+        + preview
+        + suffix
+    )
+
+
 def validate_public_data_files(paths: dict[str, Path]) -> None:
     missing: list[str] = []
 
@@ -171,6 +231,10 @@ def validate_public_data_files(paths: dict[str, Path]) -> None:
     for key in ("data_collection_locations_path", "data_interview_manifest_path"):
         path = paths.get(key)
         if path is not None and not path.exists():
+            missing.append(_relative_data_label(path, paths))
+
+    for path in (GENAI_SCORES_PATH, GRADER1_SCORES_PATH, GRADER2_SCORES_PATH):
+        if not path.exists():
             missing.append(_relative_data_label(path, paths))
 
     if missing:
@@ -333,6 +397,19 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     log_step("Loading /data/ survey export and /data/logs/.")
     survey_rows, headers = load_survey_export(paths["data_survey_path"])
     require_delayed_included_column(survey_rows, headers, paths["data_survey_path"])
+
+    if public_route:
+        log_step("PUBLIC_ROUTE=True: rebuilding retention_scores_merged.tsv from survey_export, GenAI scores, and human grader files.")
+        scoring_rows, scoring_problems = write_prompt_score_file(survey_rows, require_complete_review=True)
+        if scoring_problems:
+            raise RuntimeError(_retention_scoring_problem_message(scoring_problems, paths, final_stats=True))
+        log_step(f"Retention scores merged file ready: {len(scoring_rows):,} prompt-level row(s).")
+    else:
+        log_step("PUBLIC_ROUTE=False: preparing retention_answers.tsv, retention_scores_genai.tsv, and GenAI prompt support files.")
+        retention_prepare = prepare_retention_answer_files(survey_rows)
+        for key, value in retention_prepare.items():
+            log_step(f"Retention prep {key}: {value:,}" if isinstance(value, int) else f"Retention prep {key}: {value}")
+
     log_index = load_log_index(paths["data_log_dir"])
 
     log_step("Reading persisted delayed-response inclusion from /data/survey_export.tsv.")
