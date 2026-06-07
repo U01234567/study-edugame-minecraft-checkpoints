@@ -27,9 +27,6 @@ CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
 RETENTION_SCORES_PATH = DATA_DIR / "retention_scores_merged.tsv"
 RETENTION_ANSWERS_PATH = DATA_DIR / "retention_answers.tsv"
-GENAI_SCORES_PATH = DATA_DIR / "retention_scores_genai.tsv"
-GRADER1_SCORES_PATH = DATA_DIR / "retention_scores_grader1.tsv"
-GRADER2_SCORES_PATH = DATA_DIR / "retention_scores_grader2.tsv"
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"
 INTERVIEW_TRANSCRIPTS_PATH = INTERVIEW_TRANSCRIPTS_DIR
@@ -37,9 +34,8 @@ INTERVIEW_TRANSCRIPTS_PATH = INTERVIEW_TRANSCRIPTS_DIR
 DISPLAY_SOURCE_PATHS = {
     "Survey export": r".\data\survey_export.tsv",
     "Retention answers": r".\data\retention_answers.tsv",
-    "Retention scores GenAI": r".\data\retention_scores_genai.tsv",
-    "Retention scores grader 1": r".\data\retention_scores_grader1.tsv",
-    "Retention scores grader 2": r".\data\retention_scores_grader2.tsv",
+    "Retention scores GenAI source files": r".\data\retention_scores_genai*.tsv",
+    "Retention scores grader source files": r".\data\retention_scores_grader*.tsv",
     "Retention scores merged": r".\data\retention_scores_merged.tsv",
     "Interview transcript CSVs": r".\data\transcripts\*.csv",
     "Interview manifest": r".\data\config\interview_manifest.json",

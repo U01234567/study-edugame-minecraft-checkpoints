@@ -34,9 +34,6 @@ from helpers._ret_main import (
 from helpers._retention_coding import (
     CREATURE_INFO_HTML_PATH,
     GENAI_PROMPT_PATH,
-    GENAI_SCORES_PATH,
-    GRADER1_SCORES_PATH,
-    GRADER2_SCORES_PATH,
     SCORING_RUBRICS_HTML_PATH,
     prepare_retention_answer_files,
     write_prompt_score_file,
@@ -64,6 +61,8 @@ from helpers._shared import (
     STATIC_DIR,
     SURVEY_EXPORT_PATH,
     TEMPLATES_DIR,
+    clean,
+    parse_numeric,
 )
 from helpers._stats_main import build_inferential_statistics
 from helpers._survey_io import load_survey_export
@@ -166,7 +165,7 @@ def _relative_data_label(path: Path, paths: dict[str, Path]) -> str:
 
 
 def _retention_scoring_problem_message(problems: list[str], paths: dict[str, Path], *, final_stats: bool) -> str:
-    """Return a concise terminal message for common retention-scoring setup states."""
+    """Return a concise terminal/UI message for common retention-scoring setup states."""
     if not problems:
         return ""
 
@@ -178,22 +177,30 @@ def _retention_scoring_problem_message(problems: list[str], paths: dict[str, Pat
         if score_problem in problem or confidence_problem in problem
     )
 
-    genai_path = _relative_data_label(GENAI_SCORES_PATH, paths)
+    genai_path = _relative_data_label(paths["data_dir"] / "retention_scores_genai*.tsv", paths)
+    grader_path = _relative_data_label(paths["data_dir"] / "retention_scores_grader*.tsv", paths)
     prompt_path = _relative_data_label(GENAI_PROMPT_PATH, paths)
     rubrics_path = _relative_data_label(SCORING_RUBRICS_HTML_PATH, paths)
     creature_path = _relative_data_label(CREATURE_INFO_HTML_PATH, paths)
+
+    rebuild_hint = (
+        "Fix: make sure the source files are complete, then rerun sum_merged with PUBLIC_ROUTE=True. "
+        "If the GenAI files do not exist yet, first run sum_merged with PUBLIC_ROUTE=False. "
+        f"Fill {genai_path} using {prompt_path}; attach {genai_path}, {rubrics_path}, and {creature_path} "
+        "when asking GenAI to score. If human review is required, create/complete grader files with "
+        f"python main.py score_ret grader=1, or another positive integer, which writes {grader_path}."
+    )
 
     if unfinished_score_confidence_rows >= 4:
         prefix = (
             "Cannot calculate final retention statistics yet: "
             if final_stats
-            else "Retention scores merged file not rebuilt yet: "
+            else "Retention scores merged file was not rebuilt: "
         )
         return (
             prefix
-            + f"GenAI scoring is not ready. Fill {genai_path} first. "
-            + f"Use {prompt_path} and attach {genai_path}, {rubrics_path}, and {creature_path}. "
-            + "The score/confidence columns appear to be empty or unfinished."
+            + "GenAI scoring appears incomplete because multiple score/confidence cells are empty or invalid. "
+            + rebuild_hint
         )
 
     preview = " | ".join(problems[:5])
@@ -202,16 +209,21 @@ def _retention_scoring_problem_message(problems: list[str], paths: dict[str, Pat
     if final_stats:
         return (
             "Cannot calculate final retention statistics yet. "
-            "Resolve retention scoring first. Problems: "
+            "Retention scoring source files need attention. "
+            "Problems: "
             + preview
             + suffix
+            + ". "
+            + rebuild_hint
         )
 
     return (
-        "Retention scores merged file not rebuilt yet. This is okay before GenAI/human scoring is complete. "
+        "Retention scores merged file was not rebuilt. This is expected while GenAI/human scoring is still incomplete. "
         "Problems: "
         + preview
         + suffix
+        + ". "
+        + rebuild_hint
     )
 
 
@@ -231,10 +243,6 @@ def validate_public_data_files(paths: dict[str, Path]) -> None:
     for key in ("data_collection_locations_path", "data_interview_manifest_path"):
         path = paths.get(key)
         if path is not None and not path.exists():
-            missing.append(_relative_data_label(path, paths))
-
-    for path in (GENAI_SCORES_PATH, GRADER1_SCORES_PATH, GRADER2_SCORES_PATH):
-        if not path.exists():
             missing.append(_relative_data_label(path, paths))
 
     if missing:
@@ -398,14 +406,15 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     survey_rows, headers = load_survey_export(paths["data_survey_path"])
     require_delayed_included_column(survey_rows, headers, paths["data_survey_path"])
 
+    scoring_problems: list[str] = []
     if public_route:
-        log_step("PUBLIC_ROUTE=True: rebuilding retention_scores_merged.tsv from survey_export, GenAI scores, and human grader files.")
+        log_step("PUBLIC_ROUTE=True: rebuilding retention_scores_merged.tsv from survey_export.tsv and all retention_scores_genai*.tsv / retention_scores_grader*.tsv source files.")
         scoring_rows, scoring_problems = write_prompt_score_file(survey_rows, require_complete_review=True)
         if scoring_problems:
-            raise RuntimeError(_retention_scoring_problem_message(scoring_problems, paths, final_stats=True))
+            log_step(_retention_scoring_problem_message(scoring_problems, paths, final_stats=True))
         log_step(f"Retention scores merged file ready: {len(scoring_rows):,} prompt-level row(s).")
     else:
-        log_step("PUBLIC_ROUTE=False: preparing retention_answers.tsv, retention_scores_genai.tsv, and GenAI prompt support files.")
+        log_step("PUBLIC_ROUTE=False: preparing retention_answers.tsv, configured GenAI score file(s), and GenAI prompt support files.")
         retention_prepare = prepare_retention_answer_files(survey_rows)
         for key, value in retention_prepare.items():
             log_step(f"Retention prep {key}: {value:,}" if isinstance(value, int) else f"Retention prep {key}: {value}")
@@ -436,8 +445,23 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     retention_scores, retention_warnings = load_retention_scores(retention_score_path)
     attach_retention_scores(participants, retention_scores)
     retention_question_rows = build_retention_question_rows(participants)
+    unresolved_retention_conflicts = sum(
+        1
+        for row in retention_question_rows
+        if clean(row.get("answer_std"))
+        and not (
+            parse_numeric(row.get("final_score")) is not None
+            and float(parse_numeric(row.get("final_score"))).is_integer()
+            and 0 <= int(parse_numeric(row.get("final_score"))) <= 4
+        )
+    )
+    scoring_warning_summary = (
+        [_retention_scoring_problem_message(scoring_problems, paths, final_stats=True)]
+        if scoring_problems
+        else []
+    )
     retention = {
-        "warnings": retention_warnings,
+        "warnings": retention_warnings + scoring_warning_summary + scoring_problems,
         "condition_summary": ret_condition_summary(participants, CONDITION_ORDER),
         "reliability": retention_reliability_summary(retention_score_path),
         "answer_rows": retention_question_rows,
@@ -446,6 +470,7 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
             for key, label in RETENTION_QUESTION_SPECS
         ],
         "show_grades": bool(retention_scores),
+        "unresolved_conflict_count": unresolved_retention_conflicts,
     }
 
     log_step("Building demographic and collection-context summaries.")

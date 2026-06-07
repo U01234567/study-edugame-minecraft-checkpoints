@@ -31,13 +31,17 @@ function table(headers, rows, options = {}) {
     const label = header.labelHtml || escapeHtml(header.label);
     return `<th${header.num ? ' class="num"' : ''}>${label}</th>`;
   }).join('')}</tr></thead>`;
-  const bodyRows = (rows || []).map(row => `<tr>${headers.map(header => {
-    const rawValue = row[header.key] ?? '—';
-    const value = typeof header.render === 'function'
-      ? header.render(row)
-      : header.html ? String(rawValue) : escapeHtml(rawValue);
-    return `<td${header.num ? ' class="num"' : ''}>${value}</td>`;
-  }).join('')}</tr>`).join('');
+  const bodyRows = (rows || []).map(row => {
+    const rowClass = typeof options.rowClass === 'function' ? options.rowClass(row) : '';
+    const rowClassAttr = rowClass ? ` class="${escapeHtml(rowClass)}"` : '';
+    return `<tr${rowClassAttr}>${headers.map(header => {
+      const rawValue = row[header.key] ?? '—';
+      const value = typeof header.render === 'function'
+        ? header.render(row)
+        : header.html ? String(rawValue) : escapeHtml(rawValue);
+      return `<td${header.num ? ' class="num"' : ''}>${value}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
   const emptyRow = `<tr><td colspan="${headers.length}">No rows.</td></tr>`;
   return `<div class="table-wrap"><table${className}>${head}<tbody>${bodyRows || emptyRow}</tbody></table></div>`;
 }
@@ -50,9 +54,42 @@ function renderMcidListCell(row) {
   )).join('')}</ul>`;
 }
 
-function renderWarnings(warnings) {
+function renderWarnings(warnings, options = {}) {
   if (!warnings || !warnings.length) return '';
-  return `<div class="notice"><strong>Note:</strong><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
+  const className = options.danger ? 'notice notice-danger' : 'notice';
+  const label = options.danger ? 'Retention scoring needs attention:' : 'Note:';
+  return `<div class="${className}"><strong>${label}</strong><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
+}
+
+function validRetentionScore(value) {
+  const text = String(value ?? '').trim();
+  if (!/^[0-4]$/.test(text)) return false;
+  const number = Number(text);
+  return Number.isInteger(number) && number >= 0 && number <= 4;
+}
+
+function retentionConflictRow(row) {
+  return String(row.answer_std || '').trim() && !validRetentionScore(row.final_score);
+}
+
+function sourceLabelsFromRows(rows, prefix) {
+  const labels = new Set();
+  const labelKey = `${prefix}_labels`;
+  for (const row of rows || []) {
+    for (const label of row[labelKey] || []) labels.add(label);
+    for (const key of Object.keys(row || {})) {
+      const match = key.match(new RegExp(`^(${prefix}\\d+(?:_\\d+)?)_score$`));
+      if (match) labels.add(match[1]);
+    }
+  }
+  return [...labels].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function displaySourceLabel(label) {
+  return String(label || '')
+    .replace(/^genai/i, 'GenAI ')
+    .replace(/^grader/i, 'Grader ')
+    .replaceAll('_', ' / ');
 }
 
 function conditionColours(data) {
@@ -582,6 +619,9 @@ function renderRetention(data) {
   const rows = retention.answer_rows || [];
   const questions = retention.questions || [];
   const showGrades = Boolean(retention.show_grades);
+  const unresolvedConflictCount = Number.isFinite(Number(retention.unresolved_conflict_count))
+    ? Number(retention.unresolved_conflict_count)
+    : rows.filter(retentionConflictRow).length;
 
   const summaryHeaders = [
     { key: 'condition', label: 'Condition' },
@@ -614,10 +654,16 @@ function renderRetention(data) {
       ], reliabilityRows)}
     </section>` : '';
 
+  const conflictHtml = showGrades ? `
+    <p class="retention-conflict-count ${unresolvedConflictCount ? 'has-conflicts' : ''}">
+      Final-score conflicts still to resolve: <strong>${escapeHtml(unresolvedConflictCount)}</strong>
+    </p>` : '';
+
   const summaryHtml = `
     <section class="card">
       <h1>Retention</h1>
-      ${renderWarnings(retention.warnings || [])}
+      ${renderWarnings(retention.warnings || [], { danger: true })}
+      ${conflictHtml}
       ${table(summaryHeaders, retention.condition_summary || [])}
     </section>
     ${reliabilityHtml}`;
@@ -634,18 +680,21 @@ function renderRetention(data) {
     { key: 'moment', label: 'Moment' },
     { key: 'answer', label: 'Answer' },
   ];
+  const genaiLabels = sourceLabelsFromRows(rows, 'genai');
+  const graderLabels = sourceLabelsFromRows(rows, 'grader');
   const answerHeadersWithGrades = [
     { key: 'participant_id', label: 'MCID' },
     { key: 'moment', label: 'Moment' },
     { key: 'answer', label: 'Original answer' },
     { key: 'answer_std', label: 'Standardised answer' },
-    { key: 'genai_score', label: 'GenAI score', num: true },
-    { key: 'genai_confidence', label: 'GenAI confidence', num: true },
-    { key: 'grader1_score', label: 'Grader 1 score', num: true },
-    { key: 'grader2_score', label: 'Grader 2 score', num: true },
-    { key: 'final_score', label: 'Final score', num: true },
-    { key: 'final_status', label: 'Final source' },
-    { key: 'grader_notes_html', label: 'Grader notes', html: true },
+    ...genaiLabels.flatMap(label => [
+      { key: `${label}_score`, label: `${displaySourceLabel(label)} score`, num: true },
+      { key: `${label}_confidence`, label: `${displaySourceLabel(label)} confidence`, num: true },
+    ]),
+    ...graderLabels.map(label => ({ key: `${label}_score`, label: `${displaySourceLabel(label)} score`, num: true })),
+    { key: 'final_score', label: 'Final score' },
+    { key: 'final_note_auto', label: 'Auto final note' },
+    { key: 'final_note_manual', label: 'Manual final note' },
   ];
 
   const creatureButtons = creatures.map((creature, index) =>
@@ -663,17 +712,23 @@ function renderRetention(data) {
           const output = { participant_id: row.participant_id, moment: row.moment, answer: row.answer };
           if (showGrades) {
             output.answer_std = row.answer_std;
-            output.genai_score = row.genai_score;
-            output.genai_confidence = row.genai_confidence;
-            output.grader1_score = row.grader1_score;
-            output.grader2_score = row.grader2_score;
+            for (const label of genaiLabels) {
+              output[`${label}_score`] = row[`${label}_score`];
+              output[`${label}_confidence`] = row[`${label}_confidence`];
+            }
+            for (const label of graderLabels) {
+              output[`${label}_score`] = row[`${label}_score`];
+            }
             output.final_score = row.final_score;
-            output.final_status = row.final_status;
-            output.grader_notes_html = row.grader_notes_html;
+            output.final_note_auto = row.final_note_auto;
+            output.final_note_manual = row.final_note_manual;
           }
           return output;
         });
-      return `<section id="question-${escapeHtml(creature.creature_id)}-${escapeHtml(question.key)}" class="question-panel ${questionIndex === 0 ? 'active' : ''}" data-group="question-${escapeHtml(creature.creature_id)}"><h3>${escapeHtml(question.label)}</h3>${table(showGrades ? answerHeadersWithGrades : answerHeadersBase, questionRows, { className: 'retention-answer-table' })}</section>`;
+      return `<section id="question-${escapeHtml(creature.creature_id)}-${escapeHtml(question.key)}" class="question-panel ${questionIndex === 0 ? 'active' : ''}" data-group="question-${escapeHtml(creature.creature_id)}"><h3>${escapeHtml(question.label)}</h3>${table(showGrades ? answerHeadersWithGrades : answerHeadersBase, questionRows, {
+          className: 'retention-answer-table',
+          rowClass: showGrades ? row => (retentionConflictRow(row) ? 'retention-conflict-row' : '') : undefined,
+        })}</section>`;
     }).join('');
     return `<section id="creature-${escapeHtml(creature.creature_id)}" class="creature-panel ${creatureIndex === 0 ? 'active' : ''}" data-group="creatures"><h2>${escapeHtml(creature.creature_name)}</h2><nav class="question-tabs">${questionButtons}</nav>${questionPanels}</section>`;
   }).join('');

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -108,12 +110,6 @@ PROMPT_SCORE_COLUMNS = {
     "moment",
     "creature_id",
     "question_key",
-    "grader1_score",
-    "grader1_status",
-    "grader1_note",
-    "grader2_score",
-    "grader2_status",
-    "grader2_note",
     "final_score",
     "final_status",
 }
@@ -200,14 +196,26 @@ def _prompt_score_for_participant(participant: dict[str, Any], moment: str, crea
     return lookup.get((moment, creature_id, question_key), {})
 
 
+def _natural_source_key(label: str) -> list[Any]:
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", label)]
+
+
+def _source_labels(row: dict[str, str], prefix: str) -> list[str]:
+    labels = set()
+    for key in row:
+        match = re.match(rf"^({prefix}\d+(?:_\d+)?)_score$", key)
+        if match:
+            labels.add(match.group(1))
+    return sorted(labels, key=_natural_source_key)
+
+
 def _format_grader_note(score_info: dict[str, Any]) -> str:
     notes: list[str] = []
-    grader1_note = clean(score_info.get("grader1_note"))
-    grader2_note = clean(score_info.get("grader2_note"))
-    if grader1_note:
-        notes.append(f"<strong>Grader 1:</strong> {grader1_note}")
-    if grader2_note:
-        notes.append(f"<strong>Grader 2:</strong> {grader2_note}")
+    for label in sorted(score_info.get("grader_labels") or [], key=_natural_source_key):
+        note = clean(score_info.get(f"{label}_note"))
+        if note:
+            display = label.replace("grader", "Grader ", 1).replace("_", " / ")
+            notes.append(f"<strong>{display}:</strong> {note}")
     return "<br>".join(notes)
 
 
@@ -226,7 +234,7 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
                     score_info = _prompt_score_for_participant(participant, moment, creature_id, suffix)
                     if not answer and not score_info:
                         continue
-                    rows.append({
+                    output = {
                         "participant_id": participant_id,
                         "condition": condition,
                         "moment": moment,
@@ -236,14 +244,25 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
                         "question_label": label,
                         "answer": answer,
                         "answer_std": score_info.get("answer_std"),
+                        "genai_labels": score_info.get("genai_labels") or [],
+                        "grader_labels": score_info.get("grader_labels") or [],
                         "genai_score": score_info.get("genai_score"),
                         "genai_confidence": score_info.get("genai_confidence"),
-                        "grader1_score": score_info.get("grader1_score"),
-                        "grader2_score": score_info.get("grader2_score"),
-                        "final_score": score_info.get("final_score"),
+                        "final_score": score_info.get("final_score_display"),
                         "final_status": score_info.get("final_status"),
+                        "final_note_auto": score_info.get("final_note_auto"),
+                        "final_note_manual": score_info.get("final_note_manual"),
                         "grader_notes_html": _format_grader_note(score_info),
-                    })
+                    }
+                    for source_label in score_info.get("genai_labels") or []:
+                        output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
+                        output[f"{source_label}_confidence"] = score_info.get(f"{source_label}_confidence")
+                    for source_label in score_info.get("grader_labels") or []:
+                        output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
+                    # Legacy UI aliases when the first two grader files exist.
+                    output["grader1_score"] = score_info.get("grader1_score")
+                    output["grader2_score"] = score_info.get("grader2_score")
+                    rows.append(output)
 
     return rows
 
@@ -296,21 +315,38 @@ def _load_prompt_level_scores(rows: list[dict[str, str]]) -> dict[str, Any]:
         if not participant_id or not moment or not creature_id or not question_key:
             continue
 
+        genai_labels = _source_labels(row, "genai")
+        grader_labels = _source_labels(row, "grader")
+        first_genai_label = genai_labels[0] if genai_labels else ""
         final_score = _final_score_from_row(row)
+        final_score_raw = clean(row.get("final_score"))
         score_info = {
             "answer_std": clean(row.get("answer_std")),
-            "genai_score": parse_numeric(row.get("genai_score")),
-            "genai_confidence": parse_numeric(clean(row.get("genai_confidence")).replace("%", "")),
-            "genai_note": clean(row.get("genai_note")),
-            "grader1_score": _score_from_row(row, "grader1"),
-            "grader1_status": clean(row.get("grader1_status")),
-            "grader1_note": clean(row.get("grader1_note")),
-            "grader2_score": _score_from_row(row, "grader2"),
-            "grader2_status": clean(row.get("grader2_status")),
-            "grader2_note": clean(row.get("grader2_note")),
+            "genai_labels": genai_labels,
+            "grader_labels": grader_labels,
+            "genai_score": parse_numeric(row.get("genai_score") or (row.get(f"{first_genai_label}_score") if first_genai_label else "")),
+            "genai_confidence": parse_numeric(clean(row.get("genai_confidence") or (row.get(f"{first_genai_label}_confidence") if first_genai_label else "")).replace("%", "")),
+            "genai_note": clean(row.get("genai_note") or (row.get(f"{first_genai_label}_note") if first_genai_label else "")),
             "final_score": final_score,
+            "final_score_display": final_score_raw if final_score_raw else ("" if final_score is None else final_score),
             "final_status": clean(row.get("final_status")),
+            "final_note_auto": clean(row.get("final_note_auto")),
+            "final_note_manual": clean(row.get("final_note_manual")),
         }
+        for label in genai_labels:
+            score_info[f"{label}_score"] = parse_numeric(row.get(f"{label}_score"))
+            score_info[f"{label}_confidence"] = parse_numeric(clean(row.get(f"{label}_confidence")).replace("%", ""))
+            score_info[f"{label}_note"] = clean(row.get(f"{label}_note"))
+        for label in grader_labels:
+            score_info[f"{label}_score"] = _score_from_row(row, label)
+            score_info[f"{label}_status"] = clean(row.get(f"{label}_status"))
+            score_info[f"{label}_note"] = clean(row.get(f"{label}_note"))
+        # Legacy UI aliases when the first two grader files exist.
+        for label in ("grader1", "grader2"):
+            score_info.setdefault(f"{label}_score", _score_from_row(row, label))
+            score_info.setdefault(f"{label}_status", clean(row.get(f"{label}_status")))
+            score_info.setdefault(f"{label}_note", clean(row.get(f"{label}_note")))
+
         prompt_scores_by_participant[participant_id][prompt_score_key(moment, creature_id, question_key)] = score_info
         if final_score is not None:
             values_by_participant_wave[(participant_id, moment)].append(final_score)
@@ -344,12 +380,25 @@ def _load_legacy_participant_scores(rows: list[dict[str, str]]) -> dict[str, dic
 
 
 def load_retention_scores(path: Path = RETENTION_SCORES_PATH) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    fix_hint = (
+        "To fix this, rebuild the merged retention scores by running sum_merged with PUBLIC_ROUTE=True "
+        "after the retention source files exist. If you have not prepared GenAI scoring yet, first run "
+        "sum_merged with PUBLIC_ROUTE=False, fill data/retention_scores_genai*.tsv using "
+        "data/config/genai_prompt.txt and the rubric files, then rerun sum_merged with PUBLIC_ROUTE=True. "
+        "If human review is required, complete it with python main.py score_ret grader=1 "
+        "(or another positive integer) before the final PUBLIC_ROUTE=True rebuild."
+    )
+
     if not path.exists():
-        return {}, [f"Retention scores merged file not found: {path}"]
+        return {}, [
+            f"Retention scores merged file not found: {path}. {fix_hint}"
+        ]
     
     rows = _load_plain_delimited(path)
     if not rows:
-        return {}, [f"Retention scores merged file is empty: {path}"]
+        return {}, [
+            f"Retention scores merged file is empty: {path}. {fix_hint}"
+        ]
 
     header = set(rows[0])
     if PROMPT_SCORE_COLUMNS.issubset(header):
@@ -358,7 +407,11 @@ def load_retention_scores(path: Path = RETENTION_SCORES_PATH) -> tuple[dict[str,
     required = {"MCID", *RETENTION_SCORE_COLUMNS.values()}
     missing = sorted(required - header)
     if missing:
-        return {}, [f"Retention scores merged file is missing required column(s): {', '.join(missing)}"]
+        return {}, [
+            "Retention scores merged file is missing required column(s): "
+            f"{', '.join(missing)}. Do not edit this file manually; rebuild it from the "
+            f"retention_scores_genai*.tsv and retention_scores_grader*.tsv source files. {fix_hint}"
+        ]
 
     return _load_legacy_participant_scores(rows), []
 
@@ -477,30 +530,47 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
 
     unique_rows = _unique_rows_by_task([row for row in rows if clean(row.get("task_id"))])
 
-    def human_pair(row: dict[str, str]) -> tuple[int, int] | None:
-        if clean(row.get("grader1_status")) != "graded" or clean(row.get("grader2_status")) != "graded":
-            return None
-        g1 = _valid_int_score(row.get("grader1_score"))
-        g2 = _valid_int_score(row.get("grader2_score"))
-        if g1 is None or g2 is None:
-            return None
-        return g1, g2
+    def human_pairs(row: dict[str, str]) -> list[tuple[int, int]]:
+        graded: list[int] = []
+        for label in _source_labels(row, "grader"):
+            if clean(row.get(f"{label}_status")) != "graded":
+                continue
+            score = _valid_int_score(row.get(f"{label}_score"))
+            if score is not None:
+                graded.append(score)
+        return list(combinations(graded, 2))
 
-    def genai_human_pair(row: dict[str, str]) -> tuple[int, int] | None:
-        if clean(row.get("final_status")) != "human_agreement":
-            return None
-        genai = _valid_int_score(row.get("genai_score"))
-        final = _valid_int_score(row.get("final_score"))
-        if genai is None or final is None:
-            return None
-        return genai, final
+    def genai_human_pairs(row: dict[str, str]) -> list[tuple[int, int]]:
+        human_scores: list[int] = []
+        for label in _source_labels(row, "grader"):
+            if clean(row.get(f"{label}_status")) != "graded":
+                continue
+            score = _valid_int_score(row.get(f"{label}_score"))
+            if score is not None:
+                human_scores.append(score)
+        if not human_scores or not all(score == human_scores[0] for score in human_scores):
+            return []
+
+        human_consensus = human_scores[0]
+        pairs: list[tuple[int, int]] = []
+        genai_labels = _source_labels(row, "genai")
+        if genai_labels:
+            for label in genai_labels:
+                genai = _valid_int_score(row.get(f"{label}_score"))
+                if genai is not None:
+                    pairs.append((genai, human_consensus))
+        else:
+            genai = _valid_int_score(row.get("genai_score"))
+            if genai is not None:
+                pairs.append((genai, human_consensus))
+        return pairs
 
     summary_rows: list[dict[str, Any]] = []
     for label, pair_getter in (
-        ("Human-human unique answers", human_pair),
-        ("Human-human occurrence-weighted", human_pair),
-        ("GenAI-human unique answers", genai_human_pair),
-        ("GenAI-human occurrence-weighted", genai_human_pair),
+        ("Human-human unique answers", human_pairs),
+        ("Human-human occurrence-weighted", human_pairs),
+        ("GenAI-human unique answers", genai_human_pairs),
+        ("GenAI-human occurrence-weighted", genai_human_pairs),
     ):
         source_rows = unique_rows if "unique" in label else rows
         pairs: list[tuple[int, int]] = []
@@ -508,15 +578,16 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
         pairs_by_group: dict[str, list[tuple[int, int]]] = defaultdict(list)
         weights_by_group: dict[str, list[int]] = defaultdict(list)
         for row in source_rows:
-            pair = pair_getter(row)
-            if pair is None:
+            row_pairs = pair_getter(row)
+            if not row_pairs:
                 continue
             weight = _row_weight(row) if "weighted" in label else 1
-            pairs.append(pair)
-            weights.append(weight)
             question_key = clean(row.get("question_key")) or clean(row.get("question")) or "Unknown"
-            pairs_by_group[question_key].append(pair)
-            weights_by_group[question_key].append(weight)
+            for pair in row_pairs:
+                pairs.append(pair)
+                weights.append(weight)
+                pairs_by_group[question_key].append(pair)
+                weights_by_group[question_key].append(weight)
         overall = _agreement_row_weighted(label + " · Overall", pairs, weights if "weighted" in label else None)
         summary_rows.append(overall)
         for question_key, _label in RETENTION_QUESTION_SPECS:
@@ -528,7 +599,7 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
 
     return {
         "available": any(row.get("n_double_scored", 0) for row in summary_rows),
-        "method": "Reliability is reported for human-human agreement and GenAI-human agreement. Unique-answer rows count each reviewed standardised answer once. Occurrence-weighted rows expand each reviewed unique answer by its frequency in the original prompt-level data. Percent exact agreement and quadratic weighted Cohen's kappa use ordinal categories 0, 1, 2, 3, 4.",
+        "method": "Reliability is reported across every available grader-file pair and every available GenAI-vs-human pair in retention_scores_merged.tsv. GenAI-vs-human pairs use rows where the human graders have a valid consensus, even when final_score is still marked for manual conflict resolution. Unique-answer rows count each reviewed standardised answer once. Occurrence-weighted rows expand each reviewed unique answer by its frequency in the original prompt-level data. Percent exact agreement and quadratic weighted Cohen's kappa use ordinal categories 0, 1, 2, 3, 4.",
         "rows": summary_rows,
     }
 

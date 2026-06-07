@@ -26,9 +26,8 @@ from helpers._delayed_response_filter import (  # noqa: E402
 from helpers._retention_coding import (  # noqa: E402
     CREATURE_INFO_HTML_PATH,
     GENAI_PROMPT_PATH,
-    GENAI_SCORES_PATH,
-    GRADER1_SCORES_PATH,
-    GRADER2_SCORES_PATH,
+    discover_genai_score_paths,
+    grader_score_path,
     LOW_CONFIDENCE_THRESHOLD,
     SCORING_RUBRICS_HTML_PATH,
     VALIDATION_SAMPLE_FRACTION,
@@ -46,12 +45,6 @@ from helpers._survey_io import load_survey_export  # noqa: E402
 RUBRIC_RESOURCE_PATH = RESOURCES_DIR / "retention_rubrics.json"
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-
-GRADER_PATHS = {
-    1: GRADER1_SCORES_PATH,
-    2: GRADER2_SCORES_PATH,
-}
-
 
 def log_step(message: str) -> None:
     print(f"[score_ret] {message}", flush=True)
@@ -90,10 +83,11 @@ def require_delayed_included_column(survey_rows: list[dict[str, str]], header: l
 
 
 def required_prompt_files_message() -> str:
+    discovered = ", ".join(path.name for path in discover_genai_score_paths()) or "retention_scores_genai*.tsv"
     return (
         "score_ret cannot start yet: GenAI scoring is not ready. "
-        "Fill data/retention_scores_genai.tsv first. Use data/config/genai_prompt.txt and attach "
-        "retention_scores_genai.tsv, data/config/scoring_rubrics.html, and data/config/creature_info.html."
+        f"Fill the generated GenAI score file(s) first: {discovered}. Use data/config/genai_prompt.txt and attach "
+        "the generated GenAI TSV file(s), data/config/scoring_rubrics.html, and data/config/creature_info.html."
     )
 
 
@@ -101,7 +95,7 @@ def human_readable_genai_error(problems: list[str]) -> str:
     if not problems:
         return required_prompt_files_message()
 
-    if any(problem.startswith("Missing ") for problem in problems):
+    if any(problem.startswith("Missing ") or problem.startswith("No retention_scores_genai") for problem in problems):
         return required_prompt_files_message() + " Run sum_merged with PUBLIC_ROUTE=False if the prompt files do not exist yet."
 
     if any(" is empty" in problem for problem in problems):
@@ -177,7 +171,7 @@ class RetentionScoringServer:
         started = time.perf_counter()
         log_step(f"Initialising retention scoring server for grader {grader}...")
         self.grader = grader
-        self.grader_path = GRADER_PATHS[grader]
+        self.grader_path = grader_score_path(grader)
 
         log_step(f"Loading survey export from {SURVEY_EXPORT_PATH}...")
         self.survey_rows, survey_header = load_survey_export(SURVEY_EXPORT_PATH)
@@ -193,7 +187,7 @@ class RetentionScoringServer:
         )
 
         prompt_rows = build_prompt_rows_from_survey(self.survey_rows)
-        genai_lookup, genai_problems = load_genai_scores(GENAI_SCORES_PATH)
+        genai_lookup, genai_problems = load_genai_scores()
         if genai_problems:
             raise RuntimeError(human_readable_genai_error(genai_problems))
 
@@ -387,13 +381,14 @@ def print_usage() -> None:
     print("Usage:")
     print("  python main.py score_ret grader=1")
     print("  python main.py score_ret grader=2")
-    print("  python main.py score_ret grader=2 port=8766")
+    print("  python main.py score_ret grader=3 port=8766")
+    print("grader must be any positive integer; it writes data/retention_scores_grader{int}.tsv")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     grader, port = parse_args(args)
-    if grader not in {1, 2}:
+    if grader is None or grader < 1:
         print_usage()
         return 1
     try:

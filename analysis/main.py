@@ -20,7 +20,7 @@ from apps.summarise_survey import main as summarise_survey_main
 # all raw logs, builds the inclusion/exclusion checklist from /raw/, regenerates
 # /data/ for included MCIDs, and then performs the full report calculations from
 # /data/ only.
-PUBLIC_ROUTE = False
+PUBLIC_ROUTE = True
 
 ANALYSIS_DIR = Path(__file__).resolve().parent
 RAW_DIR = ANALYSIS_DIR / "raw"
@@ -74,6 +74,7 @@ def print_usage() -> None:
     print("  python main.py sum_merged")
     print("  python main.py score_ret grader=1")
     print("  python main.py score_ret grader=2")
+    print("  python main.py score_ret grader=x port=8766")
     print()
     print(f"Current route: PUBLIC_ROUTE={PUBLIC_ROUTE}")
 
