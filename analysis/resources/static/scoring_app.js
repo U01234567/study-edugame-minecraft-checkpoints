@@ -100,60 +100,304 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cobaltTokenHtml(value) {
-  return lineBreaks(value).replace(/\[(SRC|FAN)\]/g, '<span class="rubric-token-cobalt">[$1]</span>');
+function ensureRubricAppendixCss() {
+  if (document.getElementById('retention-rubric-appendix-style')) return;
+  const style = document.createElement('style');
+  style.id = 'retention-rubric-appendix-style';
+  style.textContent = `
+    :root {
+      --thesis-red: #cc0000;
+      --thesis-light-red: #e06666;
+      --thesis-blue: #6d9eeb;
+      --rule: #000000;
+      --table-header: #cccccc;
+      --score-2: #93c47d;
+      --score-2-content: #d9ead3;
+      --score-2-label: #b6d7a8;
+      --score-1: #f6b26b;
+      --score-1-content: #fce5cd;
+      --score-1-label: #f9cb9c;
+      --score-0: #e06666;
+      --score-0-content: #f4cccc;
+      --score-0-label: #ea9999;
+      --example-bg: #f3f3f3;
+    }
+    .retention-rubric-appendix {
+      box-sizing: border-box;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px;
+      color: #000000;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 14px;
+      line-height: 1.18;
+      background: #ffffff;
+    }
+    .retention-rubric-appendix * { box-sizing: border-box; }
+    .retention-rubric-appendix h1 {
+      margin: 0 0 8px;
+      color: var(--thesis-red);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 28px;
+      line-height: 1.12;
+      font-weight: 700;
+    }
+    .retention-rubric-appendix h2 {
+      margin: 22px 0 8px;
+      color: var(--thesis-red);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 23px;
+      line-height: 1.12;
+      font-weight: 700;
+    }
+    .retention-rubric-appendix h3 {
+      margin: 14px 0 6px;
+      color: var(--thesis-light-red);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 17px;
+      line-height: 1.15;
+      font-weight: 700;
+    }
+    .retention-rubric-appendix p { margin: 0 0 10px; }
+    .retention-rubric-appendix ul {
+      margin: 4px 0 12px 24px;
+      padding: 0;
+    }
+    .retention-rubric-appendix li { margin: 2px 0; padding-left: 4px; }
+    .retention-rubric-appendix .appendix-title-rule {
+      border: 0;
+      border-top: 1px solid var(--rule);
+      margin: 8px 0 18px;
+    }
+    .retention-rubric-appendix .appendix-rubric-block {
+      margin: 0 0 18px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .retention-rubric-appendix .rubric-note-line {
+      margin: 0 0 6px;
+      font-size: 13px;
+    }
+    .retention-rubric-appendix .rubric-token-cobalt {
+      color: var(--thesis-blue);
+      font-weight: 700;
+    }
+    .retention-rubric-appendix .appendix-rubric-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin: 4px 0 14px;
+      border: 1px solid var(--rule);
+    }
+    .retention-rubric-appendix .appendix-rubric-table th,
+    .retention-rubric-appendix .appendix-rubric-table td {
+      border: 1px solid var(--rule);
+      vertical-align: top;
+      padding: 7px;
+    }
+    .retention-rubric-appendix .appendix-rubric-table th {
+      background: var(--table-header);
+      text-align: left;
+      font-weight: 700;
+    }
+    .retention-rubric-appendix .appendix-score-col { width: 62px; }
+    .retention-rubric-appendix .appendix-score-cell { text-align: left; }
+    .retention-rubric-appendix .score-number {
+      color: #ffffff;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .retention-rubric-appendix .score-bg-2 { background: var(--score-2); }
+    .retention-rubric-appendix .score-bg-1 { background: var(--score-1); }
+    .retention-rubric-appendix .score-bg-0 { background: var(--score-0); }
+    .retention-rubric-appendix .content-bg-2 { background: var(--score-2-content); }
+    .retention-rubric-appendix .content-bg-1 { background: var(--score-1-content); }
+    .retention-rubric-appendix .content-bg-0 { background: var(--score-0-content); }
+    .retention-rubric-appendix .rubric-inner-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin: 0;
+    }
+    .retention-rubric-appendix .rubric-inner-table td {
+      border: 1px solid var(--rule);
+      vertical-align: top;
+      padding: 6px;
+    }
+    .retention-rubric-appendix .rubric-inner-table td:first-child {
+      width: 66%;
+      font-weight: 400;
+    }
+    .retention-rubric-appendix .inner-label-2 { background: var(--score-2-label); }
+    .retention-rubric-appendix .inner-label-1 { background: var(--score-1-label); }
+    .retention-rubric-appendix .inner-label-0 { background: var(--score-0-label); }
+    .retention-rubric-appendix .inner-example { background: var(--example-bg); }
+    .retention-rubric-appendix .rubric-content-list { margin: 0 0 0 18px; }
+    .retention-rubric-appendix .rubric-content-text { margin: 0; }
+    .retention-rubric-appendix .small { font-size: 13px; }
+    .retention-rubric-appendix .rubric-score-row { cursor: pointer; }
+    .retention-rubric-appendix .rubric-score-row.selected { outline: 3px solid #000000; outline-offset: -3px; }
+    .retention-rubric-appendix .rubric-score-row.disabled { opacity: 0.45; cursor: not-allowed; }
+
+    
+    /* PDF-matching overrides for generated rubric views. These intentionally
+       neutralise the generic scoring-app table/score styles inside rubric appendices. */
+    .retention-rubric-appendix {
+      font-family: Georgia, 'Times New Roman', serif !important;
+      color: #000000 !important;
+      background: #ffffff !important;
+      line-height: 1.18 !important;
+    }
+    .retention-rubric-appendix h1 { color: #28393B !important; }
+    .retention-rubric-appendix h2 { color: #35506B !important; }
+    .retention-rubric-appendix h3 { color: #567087 !important; }
+    .retention-rubric-appendix .appendix-rubric-table,
+    .retention-rubric-appendix table.appendix-rubric-table.score-table {
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      border: 1px solid #000000 !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-table th,
+    .retention-rubric-appendix .appendix-rubric-table td {
+      border: 1px solid #000000 !important;
+      padding: 7px !important;
+      text-align: left !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-table th {
+      background: #DCEBEC !important;
+      color: #000000 !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+    }
+    .retention-rubric-appendix .score-number {
+      display: inline !important;
+      width: auto !important;
+      height: auto !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      color: #ffffff !important;
+      font-size: 26px !important;
+      font-weight: 700 !important;
+      line-height: 1 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table,
+    .retention-rubric-appendix table.generated-rubric-inner-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 0 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table td {
+      border: 1px solid #000000 !important;
+      padding: 6px !important;
+      vertical-align: top !important;
+      font-size: 12px !important;
+      line-height: 1.15 !important;
+      color: #000000 !important;
+      font-weight: 400 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table td:first-child { width: 66% !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-2 { background: #B6D7A8 !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-1 { background: #F9CB9C !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-0 { background: #EA9999 !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-example { background: #F3F3F3 !important; }
+    .retention-rubric-appendix .score-bg-2 { background: #93C47D !important; }
+    .retention-rubric-appendix .score-bg-1 { background: #F6B26B !important; }
+    .retention-rubric-appendix .score-bg-0 { background: #E06666 !important; }
+    .retention-rubric-appendix .content-bg-2 { background: #D9EAD3 !important; }
+    .retention-rubric-appendix .content-bg-1 { background: #FCE5CD !important; }
+    .retention-rubric-appendix .content-bg-0 { background: #F4CCCC !important; }
+  `;
+  document.head.appendChild(style);
+}
+
+function normaliseRubricTokenSpacing(value, options = {}) {
+  const collapse = Boolean(options.collapse);
+  const joinTokenFragments = Boolean(options.joinTokenFragments);
+  let text = String(value ?? '').replace(/\u00a0/g, ' ').trim();
+  if (!text) return '';
+
+  if (collapse) {
+    text = text.replace(/\s+/g, ' ').trim();
+  } else {
+    text = text.replace(/[ \t]*\n[ \t]*/g, '\n').trim();
+  }
+
+  text = text.replace(
+    /\s*\/\s*(\[(?:SRC|FAN)\])\s*\/\s*(\[(?:SRC|FAN)\])\s*/g,
+    ' / $1 / $2 '
+  );
+
+  if (joinTokenFragments) {
+    let previous = null;
+    while (previous !== text) {
+      previous = text;
+      text = text
+        .replace(/([^\n])\n(\[(?:SRC|FAN)\])/g, '$1 $2')
+        .replace(/(\[(?:SRC|FAN)\])\n([^\n])/g, '$1 $2');
+    }
+  }
+
+  return text.replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+function rubricLabelHasInlineTokens(label) {
+  return /\[(?:SRC|FAN)\]/.test(String(label ?? ''));
+}
+
+function cobaltTokenHtml(value, options = {}) {
+  const normalised = normaliseRubricTokenSpacing(value, options);
+  return lineBreaks(normalised).replace(/\[(SRC|FAN)\]/g, '<span class="rubric-token-cobalt">[$1]</span>');
+}
+
+function contentRowsForRubric(content) {
+  if (isPlainObject(content)) {
+    const rows = Object.entries(content).map(([label, examples]) => [String(label || '').trim(), String(examples || '').trim()]);
+    return rows.length ? rows : [['', '—']];
+  }
+  if (Array.isArray(content)) {
+    const rows = [];
+    for (const item of content) {
+      if (isPlainObject(item)) {
+        for (const [label, examples] of Object.entries(item)) {
+          rows.push([String(label || '').trim(), String(examples || '').trim()]);
+        }
+      } else if (String(item || '').trim()) {
+        rows.push(['', String(item || '').trim()]);
+      }
+    }
+    return rows.length ? rows : [['', '—']];
+  }
+  return [['', String(content || '').trim() || '—']];
 }
 
 function rubricContentHtml(row) {
   if (!row) return '';
-
-  // Backward-compatible fallback for old local rubric files. New bundled rubrics
-  // use structured `content` rather than pre-rendered mini-table HTML.
   if (row.html) return row.html;
-
-  const note = row.note ? `<p class="rubric-content-title">${escapeHtml(row.note)}</p>` : '';
-  const content = row.content;
-  let contentHtml = '';
-
-  if (isPlainObject(content)) {
-    const entries = Object.entries(content);
-    if (entries.length) {
-      contentHtml = `
-        <table class="rubric-inner-table generated-rubric-inner-table">
-          <tbody>
-            ${entries.map(([left, right]) => `
-              <tr>
-                <td>${lineBreaks(left)}</td>
-                <td>${cobaltTokenHtml(right)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-    }
-  } else if (Array.isArray(content)) {
-    const items = content
-      .map(item => {
-        if (isPlainObject(item)) {
-          return Object.entries(item).map(([left, right]) => `${left}: ${right}`).join('\n');
-        }
-        return item;
-      })
-      .map(item => String(item ?? '').trim())
-      .filter(Boolean);
-
-    if (items.length) {
-      contentHtml = `
-        <ul class="rubric-content-list">
-          ${items.map(item => `<li>${cobaltTokenHtml(item)}</li>`).join('')}
-        </ul>
-      `;
-    }
-  } else if (content) {
-    contentHtml = `<p class="rubric-content-text">${lineBreaks(content)}</p>`;
+  const score = String(row.score || '');
+  const rows = contentRowsForRubric(row.content);
+  if (rows.length === 1 && !rows[0][0] && rows[0][1] === '—') {
+    return '<p class="rubric-content-text">—</p>';
   }
-
-  return note || contentHtml ? `${note}${contentHtml}` : lineBreaks(row.note || '');
+  return `
+    <table class="rubric-inner-table generated-rubric-inner-table">
+      <tbody>
+        ${rows.map(([label, examples]) => `
+          <tr>
+            <td class="inner-label-${escapeHtml(score)}">${cobaltTokenHtml(label || '—', { collapse: true })}</td>
+            <td class="inner-example">${cobaltTokenHtml(examples || '—', {
+              joinTokenFragments: rubricLabelHasInlineTokens(label)
+            })}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 
@@ -162,7 +406,7 @@ function decorateRubricScoreBadges(root) {
 
   root.querySelectorAll('.rubric-base-table td.c12').forEach(cell => {
     const scoreText = cell.textContent.trim();
-    if (!/^[0-4]$/.test(scoreText)) return;
+    if (!/^[0-2]$/.test(scoreText)) return;
     if (cell.querySelector('.score-number')) return;
 
     cell.innerHTML = `<span class="score-number">${escapeHtml(scoreText)}</span>`;
@@ -247,7 +491,7 @@ function normaliseImageUrl(rawPath) {
 function prepareClientIndexes() {
   TASKS_BY_QUESTION = {};
   for (const [index, task] of STATE.tasks.entries()) {
-    const questionKey = task.question_key || '';
+    const questionKey = task.q_element || task.question_key || '';
     if (!TASKS_BY_QUESTION[questionKey]) TASKS_BY_QUESTION[questionKey] = [];
     TASKS_BY_QUESTION[questionKey].push({task, index});
   }
@@ -271,7 +515,7 @@ function getQuestionShortLabel(questionKey) {
 
 function expandedRubricRows(table) {
   const rows = [];
-  const scoreOrder = ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2, 3, 4]).map(score => String(score));
+  const scoreOrder = (Array.isArray(table.score_order) ? table.score_order : ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2])).map(score => String(score));
 
   const appendScoreRows = (scoresByValue, baseRow) => {
     const remainingScores = Object.keys(scoresByValue).filter(score => !scoreOrder.includes(score));
@@ -416,7 +660,7 @@ function updateProgress() {
   const task = STATE.tasks[currentIndex];
   saveUiState({taskId: task.task_id});
 
-  const block = task ? blockProgress(task.question_key) : {left: 0, total: 0};
+  const block = task ? blockProgress(task.q_element || task.question_key) : {left: 0, total: 0};
 
   requireElement('progress').innerHTML = `
     <div><strong>${p.total}</strong> review tasks (<strong>${block.total}</strong> in this block)</div>
@@ -436,15 +680,15 @@ function maybeShowDone() {
 }
 
 function getRubricRows(task) {
-  const lookupKey = `${task.question_key || ''}\u0000${task.creature_id || ''}`;
+  const lookupKey = `${task.q_element || task.question_key || ''}\u0000${task.creature_id || ''}`;
   const rows = RUBRIC_ROWS_BY_KEY[lookupKey];
   if (rows && rows.length) return rows;
 
-  const questionDefaultKey = `${task.question_key || ''}\u0000`;
+  const questionDefaultKey = `${task.q_element || task.question_key || ''}\u0000`;
   const questionDefaultRows = RUBRIC_ROWS_BY_KEY[questionDefaultKey];
   if (questionDefaultRows && questionDefaultRows.length) return questionDefaultRows;
 
-  return (STATE.rubric.score_scale || [0, 1, 2, 3, 4]).map(score => ({
+  return (STATE.rubric.score_scale || [0, 1, 2]).map(score => ({
     score,
     note: ''
   }));
@@ -466,25 +710,29 @@ function renderScoreOptions(task) {
     selectedScore = null;
   }
 
+  ensureRubricAppendixCss();
   requireElement('score-options').innerHTML = `
-    <table class="score-table">
-      <thead>
-        <tr><th>Score</th><th>Label / Note</th></tr>
-      </thead>
-      <tbody>
-        ${rows.map(row => {
-          const score = String(row.score);
-          const isDisabled = isNaRubricRow(row);
-          const isSelected = !isDisabled && score === selectedScore;
-          return `
-            <tr class="rubric-score-row ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}" data-score="${escapeHtml(score)}" tabindex="${isDisabled ? '-1' : '0'}" aria-disabled="${isDisabled ? 'true' : 'false'}">
-              <td><span class="score-number">${escapeHtml(score)}</span></td>
-              <td class="rubric-note">${rubricContentHtml(row)}</td>
-            </tr>
-          `;
-        }).join('')}
-      </tbody>
-    </table>
+    <div class="retention-rubric-appendix">
+      <table class="appendix-rubric-table score-table">
+        <colgroup><col class="appendix-score-col"><col></colgroup>
+        <thead>
+          <tr><th>Score</th><th>Possible answers</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => {
+            const score = String(row.score);
+            const isDisabled = isNaRubricRow(row);
+            const isSelected = !isDisabled && score === selectedScore;
+            return `
+              <tr class="appendix-rubric-score-row score-row-${escapeHtml(score)} rubric-score-row ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}" data-score="${escapeHtml(score)}" tabindex="${isDisabled ? '-1' : '0'}" aria-disabled="${isDisabled ? 'true' : 'false'}">
+                <td class="appendix-score-cell score-bg-${escapeHtml(score)}"><span class="score-number">${escapeHtml(score)}</span></td>
+                <td class="appendix-content-cell content-bg-${escapeHtml(score)}">${rubricContentHtml(row)}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
   `;
 
   document.querySelectorAll('.rubric-score-row:not(.disabled)').forEach(row => {
@@ -554,7 +802,7 @@ function renderCurrentTask() {
   const task = STATE.tasks[currentIndex];
   const creature = getCreature(task);
   const saved = getScore(task);
-  const rubric = (STATE.rubric.rubrics || {})[task.question_key] || {
+  const rubric = (STATE.rubric.rubrics || {})[task.q_element || task.question_key] || {
     title: task.question_label
   };
 
@@ -574,7 +822,7 @@ function renderCurrentTask() {
   requireElement('creature-facts').innerHTML = (creature.facts || []).map(fact => `<li>${escapeHtml(fact)}</li>`).join('')
     || '<li>Placeholder: add creature facts in resources/retention_rubrics.json.</li>';
 
-  setText('rubric-key', getQuestionShortLabel(task.question_key));
+  setText('rubric-key', getQuestionShortLabel(task.q_element || task.question_key));
   setText('rubric-title', rubric.title || task.question_label);
   renderScoreOptions(task);
 
@@ -665,7 +913,7 @@ function overviewCreatureLabel(creatureId, items) {
 function renderOverview() {
   if (!STATE) return;
   const token = ++overviewRenderToken;
-  const questionOrder = STATE.questionOrder || ['img1', 'img2', 'name1', 'name2'];
+  const questionOrder = STATE.questionOrder || ['Q1_name', 'Q2_fact1', 'Q2_fact2', 'Q2_fact3', 'Q3_looks', 'Q4_chapter', 'Q4_env'];
   const container = requireElement('overview-grid');
   container.innerHTML = '<p id="overview-build-status" class="small">Preparing overview squares…</p><div class="overview-table" id="overview-table"></div>';
   const table = requireElement('overview-table');
@@ -795,54 +1043,96 @@ function activateRubricSubtab(container, questionKey, {persist = true} = {}) {
 }
 
 function groupedFullRubricRowsHtml(rows) {
-  const groups = [];
+  return (rows || []).map(row => {
+    const score = String(row.score || '');
+    return `
+      <tr class="appendix-rubric-score-row score-row-${escapeHtml(score)}">
+        <td class="appendix-score-cell score-bg-${escapeHtml(score)}"><span class="score-number">${escapeHtml(score || '—')}</span></td>
+        <td class="appendix-content-cell content-bg-${escapeHtml(score)}">${rubricContentHtml(row)}</td>
+      </tr>
+    `;
+  }).join('');
+}
 
+function groupRowsByCreature(rows, table) {
+  const sourceRows = {};
+  for (const row of (table.rows || [])) {
+    const key = row.creature_id || row.creature || '';
+    if (key) sourceRows[key] = row;
+  }
+
+  const groups = [];
   for (const row of rows || []) {
     const creatureKey = row.creature_id || row.creature || '';
     let group = groups[groups.length - 1];
-
     if (!group || group.key !== creatureKey) {
+      const source = sourceRows[creatureKey] || {};
       group = {
         key: creatureKey,
         creature: row.creature || '',
+        note: source.note || source.rubric_note || '—',
         rows: []
       };
       groups.push(group);
     }
-
     group.rows.push(row);
   }
+  return groups;
+}
 
-  return groups.map(group => {
-    const rowSpan = Math.max(1, group.rows.length);
-    return group.rows.map((row, rowIndex) => `
-      <tr>
-        ${rowIndex === 0 ? `<td rowspan="${rowSpan}">${escapeHtml(group.creature)}</td>` : ''}
-        <td><span class="score-number">${escapeHtml(row.score)}</span></td>
-        <td class="rubric-note">${rubricContentHtml(row)}</td>
-      </tr>
-    `).join('');
-  }).join('');
+function renderRubricTableHtml(rows) {
+  return `
+    <table class="appendix-rubric-table">
+      <colgroup><col class="appendix-score-col"><col></colgroup>
+      <thead><tr><th>Score</th><th>Possible answers</th></tr></thead>
+      <tbody>${groupedFullRubricRowsHtml(rows)}</tbody>
+    </table>
+  `;
+}
+
+function renderCreatureRubricBlock(group) {
+  return `
+    <section class="appendix-rubric-block">
+      <h3>${escapeHtml(group.creature || 'Creature')}</h3>
+      <p class="rubric-note-line">Note: ${cobaltTokenHtml(group.note || '—')}</p>
+      ${renderRubricTableHtml(group.rows || [])}
+    </section>
+  `;
+}
+
+function renderQuestionRubricSection(questionKey, table) {
+  const scoreScale = ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2]).slice().reverse();
+  const rows = expandedRubricRows({...table, score_order: scoreScale});
+  const groups = groupRowsByCreature(rows, table);
+  return `
+    <section class="appendix-question-section" data-question="${escapeHtml(questionKey)}">
+      <h2>${escapeHtml(table.title || table.short_title || getQuestionShortLabel(questionKey))}</h2>
+      ${table.intro ? `<p>${cobaltTokenHtml(table.intro)}</p>` : ''}
+      ${groups.length ? groups.map(renderCreatureRubricBlock).join('') : '<p class="small">No creature-specific rubric rows are configured for this question element.</p>'}
+    </section>
+  `;
 }
 
 function renderFullRubric() {
   if (fullRubricRendered) return;
+  ensureRubricAppendixCss();
 
   const container = requireElement('full-rubric-content');
   const tables = STATE.rubric.question_rubric_tables || {};
-  const questionOrder = STATE.questionOrder || Object.keys(Object.keys(tables).length ? tables : (STATE.rubric.question_rubric_html || {}));
+  const questionOrder = STATE.questionOrder || Object.keys(tables);
+  const availableQuestions = questionOrder.filter(questionKey => tables[questionKey]);
+  const firstQuestion = restoredRubricQuestion(availableQuestions, loadUiState());
 
-  if (Object.keys(tables).length) {
-    const availableQuestions = questionOrder.filter(questionKey => tables[questionKey]);
-    const firstQuestion = restoredRubricQuestion(availableQuestions, loadUiState());
+  if (!firstQuestion) {
+    container.innerHTML = '<p class="small">No rubric tables are configured yet.</p>';
+    fullRubricRendered = true;
+    return;
+  }
 
-    if (!firstQuestion) {
-      container.innerHTML = '<p class="small">No rubric tables are configured yet.</p>';
-      fullRubricRendered = true;
-      return;
-    }
-
-    container.innerHTML = `
+  container.innerHTML = `
+    <article class="retention-rubric-appendix">
+      <h1>Materials: Retention Scoring Rubrics</h1>
+      <hr class="appendix-title-rule">
       <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
         ${availableQuestions.map(questionKey => `
           <button class="rubric-subtab-button ${questionKey === firstQuestion ? 'active' : ''}" type="button" role="tab" data-rubric-question="${escapeHtml(questionKey)}" aria-selected="${questionKey === firstQuestion ? 'true' : 'false'}">
@@ -851,78 +1141,17 @@ function renderFullRubric() {
         `).join('')}
       </div>
       <div class="rubric-subtab-panels">
-        ${availableQuestions.map(questionKey => {
-          const table = tables[questionKey];
-          return `
-            <section class="rubric-subtab-panel ${questionKey === firstQuestion ? 'active' : ''}" role="tabpanel" data-rubric-question-panel="${escapeHtml(questionKey)}">
-              <section class="full-rubric-section">
-                <h3>${escapeHtml(table.short_title || getQuestionShortLabel(questionKey))}</h3>
-                <p class="small">${escapeHtml(table.title || '')}</p>
-                ${table.intro ? `<p>${escapeHtml(table.intro)}</p>` : ''}
-                <table class="full-rubric-table">
-                  <colgroup>
-                    <col class="full-rubric-creature-col">
-                    <col class="full-rubric-score-col">
-                    <col>
-                  </colgroup>
-                  <thead>
-                    <tr><th>Creature</th><th>Score</th><th>Label / Content</th></tr>
-                  </thead>
-                  <tbody>
-                    ${groupedFullRubricRowsHtml(expandedRubricRows(table))}
-                  </tbody>
-                </table>
-              </section>
-            </section>
-          `;
-        }).join('')}
-      </div>
-    `;
-
-    bindRubricSubtabs(container);
-    activateRubricSubtab(container, firstQuestion, {persist: false});
-    fullRubricRendered = true;
-    return;
-  }
-
-  const questionHtml = STATE.rubric.question_rubric_html || {};
-
-  if (questionOrder.length && Object.keys(questionHtml).length) {
-    const firstQuestion = restoredRubricQuestion(questionOrder, loadUiState());
-    container.innerHTML = `
-      <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
-        ${questionOrder.map(questionKey => `
-          <button class="rubric-subtab-button ${questionKey === firstQuestion ? 'active' : ''}" type="button" role="tab" data-rubric-question="${escapeHtml(questionKey)}" aria-selected="${questionKey === firstQuestion ? 'true' : 'false'}">
-            ${escapeHtml(getQuestionShortLabel(questionKey))}
-          </button>
-        `).join('')}
-      </div>
-      <div class="rubric-subtab-panels">
-        ${questionOrder.map(questionKey => `
+        ${availableQuestions.map(questionKey => `
           <section class="rubric-subtab-panel ${questionKey === firstQuestion ? 'active' : ''}" role="tabpanel" data-rubric-question-panel="${escapeHtml(questionKey)}">
-            ${questionHtml[questionKey] || '<p class="small">No rubric is configured for this question yet.</p>'}
+            ${renderQuestionRubricSection(questionKey, tables[questionKey])}
           </section>
         `).join('')}
       </div>
-    `;
+    </article>
+  `;
 
-    decorateRubricScoreBadges(container);
-
-    bindRubricSubtabs(container);
-    activateRubricSubtab(container, firstQuestion, {persist: false});
-
-    fullRubricRendered = true;
-    return;
-  }
-
-  if (STATE.rubric.full_rubric_html) {
-    container.innerHTML = STATE.rubric.full_rubric_html;
-    decorateRubricScoreBadges(container);
-    fullRubricRendered = true;
-    return;
-  }
-
-  container.innerHTML = '<p class="small">No rubric tables are configured yet.</p>';
+  bindRubricSubtabs(container);
+  activateRubricSubtab(container, firstQuestion, {persist: false});
   fullRubricRendered = true;
 }
 

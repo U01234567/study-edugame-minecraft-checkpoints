@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import html
 import json
 import math
 import re
+import shutil
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -21,6 +23,9 @@ from ._shared import (
     MAX_RETENTION_SLOTS,
     RESOURCES_DIR,
     RETENTION_QUESTION_SPECS,
+    RETENTION_ELEMENT_LABEL_BY_KEY,
+    RETENTION_ELEMENT_SPECS,
+    RETENTION_PROMPT_TO_ELEMENTS,
     SURVEY_EXPORT_PATH,
     clean,
     delayed_flag,
@@ -35,7 +40,10 @@ RETENTION_ANSWERS_PATH = DATA_DIR / "retention_answers.tsv"
 RETENTION_MERGED_PATH = DATA_DIR / "retention_scores_merged.tsv"
 GENAI_PROMPT_PATH = DATA_CONFIG_DIR / "genai_prompt.txt"
 SCORING_RUBRICS_HTML_PATH = DATA_CONFIG_DIR / "scoring_rubrics.html"
-CREATURE_INFO_HTML_PATH = DATA_CONFIG_DIR / "creature_info.html"
+CREATURE_INFO_PDF_PATH = DATA_CONFIG_DIR / "creature_info.pdf"
+SCORING_RUBRICS_PDF_PATH = DATA_CONFIG_DIR / "scoring_rubrics.pdf"
+GENAI_PROMPT_RESOURCE_PATH = RESOURCES_DIR / "retention_genai_prompt.txt"
+REVIEW_TASKS_PATH = DATA_DIR / "retention_review_tasks.tsv"
 RUBRIC_JSON_PATH = RESOURCES_DIR / "retention_rubrics.json"
 SCORE_BACKUPS_DIR = DATA_DIR.parent / "score_backups"
 
@@ -44,47 +52,64 @@ SCORE_BACKUPS_DIR = DATA_DIR.parent / "score_backups"
 # AMOUNT_GENAI>1 writes data/retention_scores_genai1.tsv,
 # data/retention_scores_genai2.tsv, ... data/retention_scores_genai{n}.tsv.
 AMOUNT_GENAI = 2
+# Number of human-coder files expected by the scoring and merge workflow.
+AMOUNT_HUMAN = 2
 
 GENAI_SCORE_PREFIX = "retention_scores_genai"
 GRADER_SCORE_PREFIX = "retention_scores_grader"
 GENAI_FILENAME_RE = re.compile(r"^retention_scores_genai(\d*)\.tsv$")
 GRADER_FILENAME_RE = re.compile(r"^retention_scores_grader(\d+)\.tsv$")
 
-LOW_CONFIDENCE_THRESHOLD = 80.0
+GENAI_LOW_CONFIDENCE_THRESHOLD = 80.0
+# Backward-compatible alias for older callers/imports.
+LOW_CONFIDENCE_THRESHOLD = GENAI_LOW_CONFIDENCE_THRESHOLD
 VALIDATION_SAMPLE_FRACTION = 0.25
 
 RETENTION_ANSWER_FIELDNAMES = [
     "MCID",
     "creature",
-    "question",
+    "q_element",
     "answer",
     "answer_std",
 ]
 
 GENAI_SCORE_FIELDNAMES = [
-    "question",
+    "q_element",
     "creature",
     "answer_std",
-    "score (0-4)",
+    "score (0-2)",
     "confidence (0-100%)",
     "note (optional)",
 ]
 
 GRADER_SCORE_FIELDNAMES = [
-    "question",
+    "q_element",
     "creature",
     "answer_std",
-    "score (0-4)",
+    "score (0-2)",
     "status",
     "note (optional)",
     "updated_at",
     "task_id",
 ]
 
+REVIEW_TASK_FIELDNAMES = [
+    "task_id",
+    "q_element",
+    "question_key",
+    "question_label",
+    "creature",
+    "creature_id",
+    "answer_std",
+    "answer",
+    "occurrence_count",
+    "review_reasons",
+]
+
 MERGED_SCORE_BASE_FIELDNAMES = [
     "MCID",
     "creature",
-    "question",
+    "q_element",
     "answer",
     "answer_std",
 ]
@@ -115,17 +140,15 @@ MERGED_SCORE_FINAL_FIELDNAMES = [
 FINAL_SCORE_PLACEHOLDER = "[resolve conflict]"
 FINAL_NOTE_MANUAL_NOT_NEEDED = "—"
 
-QUESTION_BY_KEY = {
-    key: f"Q{index}"
-    for index, (key, _label) in enumerate(RETENTION_QUESTION_SPECS, start=1)
-}
-QUESTION_KEY_BY_QUESTION = {value: key for key, value in QUESTION_BY_KEY.items()}
-QUESTION_LABEL_BY_QUESTION = {
-    QUESTION_BY_KEY[key]: label
-    for key, label in RETENTION_QUESTION_SPECS
-}
-QUESTION_ORDER = list(QUESTION_KEY_BY_QUESTION)
-QUESTION_SORT_INDEX = {question: index for index, question in enumerate(QUESTION_ORDER)}
+Q_ELEMENT_ORDER = [key for key, _label in RETENTION_ELEMENT_SPECS]
+Q_ELEMENT_SORT_INDEX = {q_element: index for index, q_element in enumerate(Q_ELEMENT_ORDER)}
+Q_ELEMENT_LABELS = dict(RETENTION_ELEMENT_SPECS)
+# Backward-compatible names retained for older UI code paths.
+QUESTION_BY_KEY = {key: key for key in Q_ELEMENT_ORDER}
+QUESTION_KEY_BY_QUESTION = {key: key for key in Q_ELEMENT_ORDER}
+QUESTION_LABEL_BY_QUESTION = Q_ELEMENT_LABELS
+QUESTION_ORDER = Q_ELEMENT_ORDER
+QUESTION_SORT_INDEX = Q_ELEMENT_SORT_INDEX
 FORM_ORDER_COLUMNS = [
     "retention_form_order",
     "retention_immediate_form_order",
@@ -173,6 +196,12 @@ def grader_score_path(grader: int) -> Path:
     if grader < 1:
         raise ValueError("grader must be a positive integer")
     return DATA_DIR / f"{GRADER_SCORE_PREFIX}{grader}.tsv"
+
+
+def configured_grader_score_paths(amount: int | None = None) -> list[Path]:
+    """Return the expected human-coder files for the configured workflow."""
+    amount = positive_int(AMOUNT_HUMAN if amount is None else amount)
+    return [grader_score_path(index) for index in range(1, amount + 1)]
 
 
 def retention_score_source_sort_key(path: Path, filename_re: re.Pattern[str]) -> tuple[int, int, str]:
@@ -331,10 +360,188 @@ def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]], *, 
         backup_retention_tsv(path)
 
 
+
+def _score_key(value: object) -> str:
+    text = clean(value)
+    if not text:
+        return ""
+    try:
+        number = int(float(text))
+        return str(number)
+    except (TypeError, ValueError):
+        return text
+
+
+def _rubric_template_label_entries(score_content: Any) -> list[dict[str, str]]:
+    """Return ordered label definitions for a compact rubric-template score."""
+    entries: list[dict[str, str]] = []
+    if isinstance(score_content, list):
+        for index, item in enumerate(score_content, start=1):
+            if isinstance(item, dict):
+                label = clean(item.get("label") or item.get("text") or item.get("description"))
+                label_id = clean(item.get("id")) or f"label_{index:02d}"
+            else:
+                label = clean(item)
+                label_id = f"label_{index:02d}"
+            if label:
+                entries.append({"id": label_id, "label": label})
+        return entries
+
+    if isinstance(score_content, dict):
+        for index, (label_id, label_value) in enumerate(score_content.items(), start=1):
+            if isinstance(label_value, dict):
+                label = clean(label_value.get("label") or label_value.get("text") or label_value.get("description"))
+                entry_id = clean(label_value.get("id")) or clean(label_id) or f"label_{index:02d}"
+            else:
+                label = clean(label_value)
+                entry_id = clean(label_id) or f"label_{index:02d}"
+            if label:
+                entries.append({"id": entry_id, "label": label})
+        return entries
+
+    label = clean(score_content)
+    return [{"id": "label_01", "label": label}] if label else []
+
+
+def _has_compact_template_labels(template_scores: dict[str, Any]) -> bool:
+    return any(_rubric_template_label_entries(content) for content in (template_scores or {}).values())
+
+
+def _has_compact_examples(example_entry: dict[str, Any]) -> bool:
+    scores = example_entry.get("scores") if isinstance(example_entry, dict) else None
+    if not isinstance(scores, dict):
+        return False
+    for score_content in scores.values():
+        if isinstance(score_content, dict):
+            if any(clean(value) for value in score_content.values()):
+                return True
+        elif isinstance(score_content, list):
+            if any(clean(value) for value in score_content):
+                return True
+        elif clean(score_content):
+            return True
+    return False
+
+
+def _materialise_compact_scores(template_scores: dict[str, Any], example_scores: dict[str, Any]) -> dict[str, Any]:
+    """Connect creature-specific examples to the score-label templates.
+
+    In resources/retention_rubrics.json, repeated score labels live once in
+    rubric_templates. Creature-specific sections only store examples keyed by
+    those label ids, plus a note. This function expands that compact source to
+    the table shape consumed by the scoring app and PDF renderers.
+    """
+    merged: dict[str, Any] = {}
+    all_scores = ["2", "1", "0"]
+    for key in template_scores:
+        score = _score_key(key)
+        if score and score not in all_scores:
+            all_scores.append(score)
+    for key in example_scores:
+        score = _score_key(key)
+        if score and score not in all_scores:
+            all_scores.append(score)
+
+    for score in all_scores:
+        template_content = template_scores.get(score, template_scores.get(int(score)) if score.isdigit() else None)
+        example_content = example_scores.get(score, example_scores.get(int(score)) if score.isdigit() else None)
+        label_entries = _rubric_template_label_entries(template_content)
+        if label_entries:
+            score_rows: dict[str, str] = {}
+            examples_by_id = example_content if isinstance(example_content, dict) else {}
+            for label_entry in label_entries:
+                label_id = clean(label_entry.get("id"))
+                label = clean(label_entry.get("label"))
+                example_value = ""
+                if isinstance(examples_by_id, dict):
+                    example_value = clean(examples_by_id.get(label_id)) or clean(examples_by_id.get(label))
+                score_rows[label] = example_value
+            merged[score] = score_rows
+        elif isinstance(example_content, dict):
+            merged[score] = {clean(key): clean(value) for key, value in example_content.items() if clean(key) or clean(value)}
+        elif isinstance(example_content, list):
+            merged[score] = [clean(value) for value in example_content if clean(value)]
+        elif clean(example_content):
+            merged[score] = clean(example_content)
+    return merged
+
+
+def _question_config(rubric: dict[str, Any], q_element: str, default_label: str) -> dict[str, Any]:
+    questions = rubric.get("questions") or {}
+    raw = questions.get(q_element)
+    if isinstance(raw, dict):
+        config = dict(raw)
+    else:
+        config = {"title": clean(raw) or default_label}
+    config.setdefault("title", default_label)
+    config.setdefault("short_title", clean((rubric.get("question_short_labels") or {}).get(q_element)) or default_label)
+    config.setdefault("template", q_element)
+    return config
+
+
+def normalise_rubric_json(rubric: dict[str, Any]) -> dict[str, Any]:
+    """Expand the compact q_element rubric schema used by this repository.
+
+    The JSON source intentionally stores repeated score-label links only once in
+    rubric_templates. Creature-specific rubric dictionaries store only a note and
+    examples keyed to those template labels. This normaliser materialises the
+    older question_rubric_tables/rubrics shape used by the existing scoring apps
+    and PDF renderers.
+    """
+    rubric = dict(rubric)
+    question_short_labels = dict(rubric.get("question_short_labels") or {})
+    templates = rubric.get("rubric_templates") or {}
+    examples = rubric.get("rubric_examples") or rubric.get("question_rubric_examples") or {}
+    creatures = rubric.get("creatures") or {}
+
+    if templates and not rubric.get("question_rubric_tables"):
+        tables: dict[str, Any] = {}
+        for q_element, label in RETENTION_ELEMENT_SPECS:
+            config = _question_config(rubric, q_element, label)
+            template_key = clean(config.get("template")) or q_element
+            template = templates.get(template_key) or templates.get(q_element) or {}
+            title = clean(config.get("title")) or clean(template.get("title")) or label
+            short_title = clean(config.get("short_title")) or clean(template.get("short_title")) or clean(question_short_labels.get(q_element)) or label
+            intro = clean(config.get("intro")) or clean(template.get("intro"))
+            template_scores = template.get("scores") or {}
+            per_creature = examples.get(q_element) or {}
+            should_render_rows = _has_compact_template_labels(template_scores) or any(
+                _has_compact_examples(entry if isinstance(entry, dict) else {})
+                for entry in (per_creature or {}).values()
+            )
+            rows: list[dict[str, Any]] = []
+            if should_render_rows:
+                for creature_id, creature in sorted(creatures.items(), key=lambda item: clean((item[1] or {}).get("name")).lower()):
+                    example_entry = per_creature.get(creature_id) or {}
+                    if not isinstance(example_entry, dict):
+                        example_entry = {"scores": example_entry}
+                    rows.append({
+                        "creature_id": creature_id,
+                        "creature": clean((creature or {}).get("name")) or creature_id,
+                        "note": clean(example_entry.get("note")),
+                        "scores": _materialise_compact_scores(template_scores, example_entry.get("scores") or {}),
+                    })
+            tables[q_element] = {
+                "title": title,
+                "short_title": short_title,
+                "intro": intro,
+                "rows": rows,
+            }
+        rubric["question_rubric_tables"] = tables
+
+    rubric.setdefault("questions", {key: label for key, label in RETENTION_ELEMENT_SPECS})
+    rubric.setdefault("rubrics", {
+        key: {"title": label}
+        for key, label in RETENTION_ELEMENT_SPECS
+    })
+    rubric.setdefault("question_short_labels", {key: label for key, label in RETENTION_ELEMENT_SPECS})
+    return rubric
+
+
 def load_rubric_json(path: Path = RUBRIC_JSON_PATH) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Missing rubric JSON source: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return normalise_rubric_json(json.loads(path.read_text(encoding="utf-8")))
 
 
 def normalise_form_order(value: object) -> str:
@@ -415,24 +622,24 @@ def build_prompt_rows_from_survey(survey_rows: list[dict[str, str]]) -> list[dic
         for slot_index, creature_id in enumerate(seen_creatures, start=1):
             administered_keys = question_pair_for_slot(row, slot_index, len(seen_creatures), delayed=is_delayed)
             for question_key in administered_keys:
-                question = QUESTION_BY_KEY[question_key]
                 answer = clean(row.get(retention_column_name(slot_index, question_key)))
-                rows.append({
-                    "participant_id": participant_id,
-                    "moment": moment,
-                    "creature_id": creature_id,
-                    "creature": CREATURE_NAME_BY_ID.get(creature_id, creature_id),
-                    "question": question,
-                    "question_key": question_key,
-                    "question_label": QUESTION_LABEL_BY_QUESTION.get(question, question_key),
-                    "answer": answer,
-                    "answer_std": standardise_answer(answer),
-                })
+                for q_element in RETENTION_PROMPT_TO_ELEMENTS.get(question_key, []):
+                    rows.append({
+                        "participant_id": participant_id,
+                        "moment": moment,
+                        "creature_id": creature_id,
+                        "creature": CREATURE_NAME_BY_ID.get(creature_id, creature_id),
+                        "q_element": q_element,
+                        "question_key": question_key,
+                        "question_label": RETENTION_ELEMENT_LABEL_BY_KEY.get(q_element, q_element),
+                        "answer": answer,
+                        "answer_std": standardise_answer(answer),
+                    })
 
     rows.sort(key=lambda item: (
         clean(item.get("participant_id")),
         clean(item.get("creature")).lower(),
-        QUESTION_SORT_INDEX.get(clean(item.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(item.get("q_element")), 999),
         clean(item.get("moment")),
     ))
     return rows
@@ -443,7 +650,7 @@ def build_retention_answer_rows(prompt_rows: list[dict[str, str]]) -> list[dict[
         {
             "MCID": row["participant_id"],
             "creature": row["creature"],
-            "question": row["question"],
+            "q_element": row["q_element"],
             "answer": row["answer"],
             "answer_std": row["answer_std"],
         }
@@ -452,14 +659,14 @@ def build_retention_answer_rows(prompt_rows: list[dict[str, str]]) -> list[dict[
     rows.sort(key=lambda item: (
         clean(item.get("MCID")),
         clean(item.get("creature")).lower(),
-        QUESTION_SORT_INDEX.get(clean(item.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(item.get("q_element")), 999),
         clean(item.get("answer_std")),
     ))
     return rows
 
 
 def genai_group_key(row: dict[str, str], multi_creature_keys: set[tuple[str, str]]) -> tuple[str, str, str]:
-    question = clean(row.get("question"))
+    question = clean(row.get("q_element"))
     answer_std = clean(row.get("answer_std"))
     creature = clean(row.get("creature"))
     # Hybrid duplicate rule: normally question + answer_std; if the same
@@ -473,7 +680,7 @@ def existing_genai_lookup(path: Path | None = None) -> dict[tuple[str, str, str]
     path = path or genai_score_path()
     lookup: dict[tuple[str, str, str], dict[str, str]] = {}
     for row in read_tsv(path):
-        key = (clean(row.get("question")), clean(row.get("creature")), clean(row.get("answer_std")))
+        key = (clean(row.get("q_element")), clean(row.get("creature")), clean(row.get("answer_std")))
         if all(key):
             lookup[key] = row
     return lookup
@@ -483,17 +690,17 @@ def build_unique_genai_rows(prompt_rows: list[dict[str, str]], *, existing_path:
     nonblank = [row for row in prompt_rows if clean(row.get("answer_std"))]
     creatures_by_question_answer: dict[tuple[str, str], set[str]] = defaultdict(set)
     for row in nonblank:
-        creatures_by_question_answer[(row["question"], row["answer_std"])].add(row["creature"])
+        creatures_by_question_answer[(row["q_element"], row["answer_std"])].add(row["creature"])
     multi_creature_keys = {key for key, creatures in creatures_by_question_answer.items() if len(creatures) > 1}
 
     grouped: dict[tuple[str, str, str], dict[str, str]] = {}
     for row in nonblank:
         key = genai_group_key(row, multi_creature_keys)
         grouped.setdefault(key, {
-            "question": key[0],
+            "q_element": key[0],
             "creature": key[1],
             "answer_std": key[2],
-            "score (0-4)": "",
+            "score (0-2)": "",
             "confidence (0-100%)": "",
             "note (optional)": "",
         })
@@ -503,13 +710,13 @@ def build_unique_genai_rows(prompt_rows: list[dict[str, str]], *, existing_path:
     for key, row in grouped.items():
         previous = existing.get(key, {})
         merged = dict(row)
-        for field in ("score (0-4)", "confidence (0-100%)", "note (optional)"):
+        for field in ("score (0-2)", "confidence (0-100%)", "note (optional)"):
             if clean(previous.get(field)):
                 merged[field] = clean(previous.get(field))
         rows.append(merged)
 
     rows.sort(key=lambda item: (
-        QUESTION_SORT_INDEX.get(clean(item.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(item.get("q_element")), 999),
         clean(item.get("creature")).lower(),
         clean(item.get("answer_std")),
     ))
@@ -520,8 +727,59 @@ def html_text(value: object) -> str:
     return html.escape(clean(value)).replace("\n", "<br>")
 
 
-def html_text_with_tokens(value: object) -> str:
-    escaped = html_text(value)
+def _normalise_rubric_token_spacing(
+    value: object,
+    *,
+    collapse: bool = False,
+    join_token_fragments: bool = False,
+) -> str:
+    text = clean(value).replace("\u00a0", " ")
+    if not text:
+        return ""
+
+    # Labels should behave like the PDF: no artificial line breaks around
+    # slash-separated [FAN] / [SRC] components.
+    if collapse:
+        text = re.sub(r"\s+", " ", text).strip()
+    else:
+        text = re.sub(r"[ \t]*\n[ \t]*", "\n", text).strip()
+
+    text = re.sub(
+        r"\s*/\s*(\[(?:SRC|FAN)\])\s*/\s*(\[(?:SRC|FAN)\])\s*",
+        r" / \1 / \2 ",
+        text,
+    )
+
+    # Some generated example strings contain token fragments on separate lines,
+    # e.g. "abyss deer\n[SRC]\n[FAN]\nabyss deer". For interfering rows,
+    # those fragments belong to the same example and should render inline.
+    if join_token_fragments:
+        previous = None
+        while previous != text:
+            previous = text
+            text = re.sub(r"([^\n])\n(\[(?:SRC|FAN)\])", r"\1 \2", text)
+            text = re.sub(r"(\[(?:SRC|FAN)\])\n([^\n])", r"\1 \2", text)
+
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+def _rubric_label_has_inline_tokens(label: object) -> bool:
+    text = clean(label)
+    return bool(re.search(r"\[(?:SRC|FAN)\]", text))
+
+
+def html_text_with_tokens(
+    value: object,
+    *,
+    collapse: bool = False,
+    join_token_fragments: bool = False,
+) -> str:
+    text = _normalise_rubric_token_spacing(
+        value,
+        collapse=collapse,
+        join_token_fragments=join_token_fragments,
+    )
+    escaped = html.escape(text).replace("\n", "<br>")
     return re.sub(
         r"\[(SRC|FAN)\]",
         r'<span class="rubric-token-cobalt">[\1]</span>',
@@ -529,38 +787,226 @@ def html_text_with_tokens(value: object) -> str:
     )
 
 
-def render_rubric_content_html(content: Any) -> str:
-    if isinstance(content, dict):
-        rows = []
-        for left, right in content.items():
-            rows.append(
-                "<tr>"
-                f"<td>{html_text(left)}</td>"
-                f"<td>{html_text_with_tokens(right)}</td>"
-                "</tr>"
-            )
-        if not rows:
-            return ""
-        return (
-            '<table class="rubric-inner-table generated-rubric-inner-table"><tbody>'
-            + "".join(rows)
-            + "</tbody></table>"
-        )
+def _appendix_html_css() -> str:
+    """CSS counterpart of the ReportLab rubric PDF layout.
 
+    Keep this in sync with _retention_pdf_styles(). The selectors are deliberately
+    specific and use !important where needed because the scoring app also has
+    generic .score-number, .score-table, and .generated-rubric-inner-table rules
+    that otherwise overwrite the appendix/rubric appearance.
+    """
+    return """
+    :root {
+      --thesis-title: #28393B;
+      --thesis-h2: #35506B;
+      --thesis-h3: #567087;
+      --thesis-blue: #3C78D8;
+      --rule: #000000;
+      --table-header: #DCEBEC;
+      --score-2: #93C47D;
+      --score-2-content: #D9EAD3;
+      --score-2-label: #B6D7A8;
+      --score-1: #F6B26B;
+      --score-1-content: #FCE5CD;
+      --score-1-label: #F9CB9C;
+      --score-0: #E06666;
+      --score-0-content: #F4CCCC;
+      --score-0-label: #EA9999;
+      --example-bg: #F3F3F3;
+    }
+    .retention-rubric-appendix {
+      box-sizing: border-box !important;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px;
+      color: #000000;
+      font-family: Georgia, 'Times New Roman', serif !important;
+      font-size: 14px;
+      line-height: 1.18;
+      background: #ffffff;
+    }
+    .retention-rubric-appendix * { box-sizing: border-box; }
+    .retention-rubric-appendix h1 {
+      margin: 0 0 8px !important;
+      color: var(--thesis-title) !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+      font-size: 28px !important;
+      line-height: 1.12 !important;
+      font-weight: 700 !important;
+    }
+    .retention-rubric-appendix h2 {
+      margin: 22px 0 8px !important;
+      color: var(--thesis-h2) !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+      font-size: 23px !important;
+      line-height: 1.12 !important;
+      font-weight: 700 !important;
+    }
+    .retention-rubric-appendix h3 {
+      margin: 14px 0 6px !important;
+      color: var(--thesis-h3) !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+      font-size: 17px !important;
+      line-height: 1.15 !important;
+      font-weight: 700 !important;
+    }
+    .retention-rubric-appendix p { margin: 0 0 10px !important; }
+    .retention-rubric-appendix ul {
+      margin: 4px 0 12px 24px !important;
+      padding: 0 !important;
+    }
+    .retention-rubric-appendix li { margin: 2px 0 !important; padding-left: 4px !important; }
+    .retention-rubric-appendix .appendix-title-rule {
+      border: 0 !important;
+      border-top: 1px solid var(--rule) !important;
+      margin: 8px 0 18px !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-block {
+      margin: 0 0 18px !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .retention-rubric-appendix .rubric-note-line {
+      margin: 0 0 6px !important;
+      font-size: 13px !important;
+    }
+    .retention-rubric-appendix .rubric-token-cobalt {
+      color: var(--thesis-blue) !important;
+      font-weight: 700 !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-table,
+    .retention-rubric-appendix table.appendix-rubric-table.score-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 4px 0 14px !important;
+      border: 1px solid var(--rule) !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-table th,
+    .retention-rubric-appendix .appendix-rubric-table td {
+      border: 1px solid var(--rule) !important;
+      vertical-align: top !important;
+      padding: 7px !important;
+      text-align: left !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+      font-family: Georgia, 'Times New Roman', serif !important;
+    }
+    .retention-rubric-appendix .appendix-rubric-table th {
+      background: var(--table-header) !important;
+      color: #000000 !important;
+      font-weight: 700 !important;
+      font-size: 13px !important;
+    }
+    .retention-rubric-appendix .appendix-score-col { width: 62px !important; }
+    .retention-rubric-appendix .appendix-score-cell { text-align: left !important; }
+    .retention-rubric-appendix .score-number {
+      display: inline !important;
+      width: auto !important;
+      height: auto !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      color: #ffffff !important;
+      font-size: 26px !important;
+      font-weight: 700 !important;
+      line-height: 1 !important;
+    }
+    .retention-rubric-appendix .score-bg-2 { background: var(--score-2) !important; }
+    .retention-rubric-appendix .score-bg-1 { background: var(--score-1) !important; }
+    .retention-rubric-appendix .score-bg-0 { background: var(--score-0) !important; }
+    .retention-rubric-appendix .content-bg-2 { background: var(--score-2-content) !important; }
+    .retention-rubric-appendix .content-bg-1 { background: var(--score-1-content) !important; }
+    .retention-rubric-appendix .content-bg-0 { background: var(--score-0-content) !important; }
+    .retention-rubric-appendix .rubric-inner-table,
+    .retention-rubric-appendix table.generated-rubric-inner-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 0 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table td {
+      border: 1px solid var(--rule) !important;
+      vertical-align: top !important;
+      padding: 6px !important;
+      font-size: 12px !important;
+      line-height: 1.15 !important;
+      color: #000000 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table td:first-child {
+      width: 66% !important;
+      font-weight: 400 !important;
+    }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-2 { background: var(--score-2-label) !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-1 { background: var(--score-1-label) !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-label-0 { background: var(--score-0-label) !important; }
+    .retention-rubric-appendix .rubric-inner-table .inner-example { background: var(--example-bg) !important; }
+    .retention-rubric-appendix .rubric-content-list { margin: 0 0 0 18px !important; }
+    .retention-rubric-appendix .rubric-content-text { margin: 0 !important; }
+    .retention-rubric-appendix .small { font-size: 13px !important; }
+    """
+
+
+def _instruction_sections_html(rubric: dict[str, Any]) -> str:
+    sections = _instruction_sections_from_html(rubric.get("instructions_html"))
+    if not sections:
+        fallback = clean(rubric.get("instructions_html")) or "<p>No general scoring instructions are configured.</p>"
+        return fallback
+    parts: list[str] = ["<section class=\"appendix-instructions-block\">", "<h2>Instructions</h2>"]
+    for section in sections:
+        parts.append(f"<h3>{html_text(section.get('title'))}</h3>")
+        current_list: list[str] = []
+        def flush_list() -> None:
+            nonlocal current_list
+            if current_list:
+                parts.append("<ul>" + "".join(current_list) + "</ul>")
+                current_list = []
+        for item in section.get("items", []):
+            item_html = html_text_with_tokens(item.get("text"))
+            if item.get("type") == "bullet":
+                current_list.append(f"<li>{item_html}</li>")
+            else:
+                flush_list()
+                parts.append(f"<p>{item_html}</p>")
+        flush_list()
+    parts.append("</section>")
+    return "\n".join(parts)
+
+
+def _content_rows_for_html(content: Any) -> list[tuple[str, str]]:
+    if isinstance(content, dict):
+        rows = [(clean(label), clean(examples)) for label, examples in content.items()]
+        return rows or [("", "—")]
     if isinstance(content, list):
-        items: list[str] = []
+        rows: list[tuple[str, str]] = []
         for item in content:
             if isinstance(item, dict):
-                text = "\n".join(f"{key}: {value}" for key, value in item.items())
-            else:
-                text = clean(item)
-            if clean(text):
-                items.append(f"<li>{html_text_with_tokens(text)}</li>")
-        return f'<ul class="rubric-content-list">{"".join(items)}</ul>' if items else ""
+                rows.extend((clean(key), clean(value)) for key, value in item.items())
+            elif clean(item):
+                rows.append(("", clean(item)))
+        return rows or [("", "—")]
+    return [("", clean(content) or "—")]
 
-    if clean(content):
-        return f'<p class="rubric-content-text">{html_text_with_tokens(content)}</p>'
-    return ""
+
+def render_rubric_content_html(content: Any, score: object = "") -> str:
+    """Render a rubric score's possible answers in the same mini-table style as the PDF."""
+    score_key = clean(score)
+    rows = _content_rows_for_html(content)
+    if len(rows) == 1 and not rows[0][0] and rows[0][1] == "—":
+        return '<p class="rubric-content-text">—</p>'
+    return (
+        '<table class="rubric-inner-table generated-rubric-inner-table"><tbody>'
+        + "".join(
+            "<tr>"
+            f'<td class="inner-label-{html.escape(score_key)}">'
+            f'{html_text_with_tokens(label or "—", collapse=True)}</td>'
+            f'<td class="inner-example">'
+            f'{html_text_with_tokens(examples or "—", join_token_fragments=_rubric_label_has_inline_tokens(label))}</td>'
+            "</tr>"
+            for label, examples in rows
+        )
+        + "</tbody></table>"
+    )
 
 
 def expanded_rubric_rows(table: dict[str, Any], score_scale: list[Any]) -> list[dict[str, Any]]:
@@ -581,6 +1027,7 @@ def expanded_rubric_rows(table: dict[str, Any], score_scale: list[Any]) -> list[
         append_score_rows(table["scores"], {
             "creature_id": clean(table.get("creature_id")),
             "creature": clean(table.get("creature") or "All creatures"),
+            "note": clean(table.get("note")) or clean(table.get("rubric_note")),
         })
 
     for entry in table.get("rows") or []:
@@ -588,99 +1035,163 @@ def expanded_rubric_rows(table: dict[str, Any], score_scale: list[Any]) -> list[
             append_score_rows(entry["scores"], {
                 "creature_id": clean(entry.get("creature_id")),
                 "creature": clean(entry.get("creature") or ""),
+                "note": clean(entry.get("note")) or clean(entry.get("rubric_note")),
             })
 
     return rows
 
 
-def grouped_rubric_body_html(rows: list[dict[str, Any]]) -> str:
+def expanded_rubric_rows_grouped_for_html(table: dict[str, Any], score_scale: list[Any]) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
-    for row in rows:
+    source_rows_by_key: dict[str, dict[str, Any]] = {}
+    for source_row in table.get("rows") or []:
+        key = clean(source_row.get("creature_id")) or clean(source_row.get("creature"))
+        if key:
+            source_rows_by_key[key] = source_row
+    for row in expanded_rubric_rows(table, score_scale):
         creature_key = clean(row.get("creature_id")) or clean(row.get("creature"))
         if not groups or groups[-1]["key"] != creature_key:
-            groups.append({"key": creature_key, "creature": clean(row.get("creature")), "rows": []})
+            source_row = source_rows_by_key.get(creature_key, {})
+            groups.append({
+                "key": creature_key,
+                "creature": clean(row.get("creature")),
+                "note": clean(source_row.get("note")) or clean(source_row.get("rubric_note")) or "—",
+                "rows": [],
+            })
         groups[-1]["rows"].append(row)
+    return groups
 
-    parts: list[str] = []
-    for group in groups:
-        group_rows = group["rows"]
-        row_span = max(1, len(group_rows))
-        for row_index, row in enumerate(group_rows):
-            creature_cell = f'<td rowspan="{row_span}">{html_text(group["creature"])}</td>' if row_index == 0 else ""
-            parts.append(
-                "<tr>"
-                + creature_cell
-                + f'<td><span class="score-number">{html_text(row.get("score"))}</span></td>'
-                + f'<td class="rubric-note">{render_rubric_content_html(row.get("content"))}</td>'
-                + "</tr>"
-            )
+
+def render_rubric_table_html(rows: list[dict[str, Any]], *, selectable: bool = False) -> str:
+    body: list[str] = []
+    for row in rows:
+        score = clean(row.get("score"))
+        selectable_attrs = ""
+        selectable_class = ""
+        if selectable:
+            selectable_class = " rubric-score-row"
+            selectable_attrs = f' data-score="{html.escape(score)}" tabindex="0" aria-disabled="false"'
+        body.append(
+            f'<tr class="appendix-rubric-score-row score-row-{html.escape(score)}{selectable_class}"{selectable_attrs}>'
+            f'<td class="appendix-score-cell score-bg-{html.escape(score)}"><span class="score-number">{html_text(score or "—")}</span></td>'
+            f'<td class="appendix-content-cell content-bg-{html.escape(score)}">{render_rubric_content_html(row.get("content"), score)}</td>'
+            "</tr>"
+        )
+    return (
+        '<table class="appendix-rubric-table">'
+        '<colgroup><col class="appendix-score-col"><col></colgroup>'
+        '<thead><tr><th>Score</th><th>Possible answers</th></tr></thead>'
+        '<tbody>' + "".join(body) + '</tbody></table>'
+    )
+
+
+def render_single_creature_rubric_block_html(group: dict[str, Any]) -> str:
+    note = clean(group.get("note")) or "—"
+    return (
+        '<section class="appendix-rubric-block">'
+        f'<h3>{html_text(clean(group.get("creature")) or "Creature")}</h3>'
+        f'<p class="rubric-note-line">Note: {html_text_with_tokens(note)}</p>'
+        f'{render_rubric_table_html(group.get("rows") or [])}'
+        '</section>'
+    )
+
+
+def render_question_rubric_section_html(question_key: str, table: dict[str, Any], score_scale: list[Any]) -> str:
+    q_title = clean(table.get("title")) or clean(table.get("short_title")) or question_key
+    groups = expanded_rubric_rows_grouped_for_html(table, list(reversed(score_scale)))
+    parts: list[str] = [f'<section class="appendix-question-section" data-question="{html.escape(question_key)}">', f'<h2>{html_text(q_title)}</h2>']
+    if clean(table.get("intro")):
+        parts.append(f'<p>{html_text_with_tokens(table.get("intro"))}</p>')
+    if not groups:
+        parts.append('<p class="small">No creature-specific rubric rows are configured for this question element.</p>')
+    else:
+        parts.extend(render_single_creature_rubric_block_html(group) for group in groups)
+    parts.append('</section>')
     return "\n".join(parts)
 
 
-def render_scoring_rubrics_html(rubric: dict[str, Any]) -> str:
+def render_rubric_question_tabs_html(rubric: dict[str, Any], *, first_question: str | None = None) -> str:
     question_tables = rubric.get("question_rubric_tables") or {}
-    question_order = [key for key, _label in RETENTION_QUESTION_SPECS if key in question_tables]
-    first_question = question_order[0] if question_order else ""
-    score_scale = rubric.get("score_scale", [0, 1, 2, 3, 4])
+    score_scale = rubric.get("score_scale", [0, 1, 2])
     question_labels = rubric.get("question_short_labels") or {}
-    css_path = "../../resources/static/scoring_app.css"
-    generated_at = datetime.now().strftime("%d %B %Y at %H:%M")
-
-    question_tabs = "\n".join(
-        f'''<button class="rubric-subtab-button {'active' if question_key == first_question else ''}" type="button" role="tab" data-rubric-question="{html.escape(question_key)}" aria-selected="{'true' if question_key == first_question else 'false'}">
+    question_order = [key for key, _label in RETENTION_ELEMENT_SPECS if key in question_tables]
+    first = first_question if first_question in question_order else (question_order[0] if question_order else "")
+    tabs = "\n".join(
+        f'''<button class="rubric-subtab-button {'active' if question_key == first else ''}" type="button" role="tab" data-rubric-question="{html.escape(question_key)}" aria-selected="{'true' if question_key == first else 'false'}">
               {html.escape(clean(question_labels.get(question_key)) or QUESTION_BY_KEY.get(question_key, question_key))}
             </button>'''
         for question_key in question_order
     )
+    panels = "\n".join(
+        f'''<section class="rubric-subtab-panel {'active' if question_key == first else ''}" role="tabpanel" data-rubric-question-panel="{html.escape(question_key)}">
+              {render_question_rubric_section_html(question_key, question_tables.get(question_key) or {}, score_scale)}
+            </section>'''
+        for question_key in question_order
+    )
+    return f'''
+      <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
+        {tabs}
+      </div>
+      <div class="rubric-subtab-panels">
+        {panels}
+      </div>'''
 
-    question_panels: list[str] = []
-    for question_key in question_order:
-        table = question_tables.get(question_key) or {}
-        rows = expanded_rubric_rows(table, score_scale)
-        intro_html = f"<p>{html.escape(clean(table.get('intro')))}</p>" if clean(table.get("intro")) else ""
-        question_panels.append(f'''
-          <section class="rubric-subtab-panel {'active' if question_key == first_question else ''}" role="tabpanel" data-rubric-question-panel="{html.escape(question_key)}">
-            <section class="full-rubric-section">
-              <h3>{html.escape(clean(table.get('short_title')) or QUESTION_BY_KEY.get(question_key, question_key))}</h3>
-              <p class="small">{html.escape(clean(table.get('title')))}</p>
-              {intro_html}
-              <table class="full-rubric-table">
-                <colgroup>
-                  <col class="full-rubric-creature-col">
-                  <col class="full-rubric-score-col">
-                  <col>
-                </colgroup>
-                <thead>
-                  <tr><th>Creature</th><th>Score</th><th>Label / Content</th></tr>
-                </thead>
-                <tbody>
-                  {grouped_rubric_body_html(rows)}
-                </tbody>
-              </table>
-            </section>
-          </section>''')
 
-    instructions = clean(rubric.get("instructions_html")) or "<p>No general scoring instructions are configured.</p>"
+def render_scoring_rubrics_html(rubric: dict[str, Any]) -> str:
+    """Write the GenAI/reference HTML using the same rubric layout as scoring_rubrics.pdf."""
+    generated_at = datetime.now().strftime("%d %B %Y at %H:%M")
+    instructions = _instruction_sections_html(rubric)
+    question_tabs = render_rubric_question_tabs_html(rubric)
 
     return f'''<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Retention scoring rubrics</title>
-  <link rel="stylesheet" href="{css_path}">
+  <title>Materials: Retention Scoring Rubrics</title>
   <style>
-    body {{ padding: 0; }}
-    #topbar {{ align-items: center; }}
-    #topbar .small {{ margin: 4px 0 0; }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: #ffffff;
+      color: #172026;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }}
+    #topbar {{
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 18px;
+      background: rgba(246, 247, 248, .98);
+      border-bottom: 1px solid #d9e0e4;
+    }}
+    #app-title {{ margin: 0; font-size: 22px; }}
+    #topbar .small {{ margin: 4px 0 0; color: #5f6c73; font-size: 12px; }}
+    #tabs {{ display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }}
+    .tab-button, .rubric-subtab-button {{
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-weight: 800;
+      cursor: pointer;
+      border: 1px solid #111827;
+      background: #ffffff;
+      color: #111827;
+      font: inherit;
+    }}
+    .tab-button.active, .rubric-subtab-button.active {{ background: #111827; color: #ffffff; }}
     main {{ padding: 18px; }}
-    .doc-card {{ max-width: 1280px; margin: 0 auto 18px; }}
     .tab-panel {{ display: none; }}
     .tab-panel.active {{ display: block; }}
-    .rubric-subtabs {{ top: 0; }}
-    .full-rubric-table {{ table-layout: fixed; }}
-    .full-rubric-table td:first-child {{ font-weight: 800; }}
-    .generated-rubric-inner-table td:first-child {{ width: 38%; font-weight: 700; }}
+    .rubric-subtabs {{ position: sticky; top: 73px; z-index: 10; background: #ffffff; padding: 0 0 8px; border-bottom: 1px solid #f0f0f0; }}
+    .rubric-subtab-panel {{ display: none; }}
+    .rubric-subtab-panel.active {{ display: block; }}
+    {_appendix_html_css()}
   </style>
 </head>
 <body>
@@ -697,17 +1208,18 @@ def render_scoring_rubrics_html(rubric: dict[str, Any]) -> str:
 
   <main>
     <section class="tab-panel active" data-panel="instructions">
-      <article class="doc-card">{instructions}</article>
+      <article class="retention-rubric-appendix">
+        <h1>Materials: Retention Scoring Rubrics</h1>
+        <hr class="appendix-title-rule">
+        {instructions}
+      </article>
     </section>
 
     <section class="tab-panel" data-panel="all-rubrics">
-      <article class="doc-card">
-        <div class="rubric-subtabs" role="tablist" aria-label="Rubric question tabs">
-          {question_tabs}
-        </div>
-        <div class="rubric-subtab-panels">
-          {''.join(question_panels)}
-        </div>
+      <article class="retention-rubric-appendix">
+        <h1>Materials: Retention Scoring Rubrics</h1>
+        <hr class="appendix-title-rule">
+        {question_tabs}
       </article>
     </section>
   </main>
@@ -776,52 +1288,451 @@ def render_creature_info_html(rubric: dict[str, Any]) -> str:
 
 
 def genai_prompt_text() -> str:
-    return """In the attachment, you should find exactly these files:
-- one generated retention_scores_genai*.tsv source file
-- scoring_rubrics.html
-- creature_info.html
+    if GENAI_PROMPT_RESOURCE_PATH.exists():
+        return GENAI_PROMPT_RESOURCE_PATH.read_text(encoding="utf-8")
+    return (
+        "In the attachment, you should find exactly these TWO files:\n"
+        "- retention_scores_genai*.tsv (containing the answers to grade)\n"
+        "- scoring_rubrics.html (containing the rubrics, instructions to follow, and information to know)\n\n"
+        "Fill in score (0-2), confidence (0-100%), and note (optional). Use q_element, creature, and answer_std only. "
+        "Preserve the TSV header and row order exactly. Return only the completed TSV.\n"
+    )
 
-If any file is missing, inaccessible, unreadable, or clearly incomplete, do not continue. Stop your response and state which file(s) are missing or unusable.
 
-Strict source rule:
-Use only the attached files. Do not browse the internet. Do not look up creature names, animal facts, game facts, images, or locations online. Do not use external knowledge, model memory, or assumptions about real animals, games, Minecraft, fantasy creatures, or naming conventions. These are study-specific fictional learning materials. If something is not supported by the attached rubric or creature information, treat it as unknown.
+def _resource_creature_image_path(image_value: object) -> Path | None:
+    image_name = Path(clean(image_value)).name
+    if not image_name:
+        return None
+    candidates = [
+        RESOURCES_DIR / "static" / "creatures" / image_name,
+        RESOURCES_DIR / "interactive_app" / "static" / "creatures" / image_name,
+        Path(clean(image_value)),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
-Task:
-Fill in the attached retention_scores_genai*.tsv file. Keep the row order exactly the same. Do not add, delete, reorder, rename, or reformat columns. For every row, evaluate the standardised retention answer using only the attached rubric and creature information.
 
-Columns to fill:
-- score (0-4): an integer from 0 to 4 only.
-- confidence (0-100%): your confidence percentage as a number from 0 to 100 only. Do not include a percent sign.
-- note (optional): leave this cell empty unless a note is genuinely needed. Add a note only for ambiguity, borderline scores, uncertainty, suspected rubric tension, missing/unclear source information, or a reason a human should inspect the row. Do not add routine notes for evident answers.
 
-Important scoring rules:
-- Score the value in answer_std for the listed question and creature.
-- Use the four question rubrics exactly as supplied.
-- The answer text has already been standardised; do not punish lowercase, stripped whitespace, or simple formatting loss.
-- Do not reward an answer for being plausible in general. Reward it only when it matches the supplied study-specific creature information and rubric.
-- Do not infer hidden intent when the answer is vague. If the answer could refer to multiple things and the rubric does not make it clearly correct, lower the score and add a short note.
-- If the answer is blank, equivalent to "I do not know", nonsensical, or off-topic, score it 0.
-- If an answer contains both correct and incorrect elements, apply the rubric rather than automatically giving full credit. Use the note only if the mixed answer needs human inspection.
-- The same answer may occur for many participants. Score the row once as the score for all identical cases represented by that row.
-- If the same answer seems correct for one creature but not another, score each row according to the listed creature only.
-- If the rubric and creature information appear to conflict, follow the rubric where possible and add a note.
+def _register_thesis_pdf_fonts() -> tuple[str, str, str]:
+    """Return regular/bold/italic font names approximating style.sty.
 
-TSV output rules:
-- Preserve valid TSV format.
-- Preserve the original header exactly.
-- Preserve the original row order exactly.
-- Preserve all existing cell values except the three columns you are asked to fill.
-- Do not add markdown, explanations, comments, code fences, bullet points, or surrounding text around the TSV.
-- Return only the completed TSV content or a completed TSV attachment, depending on the interface you are using.
-"""
+    The manuscript uses Georgia when available, with a Times-like fallback.
+    This helper keeps the generated appendix PDFs portable across Windows,
+    macOS, Linux, and CI environments.
+    """
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
 
+    candidates = [
+        ("Georgia", "C:/Windows/Fonts/georgia.ttf", "C:/Windows/Fonts/georgiab.ttf", "C:/Windows/Fonts/georgiai.ttf"),
+        ("Georgia", "/Library/Fonts/Georgia.ttf", "/Library/Fonts/Georgia Bold.ttf", "/Library/Fonts/Georgia Italic.ttf"),
+        ("TeXGyreTermes", "/usr/share/fonts/opentype/tex-gyre/texgyretermes-regular.otf", "/usr/share/fonts/opentype/tex-gyre/texgyretermes-bold.otf", "/usr/share/fonts/opentype/tex-gyre/texgyretermes-italic.otf"),
+        ("DejaVuSerif", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf"),
+    ]
+    for family, regular, bold, italic in candidates:
+        try:
+            regular_path = Path(regular)
+            if not regular_path.exists():
+                continue
+            pdfmetrics.registerFont(TTFont(family, regular))
+            bold_name = family
+            italic_name = family
+            if Path(bold).exists():
+                bold_name = f"{family}-Bold"
+                pdfmetrics.registerFont(TTFont(bold_name, bold))
+            if Path(italic).exists():
+                italic_name = f"{family}-Italic"
+                pdfmetrics.registerFont(TTFont(italic_name, italic))
+            return family, bold_name, italic_name
+        except Exception:
+            continue
+    return "Times-Roman", "Times-Bold", "Times-Italic"
+
+
+def _pdf_markup_text(value: object, *, preserve_breaks: bool = True, collapse: bool = False) -> str:
+    """Escape user/rubric text while formatting rubric tokens for ReportLab."""
+    text = clean(value)
+    if not text:
+        return "—"
+    text = text.replace("\u00a0", " ")
+    if collapse:
+        text = re.sub(r"\s+", " ", text).strip()
+        text = text.replace("/ [FAN] / [SRC]", "/ [FAN] / [SRC]")
+    escaped = html.escape(text)
+    escaped = re.sub(r"\[(SRC|FAN)\]", r'<font color="#3C78D8"><b>[\1]</b></font>', escaped)
+    if preserve_breaks:
+        escaped = escaped.replace("\n", "<br/>")
+    return escaped or "—"
+
+
+def _plain_text_from_html_fragment(fragment: object, *, collapse: bool = True) -> str:
+    text = clean(fragment)
+    if not text:
+        return ""
+    text = re.sub(r"<\s*br\s*/?\s*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\s*/\s*(p|h[1-6]|li)\s*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text).replace("\u00a0", " ")
+    if collapse:
+        text = re.sub(r"\s+", " ", text).strip()
+    else:
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text
+
+
+def _instruction_sections_from_html(instructions_html: object) -> list[dict[str, Any]]:
+    """Extract h2 sections with paragraphs and bullets from the uploaded rubric HTML."""
+    source = clean(instructions_html)
+    if not source:
+        return []
+    h2_matches = list(re.finditer(r"<h2\b[^>]*>(.*?)</h2>", source, flags=re.IGNORECASE | re.DOTALL))
+    sections: list[dict[str, Any]] = []
+    for index, match in enumerate(h2_matches):
+        title = _plain_text_from_html_fragment(match.group(1), collapse=True)
+        # Manuscript appendix wording: keep the HTML source content, but remove
+        # this purely parenthetical reminder from the printed section heading.
+        title = re.sub(r"\s*\(\+ examples\)\s*$", "", title, flags=re.IGNORECASE).strip()
+        body_start = match.end()
+        body_end = h2_matches[index + 1].start() if index + 1 < len(h2_matches) else len(source)
+        body = source[body_start:body_end]
+        items: list[dict[str, str]] = []
+        for part_match in re.finditer(r"<(p|li)\b[^>]*>(.*?)</\1>", body, flags=re.IGNORECASE | re.DOTALL):
+            tag = part_match.group(1).lower()
+            # Collapse HTML/newline artefacts from Google Docs spans. This keeps
+            # normal paragraph wrapping to ReportLab and avoids mid-sentence line
+            # breaks such as before/after inline emphasis.
+            text = _plain_text_from_html_fragment(part_match.group(2), collapse=True)
+            if not text:
+                continue
+            items.append({"type": "bullet" if tag == "li" else "paragraph", "text": text})
+        sections.append({"title": title, "items": items})
+    return sections
+
+
+def _retention_pdf_styles() -> dict[str, Any]:
+    """Shared ReportLab styles for manuscript appendix PDFs."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+    font_regular, font_bold, font_italic = _register_thesis_pdf_fonts()
+    base = getSampleStyleSheet()
+    return {
+        "font_regular": font_regular,
+        "font_bold": font_bold,
+        "font_italic": font_italic,
+        "title_color": colors.HexColor("#28393B"),
+        "h1_color": colors.HexColor("#1F2A44"),
+        "h2_color": colors.HexColor("#35506B"),
+        "h3_color": colors.HexColor("#567087"),
+        "table_header": colors.HexColor("#DCEBEC"),
+        "table_stripe": colors.HexColor("#F1F8F8"),
+        "rule": colors.HexColor("#000000"),
+        "score_bg": {"2": colors.HexColor("#93C47D"), "1": colors.HexColor("#F6B26B"), "0": colors.HexColor("#E06666")},
+        "content_bg": {"2": colors.HexColor("#D9EAD3"), "1": colors.HexColor("#FCE5CD"), "0": colors.HexColor("#F4CCCC")},
+        "inner_label_bg": {"2": colors.HexColor("#B6D7A8"), "1": colors.HexColor("#F9CB9C"), "0": colors.HexColor("#EA9999")},
+        "inner_example_bg": colors.HexColor("#F3F3F3"),
+        "title": ParagraphStyle("RetentionAppendixTitle", parent=base["Title"], fontName=font_bold, fontSize=20, leading=24, textColor=colors.HexColor("#28393B"), alignment=TA_LEFT, spaceAfter=8),
+        "h2": ParagraphStyle("RetentionAppendixH2", parent=base["Heading2"], fontName=font_bold, fontSize=16, leading=19, textColor=colors.HexColor("#35506B"), spaceBefore=0, spaceAfter=5),
+        "h3": ParagraphStyle("RetentionAppendixH3", parent=base["Heading3"], fontName=font_bold, fontSize=12, leading=14, textColor=colors.HexColor("#567087"), spaceBefore=0, spaceAfter=4),
+        "body": ParagraphStyle("RetentionAppendixBody", parent=base["BodyText"], fontName=font_regular, fontSize=8.7, leading=10.7, alignment=TA_LEFT, spaceAfter=4),
+        "bullet": ParagraphStyle("RetentionAppendixBullet", parent=base["BodyText"], fontName=font_regular, fontSize=8.7, leading=10.7, alignment=TA_LEFT, leftIndent=14, firstLineIndent=-8, bulletIndent=4, spaceAfter=2),
+        "small": ParagraphStyle("RetentionAppendixSmall", parent=base["BodyText"], fontName=font_regular, fontSize=7.8, leading=9.2, textColor=colors.HexColor("#444444"), spaceAfter=4),
+        "table": ParagraphStyle("RetentionAppendixTable", parent=base["BodyText"], fontName=font_regular, fontSize=6.6, leading=7.7, alignment=TA_LEFT, spaceAfter=0),
+        "table_label": ParagraphStyle("RetentionAppendixTableLabel", parent=base["BodyText"], fontName=font_regular, fontSize=6.5, leading=7.6, alignment=TA_LEFT, spaceAfter=0),
+        "table_head": ParagraphStyle("RetentionAppendixTableHead", parent=base["BodyText"], fontName=font_bold, fontSize=7.4, leading=8.8, alignment=TA_LEFT, spaceAfter=0),
+        "score": ParagraphStyle("RetentionAppendixScore", parent=base["BodyText"], fontName=font_bold, fontSize=16, leading=18, textColor=colors.white, alignment=TA_LEFT, spaceAfter=0),
+    }
+
+
+def _appendix_page_number(canvas, doc) -> None:  # type: ignore[no-untyped-def]
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+
+    styles = getattr(doc, "_retention_styles", None) or {}
+    font_regular = styles.get("font_regular", "Times-Roman")
+    canvas.saveState()
+    canvas.setFont(font_regular, 9)
+    canvas.drawRightString(A4[0] - doc.rightMargin, A4[1] - 1.25 * cm, str(doc.page))
+    canvas.restoreState()
+
+
+def _horizontal_rule(width: float) -> Any:
+    from reportlab.platypus import HRFlowable
+    return HRFlowable(width=width, thickness=0.8, color="#000000", spaceBefore=1, spaceAfter=10)
+
+
+def _safe_paragraph(value: object, style: Any, *, preserve_breaks: bool = True, collapse: bool = False) -> Any:
+    from reportlab.platypus import Paragraph
+    return Paragraph(_pdf_markup_text(value, preserve_breaks=preserve_breaks, collapse=collapse), style)
+
+
+def write_creature_info_pdf(rubric: dict[str, Any], path: Path = CREATURE_INFO_PDF_PATH) -> None:
+    """Write the creature-information manuscript appendix as a block-based PDF."""
+    try:
+        from PIL import Image as PILImage
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer
+    except Exception as exc:  # pragma: no cover - environment fallback
+        raise RuntimeError("Creating creature_info.pdf requires reportlab and pillow to be installed.") from exc
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_tmp = path.parent / "_creature_pdf_images"
+    if legacy_tmp.exists():
+        shutil.rmtree(legacy_tmp, ignore_errors=True)
+
+    styles = _retention_pdf_styles()
+    width, _height = A4
+    margin = 2.54 * cm
+    content_w = width - 2 * margin
+    doc = SimpleDocTemplate(
+        str(path), pagesize=A4,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
+        title="Materials: Creature Information",
+    )
+    doc._retention_styles = styles  # type: ignore[attr-defined]
+    story: list[Any] = [
+        Paragraph("Materials: Creature Information", styles["title"]),
+        _horizontal_rule(content_w),
+    ]
+    image_buffers: list[Any] = []
+
+    creatures = rubric.get("creatures") or {}
+    ordered = sorted(creatures.items(), key=lambda item: clean((item[1] or {}).get("name")).lower())
+    for creature_id, creature in ordered:
+        name = clean(creature.get("name")) or creature_id
+        block: list[Any] = [
+            Paragraph(name, styles["h2"]),
+            _safe_paragraph(f"Creature id: {creature_id}", styles["small"], collapse=True),
+        ]
+        image_path = _resource_creature_image_path(creature.get("image"))
+        if image_path:
+            try:
+                with PILImage.open(image_path) as source_image:
+                    image = source_image.convert("RGB")
+                    image.thumbnail((1800, 900), PILImage.LANCZOS)
+                    img_w, img_h = image.size
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="JPEG", quality=88, optimize=True)
+                    buffer.seek(0)
+                image_buffers.append(buffer)
+                max_w, max_h = content_w, 8.5 * cm
+                ratio = min(max_w / max(1, img_w), max_h / max(1, img_h))
+                block.append(Image(buffer, width=img_w * ratio, height=img_h * ratio, hAlign="CENTER"))
+                block.append(Spacer(1, 6))
+            except Exception:
+                block.append(_safe_paragraph(f"Image unavailable: {image_path.name}", styles["small"], collapse=True))
+        else:
+            block.append(_safe_paragraph("Image unavailable", styles["small"], collapse=True))
+
+        chapter = clean(creature.get("chapter")) or "—"
+        environment = clean(creature.get("environment")) or "—"
+        if chapter != "—" and environment != "—":
+            place = f"{chapter} ({environment})"
+        elif chapter != "—":
+            place = chapter
+        else:
+            place = environment
+        appearance = clean(creature.get("appearance")) or "—"
+        facts = [clean(fact) for fact in (creature.get("facts") or []) if clean(fact)]
+        block.extend([
+            Paragraph(f"<b>Place:</b> {_pdf_markup_text(place, preserve_breaks=True)}", styles["body"]),
+            Paragraph(f"<b>Appearance:</b> {_pdf_markup_text(appearance, preserve_breaks=True)}", styles["body"]),
+        ])
+        if facts:
+            fact_markup = "<br/>".join(f"• {html.escape(fact)}" for fact in facts)
+            block.append(Paragraph(f"<b>Facts:</b><br/>{fact_markup}", styles["body"]))
+        else:
+            block.append(Paragraph("<b>Facts:</b> —", styles["body"]))
+        block.append(Spacer(1, 10))
+        story.append(KeepTogether(block))
+
+    doc.build(story, onFirstPage=_appendix_page_number, onLaterPages=_appendix_page_number)
+
+
+def _content_rows_for_pdf(content: Any) -> list[tuple[str, str]]:
+    """Return mini-table rows as label/example pairs."""
+    if isinstance(content, dict):
+        rows: list[tuple[str, str]] = []
+        for label, examples in content.items():
+            rows.append((clean(label), clean(examples)))
+        return rows or [("", "—")]
+    if isinstance(content, list):
+        rows = []
+        for item in content:
+            if isinstance(item, dict):
+                rows.extend((clean(key), clean(value)) for key, value in item.items())
+            elif clean(item):
+                rows.append(("", clean(item)))
+        return rows or [("", "—")]
+    return [("", clean(content) or "—")]
+
+
+def _mini_table_for_rubric_content(content: Any, score: str, styles: dict[str, Any], width: float) -> Any:
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    rows = _content_rows_for_pdf(content)
+    table_data: list[list[Any]] = []
+    for label, examples in rows:
+        label_para = Paragraph(_pdf_markup_text(label or "—", collapse=True), styles["table_label"])
+        examples_para = Paragraph(_pdf_markup_text(examples or "—", preserve_breaks=True), styles["table"])
+        table_data.append([label_para, examples_para])
+    inner = Table(table_data, colWidths=[width * 0.66, width * 0.34], hAlign="LEFT", splitByRow=1)
+    row_styles: list[tuple[Any, ...]] = [
+        ("GRID", (0, 0), (-1, -1), 0.5, styles["rule"]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]
+    for row_index in range(len(table_data)):
+        row_styles.append(("BACKGROUND", (0, row_index), (0, row_index), styles["inner_label_bg"].get(score, styles["table_stripe"])))
+        row_styles.append(("BACKGROUND", (1, row_index), (1, row_index), styles["inner_example_bg"]))
+    inner.setStyle(TableStyle(row_styles))
+    return inner
+
+
+def _rubric_table_for_creature(rows: list[dict[str, Any]], styles: dict[str, Any], content_w: float) -> Any:
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    score_col_w = 1.45 * cm
+    content_col_w = content_w - score_col_w
+    table_data: list[list[Any]] = [[Paragraph("Score", styles["table_head"]), Paragraph("Possible answers", styles["table_head"])] ]
+    row_styles: list[tuple[Any, ...]] = [
+        ("GRID", (0, 0), (-1, -1), 0.6, styles["rule"]),
+        ("BACKGROUND", (0, 0), (-1, 0), styles["table_header"]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]
+    for row in rows:
+        score = clean(row.get("score"))
+        row_index = len(table_data)
+        table_data.append([
+            Paragraph(html.escape(score or "—"), styles["score"]),
+            _mini_table_for_rubric_content(row.get("content"), score, styles, content_col_w - 10),
+        ])
+        row_styles.extend([
+            ("BACKGROUND", (0, row_index), (0, row_index), styles["score_bg"].get(score, styles["table_stripe"])),
+            ("BACKGROUND", (1, row_index), (1, row_index), styles["content_bg"].get(score, styles["table_stripe"])),
+        ])
+    table = Table(table_data, colWidths=[score_col_w, content_col_w], repeatRows=1, hAlign="LEFT", splitByRow=1)
+    table.setStyle(TableStyle(row_styles))
+    return table
+
+
+def expanded_rubric_rows_grouped_for_pdf(table: dict[str, Any], score_scale: list[Any]) -> list[dict[str, Any]]:
+    """Group expanded rubric rows per creature for block-based PDF rendering."""
+    groups: list[dict[str, Any]] = []
+    source_rows_by_key: dict[str, dict[str, Any]] = {}
+    for source_row in table.get("rows") or []:
+        key = clean(source_row.get("creature_id")) or clean(source_row.get("creature"))
+        if key:
+            source_rows_by_key[key] = source_row
+    for row in expanded_rubric_rows(table, score_scale):
+        creature_key = clean(row.get("creature_id")) or clean(row.get("creature"))
+        if not groups or groups[-1]["key"] != creature_key:
+            source_row = source_rows_by_key.get(creature_key, {})
+            groups.append({
+                "key": creature_key,
+                "creature": clean(row.get("creature")),
+                "note": clean(source_row.get("note")) or clean(source_row.get("rubric_note")) or "—",
+                "rows": [],
+            })
+        groups[-1]["rows"].append(row)
+    return groups
+
+
+def write_scoring_rubrics_pdf(rubric: dict[str, Any], path: Path = SCORING_RUBRICS_PDF_PATH) -> None:
+    """Write the manuscript scoring-rubric appendix as a styled PDF."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer
+    except Exception as exc:  # pragma: no cover - environment fallback
+        raise RuntimeError("Creating scoring_rubrics.pdf requires reportlab to be installed.") from exc
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    styles = _retention_pdf_styles()
+    width, _height = A4
+    margin = 2.54 * cm
+    content_w = width - 2 * margin
+    doc = SimpleDocTemplate(
+        str(path), pagesize=A4,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
+        title="Materials: Retention Scoring Rubrics",
+    )
+    doc._retention_styles = styles  # type: ignore[attr-defined]
+    story: list[Any] = [
+        Paragraph("Materials: Retention Scoring Rubrics", styles["title"]),
+        _horizontal_rule(content_w),
+    ]
+
+    instruction_sections = _instruction_sections_from_html(rubric.get("instructions_html"))
+    if instruction_sections:
+        story.append(Paragraph("Instructions", styles["h2"]))
+        for section in instruction_sections:
+            section_block: list[Any] = [Paragraph(_pdf_markup_text(section.get("title"), collapse=True), styles["h3"])]
+            for item in section.get("items", []):
+                item_text = _pdf_markup_text(item.get("text"), preserve_breaks=False, collapse=True)
+                if item.get("type") == "bullet":
+                    section_block.append(Paragraph(item_text, styles["bullet"], bulletText="•"))
+                else:
+                    section_block.append(Paragraph(item_text, styles["body"]))
+            section_block.append(Spacer(1, 3))
+            story.append(KeepTogether(section_block))
+        story.append(Spacer(1, 10))
+
+    question_tables = rubric.get("question_rubric_tables") or {}
+    score_scale = rubric.get("score_scale", [0, 1, 2])
+    question_order = [key for key, _label in RETENTION_ELEMENT_SPECS if key in question_tables]
+
+    for q_element in question_order:
+        table_source = question_tables.get(q_element) or {}
+        q_title = clean(table_source.get("title")) or q_element
+        groups = expanded_rubric_rows_grouped_for_pdf(table_source, list(reversed(score_scale)))
+        if not groups:
+            story.append(KeepTogether([
+                Paragraph(q_title, styles["h2"]),
+                _safe_paragraph("No creature-specific rubric rows are present in the uploaded base HTML for this question element.", styles["small"], collapse=True),
+                Spacer(1, 10),
+            ]))
+            continue
+        first = True
+        for group in groups:
+            block: list[Any] = []
+            if first:
+                block.append(Paragraph(q_title, styles["h2"]))
+                if clean(table_source.get("intro")):
+                    block.append(_safe_paragraph(table_source.get("intro"), styles["body"], preserve_breaks=True))
+                first = False
+            block.extend([
+                Paragraph(clean(group.get("creature")) or "Creature", styles["h3"]),
+                Paragraph(f"Note: {_pdf_markup_text(clean(group.get('note')) or '—', preserve_breaks=True)}", styles["small"]),
+                _rubric_table_for_creature(group.get("rows") or [], styles, content_w),
+                Spacer(1, 10),
+            ])
+            story.append(KeepTogether(block))
+
+    doc.build(story, onFirstPage=_appendix_page_number, onLaterPages=_appendix_page_number)
 
 def write_prompt_support_files(rubric_path: Path = RUBRIC_JSON_PATH) -> None:
     rubric = load_rubric_json(rubric_path)
     DATA_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     GENAI_PROMPT_PATH.write_text(genai_prompt_text(), encoding="utf-8")
     SCORING_RUBRICS_HTML_PATH.write_text(render_scoring_rubrics_html(rubric), encoding="utf-8")
-    CREATURE_INFO_HTML_PATH.write_text(render_creature_info_html(rubric), encoding="utf-8")
+    write_scoring_rubrics_pdf(rubric, SCORING_RUBRICS_PDF_PATH)
+    write_creature_info_pdf(rubric, CREATURE_INFO_PDF_PATH)
 
 
 def prepare_retention_answer_files(survey_rows: list[dict[str, str]]) -> dict[str, Any]:
@@ -850,7 +1761,7 @@ def prepare_retention_answer_files(survey_rows: list[dict[str, str]]) -> dict[st
 
 def score_is_valid(value: object) -> bool:
     number = parse_numeric(value)
-    return number is not None and float(number).is_integer() and 0 <= int(number) <= 4
+    return number is not None and float(number).is_integer() and 0 <= int(number) <= 2
 
 
 def score_text(value: object) -> str:
@@ -858,7 +1769,7 @@ def score_text(value: object) -> str:
     if number is None or not float(number).is_integer():
         return ""
     score = int(number)
-    return str(score) if 0 <= score <= 4 else ""
+    return str(score) if 0 <= score <= 2 else ""
 
 
 def confidence_value(value: object) -> float | None:
@@ -884,14 +1795,14 @@ def load_one_genai_scores(path: Path) -> tuple[dict[tuple[str, str, str], dict[s
     lookup: dict[tuple[str, str, str], dict[str, str]] = {}
     problems: list[str] = []
     for index, row in enumerate(rows, start=2):
-        key = (clean(row.get("question")), clean(row.get("creature")), clean(row.get("answer_std")))
+        key = (clean(row.get("q_element")), clean(row.get("creature")), clean(row.get("answer_std")))
         if not all(key):
-            problems.append(f"{path.name} row {index}: question, creature, and answer_std must all be filled.")
+            problems.append(f"{path.name} row {index}: q_element, creature, and answer_std must all be filled.")
             continue
         if key in lookup:
             problems.append(f"{path.name} row {index}: duplicate GenAI score key: {key[0]} / {key[1]} / {key[2]}")
-        if not score_is_valid(row.get("score (0-4)")):
-            problems.append(f"{path.name} row {index}: score (0-4) must be an integer from 0 to 4.")
+        if not score_is_valid(row.get("score (0-2)")):
+            problems.append(f"{path.name} row {index}: score (0-2) must be an integer from 0 to 2.")
         if confidence_value(row.get("confidence (0-100%)")) is None:
             problems.append(f"{path.name} row {index}: confidence (0-100%) must be a number from 0 to 100.")
         lookup[key] = row
@@ -939,9 +1850,29 @@ def load_genai_scores(path: Path | None = None) -> tuple[dict[tuple[str, str, st
 
 def load_grader_score_sources() -> tuple[dict[str, dict[str, dict[str, str]]], list[str]]:
     labelled_paths = labelled_source_paths(discover_grader_score_paths(), kind="grader")
+    discovered_by_name = {path.name: (label, path) for label, path in labelled_paths}
     sources: dict[str, dict[str, dict[str, str]]] = {}
     problems: list[str] = []
+
+    for expected_path in configured_grader_score_paths():
+        if expected_path.name not in discovered_by_name:
+            problems.append(
+                f"Missing expected human grader file {expected_path.name}. Run python main.py score_ret grader=1 "
+                f"after GenAI scoring to create all AMOUNT_HUMAN={AMOUNT_HUMAN} base files, then complete each grader file."
+            )
+
     for label, path in labelled_paths:
+        rows = read_tsv(path)
+        if rows:
+            missing_columns = [column for column in GRADER_SCORE_FIELDNAMES if column not in rows[0]]
+            if missing_columns:
+                problems.append(f"{path.name} is missing column(s): {', '.join(missing_columns)}")
+            for index, row in enumerate(rows, start=2):
+                status = clean(row.get("status"))
+                if status == "graded" and not score_is_valid(row.get("score (0-2)")):
+                    problems.append(f"{path.name} row {index}: score (0-2) must be an integer from 0 to 2 when status is graded.")
+                if status and status not in {"graded", "skipped", "flagged"}:
+                    problems.append(f"{path.name} row {index}: status must be graded, skipped, or flagged.")
         sources[label] = load_grader_scores(path)
     return sources, problems
 
@@ -954,7 +1885,7 @@ def task_id_for_unique(question: str, creature: str, answer_std: str) -> str:
 def unique_task_lookup(prompt_rows: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
     genai_rows = build_unique_genai_rows(prompt_rows)
     occurrence_counts = Counter(
-        (row["question"], row["creature"], row["answer_std"])
+        (row["q_element"], row["creature"], row["answer_std"])
         for row in prompt_rows
         if clean(row.get("answer_std"))
     )
@@ -964,23 +1895,23 @@ def unique_task_lookup(prompt_rows: list[dict[str, str]]) -> dict[str, dict[str,
     for row in prompt_rows:
         if not clean(row.get("answer_std")):
             continue
-        key = (row["question"], row["creature"], row["answer_std"])
+        key = (row["q_element"], row["creature"], row["answer_std"])
         if len(raw_examples[key]) < 5 and clean(row.get("answer")) not in raw_examples[key]:
             raw_examples[key].append(clean(row.get("answer")))
         creature_id_by_key[key] = row["creature_id"]
-        question_key_by_question[row["question"]] = row["question_key"]
+        question_key_by_question[row["q_element"]] = row["question_key"]
 
     tasks: dict[str, dict[str, Any]] = {}
     for row in genai_rows:
-        key = (row["question"], row["creature"], row["answer_std"])
+        key = (row["q_element"], row["creature"], row["answer_std"])
         task_id = task_id_for_unique(*key)
-        question_key = question_key_by_question.get(row["question"], QUESTION_KEY_BY_QUESTION.get(row["question"], ""))
+        question_key = question_key_by_question.get(row["q_element"], QUESTION_KEY_BY_QUESTION.get(row["q_element"], ""))
         creature_id = creature_id_by_key.get(key, "")
         tasks[task_id] = {
             "task_id": task_id,
-            "question": row["question"],
+            "q_element": row["q_element"],
             "question_key": question_key,
-            "question_label": QUESTION_LABEL_BY_QUESTION.get(row["question"], question_key),
+            "question_label": QUESTION_LABEL_BY_QUESTION.get(row["q_element"], question_key),
             "creature": row["creature"],
             "creature_name": row["creature"],
             "creature_id": creature_id,
@@ -1016,7 +1947,7 @@ def build_review_tasks(prompt_rows: list[dict[str, str]], genai_lookup: dict[tup
 
     for task in tasks:
         genai_row = genai_by_task_id.get(task["task_id"], {})
-        task["genai_score"] = score_text(genai_row.get("score (0-4)"))
+        task["genai_score"] = score_text(genai_row.get("score (0-2)"))
         confidence = confidence_value(genai_row.get("confidence (0-100%)"))
         task["genai_confidence"] = "" if confidence is None else str(int(confidence) if confidence.is_integer() else confidence)
         task["genai_note"] = clean(genai_row.get("note (optional)"))
@@ -1028,7 +1959,7 @@ def build_review_tasks(prompt_rows: list[dict[str, str]], genai_lookup: dict[tup
     note_ids: set[str] = set()
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for task in tasks:
-        groups[(clean(task.get("question")), clean(task.get("confidence_bucket")))].append(task)
+        groups[(clean(task.get("q_element")), clean(task.get("confidence_bucket")))].append(task)
 
     for group_key, group in groups.items():
         ordered = sorted(group, key=lambda item: deterministic_order(f"validation-{group_key[0]}-{group_key[1]}-v1", item))
@@ -1056,12 +1987,102 @@ def build_review_tasks(prompt_rows: list[dict[str, str]], genai_lookup: dict[tup
         task["review_reasons"] = ",".join(dict.fromkeys(reasons))
 
     selected.sort(key=lambda task: (
-        QUESTION_SORT_INDEX.get(clean(task.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(task.get("q_element")), 999),
         clean(task.get("creature")).lower(),
         clean(task.get("answer_std")),
     ))
     return selected
 
+
+
+def review_manifest_row(task: dict[str, Any]) -> dict[str, Any]:
+    return {field: clean(task.get(field)) for field in REVIEW_TASK_FIELDNAMES}
+
+
+def read_review_manifest(path: Path = REVIEW_TASKS_PATH) -> list[dict[str, Any]]:
+    rows = read_tsv(path)
+    if not rows:
+        return []
+    if any(field not in rows[0] for field in REVIEW_TASK_FIELDNAMES):
+        return []
+    return [dict(row) for row in rows if clean(row.get("task_id"))]
+
+
+def write_review_manifest(tasks: list[dict[str, Any]], path: Path = REVIEW_TASKS_PATH) -> None:
+    rows = [review_manifest_row(task) for task in tasks]
+    write_tsv(path, REVIEW_TASK_FIELDNAMES, rows)
+
+
+def review_task_id_set(tasks: list[dict[str, Any]]) -> set[str]:
+    return {clean(task.get("task_id")) for task in tasks if clean(task.get("task_id"))}
+
+
+def load_or_build_review_manifest(
+    prompt_rows: list[dict[str, str]],
+    genai_lookup: dict[tuple[str, str, str], dict[str, str]],
+    *,
+    force: bool = False,
+) -> list[dict[str, Any]]:
+    """Return the frozen human review queue, creating it when needed.
+
+    Once retention_review_tasks.tsv exists, the scoring app reuses it so both
+    human coders receive exactly the same task IDs even on different devices.
+    Delete the manifest deliberately if the GenAI files or source data must be
+    regenerated.
+    """
+    current_tasks = build_review_tasks(prompt_rows, genai_lookup)
+    if not force and REVIEW_TASKS_PATH.exists():
+        existing = read_review_manifest(REVIEW_TASKS_PATH)
+        if existing:
+            return existing
+    write_review_manifest(current_tasks, REVIEW_TASKS_PATH)
+    return current_tasks
+
+
+def grader_base_rows_from_tasks(tasks: list[dict[str, Any]], existing_rows: dict[str, dict[str, str]] | None = None) -> dict[str, dict[str, Any]]:
+    existing_rows = existing_rows or {}
+    rows: dict[str, dict[str, Any]] = {}
+    for task in tasks:
+        task_id = clean(task.get("task_id"))
+        if not task_id:
+            continue
+        previous = existing_rows.get(task_id, {})
+        rows[task_id] = {
+            "task_id": task_id,
+            "q_element": clean(task.get("q_element")),
+            "question_key": clean(task.get("question_key")),
+            "creature": clean(task.get("creature")),
+            "creature_id": clean(task.get("creature_id")),
+            "answer_std": clean(task.get("answer_std")),
+            "score (0-2)": clean(previous.get("score (0-2)")),
+            "status": clean(previous.get("status")),
+            "note (optional)": clean(previous.get("note (optional)")),
+            "updated_at": clean(previous.get("updated_at")),
+        }
+    return rows
+
+
+def ensure_human_score_files(tasks: list[dict[str, Any]]) -> None:
+    """Create all configured human base files from the same manifest.
+
+    Existing human files are preserved row-for-row where task IDs still exist,
+    so rerunning score_ret does not wipe completed grading.
+    """
+    expected_ids = review_task_id_set(tasks)
+    for path in configured_grader_score_paths():
+        existing = load_grader_scores(path) if path.exists() else {}
+        rows = grader_base_rows_from_tasks(tasks, existing)
+        if set(existing) != expected_ids or not path.exists():
+            write_grader_scores(path, rows)
+
+
+def prepare_human_review_files(
+    prompt_rows: list[dict[str, str]],
+    genai_lookup: dict[tuple[str, str, str], dict[str, str]],
+) -> list[dict[str, Any]]:
+    tasks = load_or_build_review_manifest(prompt_rows, genai_lookup)
+    ensure_human_score_files(tasks)
+    return tasks
 
 def load_grader_scores(path: Path) -> dict[str, dict[str, str]]:
     rows = read_tsv(path)
@@ -1075,7 +2096,7 @@ def load_grader_scores(path: Path) -> dict[str, dict[str, str]]:
 
 def write_grader_scores(path: Path, rows_by_task_id: dict[str, dict[str, Any]]) -> None:
     rows = sorted(rows_by_task_id.values(), key=lambda row: (
-        QUESTION_SORT_INDEX.get(clean(row.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(row.get("q_element")), 999),
         clean(row.get("creature")).lower(),
         clean(row.get("answer_std")),
     ))
@@ -1084,7 +2105,7 @@ def write_grader_scores(path: Path, rows_by_task_id: dict[str, dict[str, Any]]) 
 
 def validate_genai_completeness(prompt_rows: list[dict[str, str]], genai_lookup: dict[tuple[str, str, str], dict[str, str]]) -> list[str]:
     expected = {
-        (row["question"], row["creature"], row["answer_std"])
+        (row["q_element"], row["creature"], row["answer_std"])
         for row in build_unique_genai_rows(prompt_rows)
     }
     missing = sorted(expected - set(genai_lookup), key=lambda key: (QUESTION_SORT_INDEX.get(key[0], 999), key[1].lower(), key[2]))
@@ -1100,7 +2121,7 @@ def append_problem(problems: list[str], message: str, *, limit: int = 75) -> Non
         problems.append(message)
 
 
-def score_source_values(source_rows: dict[str, dict[str, str]], *, score_field: str = "score (0-4)") -> dict[str, str]:
+def score_source_values(source_rows: dict[str, dict[str, str]], *, score_field: str = "score (0-2)") -> dict[str, str]:
     return {
         label: score_text(row.get(score_field))
         for label, row in source_rows.items()
@@ -1200,22 +2221,24 @@ def auto_final_fields_for_row(
     return FINAL_SCORE_PLACEHOLDER, "needs_adjudication", auto_final_note_for_scores(genai_scores, grader_scores), ""
 
 
-def merged_row_exact_key(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
+def merged_row_exact_key(row: dict[str, Any]) -> tuple[str, str, str, str, str, str]:
     return (
         clean(row.get("MCID")),
         clean(row.get("moment")),
         clean(row.get("creature_id")),
         clean(row.get("question_key")),
+        clean(row.get("q_element")),
         clean(row.get("answer_std")),
     )
 
 
-def merged_row_identity_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+def merged_row_identity_key(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
     return (
         clean(row.get("MCID")),
         clean(row.get("moment")),
         clean(row.get("creature_id")),
         clean(row.get("question_key")),
+        clean(row.get("q_element")),
     )
 
 
@@ -1263,7 +2286,7 @@ def warn_on_non_final_drift(
     if not existing_rows:
         return
 
-    existing_by_identity: dict[tuple[str, str, str, str], dict[str, str]] = {}
+    existing_by_identity: dict[tuple[str, str, str, str, str], dict[str, str]] = {}
     for row in existing_rows:
         key = merged_row_identity_key(row)
         if all(key):
@@ -1289,6 +2312,7 @@ def warn_on_non_final_drift(
                 f"moment={clean(row.get('moment')) or 'NA'}",
                 f"creature_id={clean(row.get('creature_id')) or 'NA'}",
                 f"question_key={clean(row.get('question_key')) or 'NA'}",
+                f"q_element={clean(row.get('q_element')) or 'NA'}",
             ])
             preview = ", ".join(changed[:12])
             suffix = f" (+{len(changed) - 12} more)" if len(changed) > 12 else ""
@@ -1319,10 +2343,20 @@ def build_prompt_score_rows(
     problems = list(genai_problems)
     problems.extend(validate_genai_completeness(prompt_rows, genai_lookup))
 
-    review_tasks = build_review_tasks(prompt_rows, genai_lookup)
+    review_tasks = read_review_manifest()
+    if review_tasks:
+        current_review_ids = {task["task_id"] for task in build_review_tasks(prompt_rows, genai_lookup)}
+        manifest_ids = review_task_id_set(review_tasks)
+        if current_review_ids and not manifest_ids.issubset(current_review_ids):
+            missing_preview = ", ".join(sorted(manifest_ids - current_review_ids)[:10])
+            append_problem(problems, f"Frozen human review manifest contains task_id(s) no longer present in the current data/GenAI rows: {missing_preview}")
+    else:
+        review_tasks = build_review_tasks(prompt_rows, genai_lookup)
+        if require_complete_review:
+            append_problem(problems, "retention_review_tasks.tsv is missing; run python main.py score_ret grader=1 after GenAI scoring to freeze the human review queue.")
     required_review_ids = {task["task_id"] for task in review_tasks}
     occurrence_counts = Counter(
-        (row["question"], row["creature"], row["answer_std"])
+        (row["q_element"], row["creature"], row["answer_std"])
         for row in prompt_rows
         if clean(row.get("answer_std"))
     )
@@ -1331,7 +2365,7 @@ def build_prompt_score_rows(
     if required_review_ids and not grader_sources:
         problems.append(
             "No retention_scores_grader*.tsv files found. Run python main.py score_ret grader=1 "
-            "to create a human-validation file, and repeat with another positive integer for additional graders."
+            "to create the frozen human-validation manifest and all configured human base files."
         )
 
     genai_labels = sorted(genai_sources, key=natural_source_key)
@@ -1339,7 +2373,7 @@ def build_prompt_score_rows(
 
     rows: list[dict[str, Any]] = []
     for row in prompt_rows:
-        key = (row["question"], row["creature"], row["answer_std"])
+        key = (row["q_element"], row["creature"], row["answer_std"])
         task_id = "" if not row["answer_std"] else task_id_for_unique(*key)
 
         genai_rows_for_key = {
@@ -1353,7 +2387,7 @@ def build_prompt_score_rows(
         genai_missing_labels = [
             label
             for label in genai_labels
-            if row["answer_std"] and not score_text(genai_rows_for_key.get(label, {}).get("score (0-4)"))
+            if row["answer_std"] and not score_text(genai_rows_for_key.get(label, {}).get("score (0-2)"))
         ]
 
         grader_rows_for_task = {
@@ -1362,7 +2396,7 @@ def build_prompt_score_rows(
             if task_id
         }
         graded_human_scores = {
-            label: score_text(source_row.get("score (0-4)"))
+            label: score_text(source_row.get("score (0-2)"))
             for label, source_row in grader_rows_for_task.items()
             if clean(source_row.get("status")) == "graded"
         }
@@ -1373,7 +2407,7 @@ def build_prompt_score_rows(
             if task_id
             and (
                 clean(grader_rows_for_task.get(label, {}).get("status")) != "graded"
-                or not score_text(grader_rows_for_task.get(label, {}).get("score (0-4)"))
+                or not score_text(grader_rows_for_task.get(label, {}).get("score (0-2)"))
             )
         ]
 
@@ -1398,12 +2432,12 @@ def build_prompt_score_rows(
                 old_status = "needs_human_scores"
                 if require_complete_review:
                     missing_text = ", ".join(human_missing_labels) if human_missing_labels else "all grader files"
-                    append_problem(problems, f"Human review incomplete for {row['question']} / {row['creature']} / {row['answer_std'][:80]} (missing: {missing_text})")
+                    append_problem(problems, f"Human review incomplete for {row['q_element']} / {row['creature']} / {row['answer_std'][:80]} (missing: {missing_text})")
             elif not human_agreement_score:
                 old_status = "needs_adjudication"
                 if require_complete_review:
                     score_texts = ", ".join(f"{label}={score or 'missing'}" for label, score in graded_human_scores.items())
-                    append_problem(problems, f"Human disagreement unresolved for {row['question']} / {row['creature']} / {row['answer_std'][:80]}: {score_texts}")
+                    append_problem(problems, f"Human disagreement unresolved for {row['q_element']} / {row['creature']} / {row['answer_std'][:80]}: {score_texts}")
             else:
                 old_status = "human_agreement"
         else:
@@ -1411,12 +2445,12 @@ def build_prompt_score_rows(
                 old_status = "needs_genai_scores"
                 if require_complete_review:
                     missing_text = ", ".join(genai_missing_labels) if genai_missing_labels else "all GenAI files"
-                    append_problem(problems, f"GenAI scoring incomplete for {row['question']} / {row['creature']} / {row['answer_std'][:80]} (missing: {missing_text})")
+                    append_problem(problems, f"GenAI scoring incomplete for {row['q_element']} / {row['creature']} / {row['answer_std'][:80]} (missing: {missing_text})")
             elif not genai_agreement_score:
                 old_status = "needs_genai_adjudication"
                 if require_complete_review:
                     score_texts = ", ".join(f"{label}={score or 'missing'}" for label, score in genai_scores.items())
-                    append_problem(problems, f"GenAI source disagreement for {row['question']} / {row['creature']} / {row['answer_std'][:80]}: {score_texts}")
+                    append_problem(problems, f"GenAI source disagreement for {row['q_element']} / {row['creature']} / {row['answer_std'][:80]}: {score_texts}")
             else:
                 old_status = "genai" if len(genai_labels) <= 1 else "genai_agreement"
 
@@ -1435,16 +2469,16 @@ def build_prompt_score_rows(
         ):
             append_problem(
                 problems,
-                f"Retention score conflict for {row['question']} / {row['creature']} / {row['answer_std'][:80]}: {final_note_auto}",
+                f"Retention score conflict for {row['q_element']} / {row['creature']} / {row['answer_std'][:80]}: {final_note_auto}",
             )
 
         merged_row: dict[str, Any] = {
             "MCID": row["participant_id"],
             "creature": row["creature"],
-            "question": row["question"],
+            "q_element": row["q_element"],
             "answer": row["answer"],
             "answer_std": row["answer_std"],
-            "genai_score": score_text(primary_genai.get("score (0-4)")),
+            "genai_score": score_text(primary_genai.get("score (0-2)")),
             "genai_confidence": clean(primary_genai.get("confidence (0-100%)")),
             "genai_note": clean(primary_genai.get("note (optional)")),
             "moment": row["moment"],
@@ -1461,13 +2495,13 @@ def build_prompt_score_rows(
 
         for label in genai_labels:
             source_row = genai_rows_for_key.get(label, {})
-            merged_row[f"{label}_score"] = score_text(source_row.get("score (0-4)"))
+            merged_row[f"{label}_score"] = score_text(source_row.get("score (0-2)"))
             merged_row[f"{label}_confidence"] = clean(source_row.get("confidence (0-100%)"))
             merged_row[f"{label}_note"] = clean(source_row.get("note (optional)"))
 
         for label in grader_labels:
             source_row = grader_rows_for_task.get(label, {})
-            merged_row[f"{label}_score"] = score_text(source_row.get("score (0-4)")) if clean(source_row.get("status")) == "graded" else ""
+            merged_row[f"{label}_score"] = score_text(source_row.get("score (0-2)")) if clean(source_row.get("status")) == "graded" else ""
             merged_row[f"{label}_status"] = clean(source_row.get("status"))
             merged_row[f"{label}_note"] = clean(source_row.get("note (optional)"))
 
@@ -1477,7 +2511,7 @@ def build_prompt_score_rows(
         clean(item.get("MCID")),
         clean(item.get("moment")),
         clean(item.get("creature")).lower(),
-        QUESTION_SORT_INDEX.get(clean(item.get("question")), 999),
+        QUESTION_SORT_INDEX.get(clean(item.get("q_element")), 999),
     ))
     return rows, problems
 
@@ -1509,3 +2543,247 @@ def refresh_retention_answers_from_genai(survey_rows: list[dict[str, str]]) -> t
     rows = build_retention_answer_rows(prompt_rows)
     write_tsv(RETENTION_ANSWERS_PATH, RETENTION_ANSWER_FIELDNAMES, rows)
     return len(rows), []
+
+
+def build_retention_scoring_checks(
+    survey_rows: list[dict[str, str]],
+    scoring_rows: list[dict[str, Any]] | None = None,
+    problems: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return ordered retention-scoring workflow steps for the HTML report.
+
+    The rows are deliberately phrased as a step-by-step checklist. Later steps
+    are marked as waiting when an earlier prerequisite still needs action, so a
+    user can fix the first blocking step instead of chasing downstream errors.
+    """
+    scoring_rows = scoring_rows or []
+    problems = problems or []
+    prompt_rows = build_prompt_rows_from_survey(survey_rows) if survey_rows else []
+
+    def symbol(status: str) -> str:
+        return {
+            "pass": "✅",
+            "action": "⭕",
+            "wait": "⏸",
+            "fail": "❌",
+        }.get(status, status)
+
+    def step(number: int, check: str, state: str, detail: str, action: str) -> dict[str, Any]:
+        status_symbol = symbol(state)
+        return {
+            "step": f"Step {number}/5",
+            "check": check,
+            "status": status_symbol,
+            "detail": detail or "—",
+            # Passing steps are deliberately quiet: the next action is only shown
+            # for the first blocking or cautionary step.
+            "action": "—" if status_symbol == "✅" else (action or "—"),
+        }
+
+    def rows_with_invalid_genai(path: Path) -> tuple[int, list[str], list[str], list[str], list[str]]:
+        rows = read_tsv(path)
+        missing_score: list[str] = []
+        missing_confidence: list[str] = []
+        bad_score: list[str] = []
+        bad_confidence: list[str] = []
+        for idx, row in enumerate(rows, start=2):
+            score_raw = clean(row.get("score (0-2)"))
+            conf_raw = clean(row.get("confidence (0-100%)"))
+            if not score_raw:
+                missing_score.append(str(idx))
+            elif not score_is_valid(score_raw):
+                bad_score.append(str(idx))
+            if not conf_raw:
+                missing_confidence.append(str(idx))
+            elif confidence_value(conf_raw) is None:
+                bad_confidence.append(str(idx))
+        return len(rows), missing_score, missing_confidence, bad_score, bad_confidence
+
+    def rows_with_invalid_human(path: Path) -> tuple[list[str], list[str], list[str]]:
+        rows = read_tsv(path)
+        missing_score: list[str] = []
+        bad_score: list[str] = []
+        not_graded: list[str] = []
+        for idx, row in enumerate(rows, start=2):
+            status = clean(row.get("status"))
+            score_raw = clean(row.get("score (0-2)"))
+            if status != "graded":
+                not_graded.append(str(idx))
+            if not score_raw:
+                missing_score.append(str(idx))
+            elif not score_is_valid(score_raw):
+                bad_score.append(str(idx))
+        return missing_score, bad_score, not_graded
+
+    def preview(items: list[str], limit: int = 12) -> str:
+        if not items:
+            return ""
+        suffix = f" (+{len(items) - limit} more)" if len(items) > limit else ""
+        return ", ".join(items[:limit]) + suffix
+
+    rows: list[dict[str, Any]] = []
+
+    expected_genai = configured_genai_score_paths()
+    present_genai = [path for path in expected_genai if path.exists()]
+    missing_genai = [path.name for path in expected_genai if not path.exists()]
+    genai_files_present = len(present_genai) == len(expected_genai)
+    rows.append(step(
+        1,
+        f"[{AMOUNT_GENAI}] GenAI base files present",
+        "pass" if genai_files_present else "action",
+        f"Found: {', '.join(path.name for path in present_genai) or 'none'}." + (f" Missing: {', '.join(missing_genai)}." if missing_genai else ""),
+        "Run `python main.py sum_merged` with `PUBLIC_ROUTE=False`. Then use `./data/config/genai_prompt.txt`, `./data/config/scoring_rubrics.html`, and the generated `./data/retention_scores_genai*.tsv` files.",
+    ))
+
+    genai_details: list[str] = []
+    genai_missing_details: list[str] = []
+    genai_invalid_details: list[str] = []
+    genai_too_much_missing = False
+    genai_has_any_missing = False
+    genai_has_invalid_values = False
+    genai_has_structural_problem = False
+    genai_filled = genai_files_present
+    if genai_files_present:
+        expected_cols = set(GENAI_SCORE_FIELDNAMES)
+        for path in expected_genai:
+            file_rows = read_tsv(path)
+            missing_cols = sorted(expected_cols - set(file_rows[0].keys() if file_rows else []))
+            if missing_cols:
+                genai_filled = False
+                genai_has_structural_problem = True
+                genai_details.append(f"{path.name}: missing column(s) {', '.join(missing_cols)}")
+                continue
+            n_rows, missing_score, missing_confidence, bad_score, bad_confidence = rows_with_invalid_genai(path)
+            denom = max(1, n_rows)
+            file_missing_parts: list[str] = []
+            if missing_score:
+                genai_has_any_missing = True
+                score_pct = 100 * len(missing_score) / denom
+                if len(missing_score) / denom > 0.10:
+                    genai_too_much_missing = True
+                file_missing_parts.append(f"score (0-2): rows {preview(missing_score)} ({score_pct:.1f}%)")
+            if missing_confidence:
+                genai_has_any_missing = True
+                conf_pct = 100 * len(missing_confidence) / denom
+                if len(missing_confidence) / denom > 0.10:
+                    genai_too_much_missing = True
+                file_missing_parts.append(f"confidence (0-100%): rows {preview(missing_confidence)} ({conf_pct:.1f}%)")
+            if file_missing_parts:
+                genai_filled = False
+                genai_missing_details.append(f"{path.name}\n- " + "\n- ".join(file_missing_parts))
+            file_invalid_parts: list[str] = []
+            if bad_score:
+                genai_has_invalid_values = True
+                file_invalid_parts.append(f"score outside 0-2 rows {preview(bad_score)}")
+            if bad_confidence:
+                genai_has_invalid_values = True
+                file_invalid_parts.append(f"confidence outside 0-100 rows {preview(bad_confidence)}")
+            if file_invalid_parts:
+                genai_filled = False
+                genai_invalid_details.append(f"{path.name}: " + "; ".join(file_invalid_parts))
+
+    if genai_filled:
+        genai_state = "pass"
+        genai_detail = f"Found: {', '.join(path.name for path in expected_genai)}."
+        genai_action = "—"
+    elif not genai_files_present:
+        genai_state = "wait"
+        genai_detail = "Fix step 1 first."
+        genai_action = "Fix step 1 first."
+    elif genai_has_structural_problem:
+        genai_state = "fail"
+        genai_detail = "Not correctly filled in; the file structure is not valid. " + " | ".join(genai_details[:5])
+        genai_action = "Regenerate the GenAI base files with `python main.py sum_merged` before rerunning the full prompt with the external GenAI tools."
+    elif genai_has_invalid_values:
+        genai_state = "fail"
+        genai_detail = "Not correctly filled in; at least one score or confidence value is outside the allowed range. " + " | ".join(genai_invalid_details[:5])
+        genai_action = "(Re)run the full prompt with the external GenAI tool for the affected file(s), using `./data/config/genai_prompt.txt`, `./data/config/scoring_rubrics.html`, and the relevant `./data/retention_scores_genai*.tsv`. Researchers can document and make a different decision, but the default pipeline treats these files as not usable for merging."
+    elif genai_too_much_missing:
+        genai_state = "fail"
+        genai_detail = "Not correctly filled in; missing too much data. " + "\n".join(genai_missing_details[:5])
+        genai_action = "(Re)run the full prompt with the external GenAI tool for the affected file(s), using `./data/config/genai_prompt.txt`, `./data/config/scoring_rubrics.html`, and the relevant `./data/retention_scores_genai*.tsv`. Researchers can document and make a different decision, but the default pipeline does not continue from a GenAI file with more than 10% missing required scoring data."
+    elif genai_has_any_missing:
+        genai_state = "action"
+        genai_detail = "Passed, but missing the following data:\n" + "\n".join(genai_missing_details[:5])
+        genai_action = "Preferably rerun the full prompt with the external GenAI tool for the affected file(s), using `./data/config/genai_prompt.txt`, `./data/config/scoring_rubrics.html`, and the relevant `./data/retention_scores_genai*.tsv`. Researchers can document and make a different decision, but the default checklist keeps this step open until the missing scores/confidence values are resolved."
+    else:
+        genai_state = "fail"
+        genai_detail = "Not correctly filled in; the GenAI files could not be validated."
+        genai_action = "Rerun the full prompt with the external GenAI tool, then rerun `python main.py sum_merged`."
+
+    rows.append(step(
+        2,
+        f"[{AMOUNT_GENAI}] GenAI files correctly filled in",
+        genai_state,
+        genai_detail,
+        genai_action,
+    ))
+
+    expected_human = configured_grader_score_paths()
+    present_human = [path for path in expected_human if path.exists()]
+    missing_human = [path.name for path in expected_human if not path.exists()]
+    manifest_present = REVIEW_TASKS_PATH.exists()
+    human_files_present = manifest_present and len(present_human) == len(expected_human)
+    rows.append(step(
+        3,
+        f"[{AMOUNT_HUMAN}] Human base files present",
+        "pass" if human_files_present else ("wait" if not genai_filled else "action"),
+        f"Manifest: {'present' if manifest_present else 'missing'}. Found human files: {', '.join(path.name for path in present_human) or 'none'}." + (f" Missing: {', '.join(missing_human)}." if missing_human else ""),
+        "—" if human_files_present else ("Fix step 2 first." if not genai_filled else "Run `python main.py score_ret prepare` once. This creates `./data/retention_review_tasks.tsv` and all configured `./data/retention_scores_grader{n}.tsv` base files from the frozen review manifest."),
+    ))
+
+    human_details: list[str] = []
+    human_filled = human_files_present
+    if human_files_present:
+        manifest = read_review_manifest()
+        manifest_ids = review_task_id_set(manifest)
+        for path in expected_human:
+            source = load_grader_scores(path)
+            ids = set(source)
+            missing_ids = sorted(manifest_ids - ids)
+            extra_ids = sorted(ids - manifest_ids)
+            if missing_ids or extra_ids:
+                human_filled = False
+                human_details.append(f"{path.name}: task_id mismatch (missing {len(missing_ids)}, extra {len(extra_ids)})")
+                continue
+            missing_score, bad_score, not_graded = rows_with_invalid_human(path)
+            if missing_score or bad_score or not_graded:
+                human_filled = False
+                parts = []
+                if not_graded:
+                    parts.append(f"not graded rows {preview(not_graded)}")
+                if missing_score:
+                    parts.append(f"missing score rows {preview(missing_score)}")
+                if bad_score:
+                    parts.append(f"score outside 0-2 rows {preview(bad_score)}")
+                human_details.append(f"{path.name}: " + "; ".join(parts))
+    rows.append(step(
+        4,
+        f"[{AMOUNT_HUMAN}] Human files correctly filled in",
+        "pass" if human_filled else ("wait" if not human_files_present else "action"),
+        "All human review rows are graded with integer scores in [0, 2] and match the frozen manifest." if human_filled else ("Fix step 3 first." if not human_files_present else " | ".join(human_details[:5])),
+        "—" if human_filled else ("Fix step 3 first." if not human_files_present else "Run `python main.py score_ret grader=1` and `python main.py score_ret grader=2` to complete the generated files. If grader 2 works on another device, copy the whole `./data/` folder first so both graders score the exact same manifest."),
+    ))
+
+    final_scores = [clean(row.get("final_score")) for row in scoring_rows if clean(row.get("answer_std"))]
+    invalid_final = [str(index + 2) for index, value in enumerate(final_scores) if not score_text(value)]
+    allowed_q_elements = set(Q_ELEMENT_ORDER)
+    unexpected_q_elements = sorted({clean(row.get("q_element")) for row in scoring_rows if clean(row.get("q_element")) and clean(row.get("q_element")) not in allowed_q_elements})
+    final_ready = bool(scoring_rows) and not invalid_final and not unexpected_q_elements and not problems
+    final_detail_parts: list[str] = []
+    if not scoring_rows:
+        final_detail_parts.append("No merged scoring rows were available yet.")
+    if invalid_final:
+        final_detail_parts.append(f"Unresolved/non-numeric final_score rows {preview(invalid_final)} in `retention_scores_merged.tsv`.")
+    if unexpected_q_elements:
+        final_detail_parts.append(f"Unexpected q_element value(s): {', '.join(unexpected_q_elements)}.")
+    if problems:
+        final_detail_parts.append("Merge problem(s): " + " | ".join(problems[:5]))
+    rows.append(step(
+        5,
+        "Merged final scores and statistics ready",
+        "pass" if final_ready else ("wait" if not human_filled else "action"),
+        "Final scores are complete, valid, and ready for retention statistics." if final_ready else ("Fix step 4 first." if not human_filled else " ".join(final_detail_parts)),
+        "—" if final_ready else ("Fix step 4 first." if not human_filled else "Open `./data/retention_scores_merged.tsv` and manually resolve rows with disagreement or `[resolve conflict]`; fill `final_score` plus a manual note where needed, then rerun `python main.py sum_merged` with `PUBLIC_ROUTE=True`."),
+    ))
+    return rows

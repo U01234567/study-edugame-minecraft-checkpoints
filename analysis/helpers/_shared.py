@@ -68,11 +68,44 @@ CREATURE_NAME_BY_ID = dict(CREATURES)
 IGNORED_SEEN_EXTRAS = {"cow", "chicken", "pig"}
 MAX_RETENTION_SLOTS = 18
 
+# Raw survey prompt slots. These remain tied to the Qualtrics export columns.
 RETENTION_QUESTION_SPECS = [
     ("img1", "IMAGE + What is the name of this creature?"),
     ("img2", "IMAGE + What are unique facts about this creature?"),
     ("name1", "NAME + What does this creature look like?"),
     ("name2", "NAME + Where in the game did you find this creature? Name the chapter and specific place if you can."),
+]
+
+# Scoring elements. These are the actual rubric-level units written to the
+# GenAI, human, and merged retention-scoring TSVs. Q2 and Q4 deliberately
+# duplicate the same raw answer across multiple q_element rows so each rubric
+# element can be scored independently.
+RETENTION_ELEMENT_SPECS = [
+    ("Q1_name", "Creature Name [Q1]"),
+    ("Q2_fact1", "Creature Fact #1 [Q2]"),
+    ("Q2_fact2", "Creature Fact #2 [Q2]"),
+    ("Q2_fact3", "Creature Fact #3 [Q2]"),
+    ("Q3_looks", "Creature Looks [Q3]"),
+    ("Q4_chapter", "Creature Chapter Name [Q4]"),
+    ("Q4_env", "Creature Environment [Q4]"),
+]
+RETENTION_ELEMENT_LABEL_BY_KEY = dict(RETENTION_ELEMENT_SPECS)
+RETENTION_PROMPT_TO_ELEMENTS = {
+    "img1": ["Q1_name"],
+    "img2": ["Q2_fact1", "Q2_fact2", "Q2_fact3"],
+    "name1": ["Q3_looks"],
+    "name2": ["Q4_chapter", "Q4_env"],
+}
+RETENTION_ELEMENT_TO_PROMPT = {
+    q_element: prompt_key
+    for prompt_key, q_elements in RETENTION_PROMPT_TO_ELEMENTS.items()
+    for q_element in q_elements
+}
+RETENTION_COMPONENT_SPECS = [
+    ("Q1_name", "Q1 name", ["Q1_name"]),
+    ("Q2_facts", "Q2 facts", ["Q2_fact1", "Q2_fact2", "Q2_fact3"]),
+    ("Q3_looks", "Q3 looks", ["Q3_looks"]),
+    ("Q4_location", "Q4 location", ["Q4_chapter", "Q4_env"]),
 ]
 
 EXCLUSION_CRITERIA = [

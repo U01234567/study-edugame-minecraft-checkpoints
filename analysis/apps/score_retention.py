@@ -24,22 +24,29 @@ from helpers._delayed_response_filter import (  # noqa: E402
     delayed_included_values_missing,
 )
 from helpers._retention_coding import (  # noqa: E402
-    CREATURE_INFO_HTML_PATH,
     GENAI_PROMPT_PATH,
     discover_genai_score_paths,
     grader_score_path,
-    LOW_CONFIDENCE_THRESHOLD,
+    GENAI_LOW_CONFIDENCE_THRESHOLD,
     SCORING_RUBRICS_HTML_PATH,
     VALIDATION_SAMPLE_FRACTION,
     build_prompt_rows_from_survey,
-    build_review_tasks,
+    prepare_human_review_files,
     load_genai_scores,
+    load_rubric_json,
     load_grader_scores,
     score_is_valid,
     score_text,
     write_grader_scores,
 )
-from helpers._shared import RESOURCES_DIR, RETENTION_QUESTION_SPECS, STATIC_DIR, SURVEY_EXPORT_PATH, TEMPLATES_DIR, clean  # noqa: E402
+from helpers._shared import (  # noqa: E402
+    RESOURCES_DIR,
+    RETENTION_ELEMENT_SPECS,
+    STATIC_DIR,
+    SURVEY_EXPORT_PATH,
+    TEMPLATES_DIR,
+    clean,
+)
 from helpers._survey_io import load_survey_export  # noqa: E402
 
 RUBRIC_RESOURCE_PATH = RESOURCES_DIR / "retention_rubrics.json"
@@ -61,8 +68,7 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def load_scoring_rubric() -> dict[str, Any]:
-    rubric = load_json(RUBRIC_RESOURCE_PATH)
-    return rubric
+    return load_rubric_json(RUBRIC_RESOURCE_PATH)
 
 
 def require_delayed_included_column(survey_rows: list[dict[str, str]], header: list[str], survey_path: Path) -> None:
@@ -87,7 +93,7 @@ def required_prompt_files_message() -> str:
     return (
         "score_ret cannot start yet: GenAI scoring is not ready. "
         f"Fill the generated GenAI score file(s) first: {discovered}. Use data/config/genai_prompt.txt and attach "
-        "the generated GenAI TSV file(s), data/config/scoring_rubrics.html, and data/config/creature_info.html."
+        "the generated GenAI TSV file(s) and data/config/scoring_rubrics.html. The creature-info appendix is generated separately as PDF and is not part of the GenAI package."
     )
 
 
@@ -104,7 +110,7 @@ def human_readable_genai_error(problems: list[str]) -> str:
     score_confidence_problem_count = sum(
         1
         for problem in problems
-        if "score (0-4) must be" in problem or "confidence (0-100%) must be" in problem
+        if "score (0-2) must be" in problem or "confidence (0-100%) must be" in problem
     )
     mostly_unfilled = score_confidence_problem_count >= max(1, len(problems) * 0.8)
     if mostly_unfilled:
@@ -132,14 +138,14 @@ def append_scoring_workflow_instructions(rubric: dict[str, Any], task_count: int
       <p>You are scoring a blinded review queue of unique standardised retention answers. GenAI scores, confidence values, and notes are hidden while you score so that the validation remains independent.</p>
       <ul>
         <li>The queue contains a deterministic stratified {int(VALIDATION_SAMPLE_FRACTION * 100)}% validation sample of unique non-empty answers.</li>
-        <li>It also contains extra GenAI answers below the low-confidence threshold ({LOW_CONFIDENCE_THRESHOLD:g}%).</li>
+        <li>It also contains extra GenAI answers below the low-confidence threshold ({GENAI_LOW_CONFIDENCE_THRESHOLD:g}%).</li>
         <li>It also contains every answer for which GenAI added a note, because those notes should signal ambiguity, uncertainty, a borderline score, or a possible rubric issue.</li>
         <li>If an answer belongs to multiple review groups, it still appears only once.</li>
-        <li>Duplicates are collapsed before human scoring: normally by question + standardised answer, but split by creature when the same question + answer occurs for multiple creatures.</li>
+        <li>Duplicates are collapsed before human scoring: normally by q_element + standardised answer, but split by creature when the same q_element + answer occurs for multiple creatures.</li>
         <li>Blank administered answers are not shown here; they are automatically scored 0.</li>
         <li>Do not worry about whether an item is from the validation sample, the low-confidence extra-check set, or the GenAI-note extra-check set. Score each row using the rubric only.</li>
       </ul>
-      <p><strong>Current queue:</strong> {task_count:,} review task(s) for this grader. Source data: {stats.get('prompt_rows', 0):,} administered prompt row(s), {stats.get('unique_nonblank_answers', 0):,} unique non-empty GenAI row(s), {stats.get('blank_prompt_rows', 0):,} blank administered prompt row(s).</p>
+      <p><strong>Current queue:</strong> {task_count:,} review task(s) for this grader. Source data: {stats.get('prompt_rows', 0):,} administered q_element row(s), {stats.get('unique_nonblank_answers', 0):,} unique non-empty GenAI row(s), {stats.get('blank_prompt_rows', 0):,} blank administered q_element row(s).</p>
     </section>
     """
     copy["instructions_html"] = workflow + existing
@@ -147,9 +153,9 @@ def append_scoring_workflow_instructions(rubric: dict[str, Any], task_count: int
 
 
 def scoring_display_key(task: dict[str, Any]) -> tuple[Any, ...]:
-    question_order = {key: index for index, (key, _label) in enumerate(RETENTION_QUESTION_SPECS)}
+    question_order = {key: index for index, (key, _label) in enumerate(RETENTION_ELEMENT_SPECS)}
     return (
-        question_order.get(clean(task.get("question_key")), 999),
+        question_order.get(clean(task.get("q_element")), 999),
         clean(task.get("creature_name") or task.get("creature")).lower(),
         clean(task.get("answer_std")),
         clean(task.get("task_id")),
@@ -159,7 +165,7 @@ def scoring_display_key(task: dict[str, Any]) -> tuple[Any, ...]:
 def public_score_row(row: dict[str, Any]) -> dict[str, str]:
     return {
         "task_id": clean(row.get("task_id")),
-        "score": clean(row.get("score (0-4)")),
+        "score": clean(row.get("score (0-2)")),
         "status": clean(row.get("status")),
         "note": clean(row.get("note (optional)")),
         "updated_at": clean(row.get("updated_at")),
@@ -191,7 +197,7 @@ class RetentionScoringServer:
         if genai_problems:
             raise RuntimeError(human_readable_genai_error(genai_problems))
 
-        self.tasks = sorted(build_review_tasks(prompt_rows, genai_lookup), key=scoring_display_key)
+        self.tasks = sorted(prepare_human_review_files(prompt_rows, genai_lookup), key=scoring_display_key)
         self.task_by_id = {task["task_id"]: task for task in self.tasks}
         self.scores_by_task_id = load_grader_scores(self.grader_path)
         self.lock = threading.RLock()
@@ -215,11 +221,11 @@ class RetentionScoringServer:
             "tasks": self.tasks,
             "scores": scores,
             "rubric": self.rubric,
-            "questionOrder": [key for key, _label in RETENTION_QUESTION_SPECS],
-            "questionLabels": {key: label for key, label in RETENTION_QUESTION_SPECS},
+            "questionOrder": [key for key, _label in RETENTION_ELEMENT_SPECS],
+            "questionLabels": {key: label for key, label in RETENTION_ELEMENT_SPECS},
             "metadata": {
                 "validation_sample_fraction": VALIDATION_SAMPLE_FRACTION,
-                "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
+                "low_confidence_threshold": GENAI_LOW_CONFIDENCE_THRESHOLD,
             },
         }
 
@@ -262,17 +268,17 @@ class RetentionScoringServer:
         status = {"grade": "graded", "skip": "skipped", "flag": "flagged"}[action]
         if action == "grade":
             if not score_is_valid(payload.get("score")):
-                raise ValueError("Score must be 0, 1, 2, 3, or 4")
+                raise ValueError("Score must be 0, 1, or 2")
             score = score_text(payload.get("score"))
 
         row = {
             "task_id": task_id,
-            "question": task["question"],
-            "question_key": task["question_key"],
+            "q_element": task["q_element"],
+            "question_key": task.get("question_key", ""),
             "creature": task["creature"],
             "creature_id": task["creature_id"],
             "answer_std": task["answer_std"],
-            "score (0-4)": score,
+            "score (0-2)": score,
             "status": status,
             "note (optional)": clean(payload.get("note")),
             "updated_at": utc_timestamp(),
@@ -363,31 +369,39 @@ def build_handler(state: RetentionScoringServer) -> type[BaseHTTPRequestHandler]
     return Handler
 
 
-def parse_args(argv: list[str]) -> tuple[int | None, int]:
+def parse_args(argv: list[str]) -> tuple[int | None, int, bool]:
     grader: int | None = None
     port = DEFAULT_PORT
+    prepare_only = False
     for arg in argv:
-        if arg.startswith("grader="):
+        arg_clean = arg.strip().lower()
+        if arg_clean in {"prepare", "prepare_only", "prepare-only"}:
+            prepare_only = True
+        elif arg.startswith("grader="):
             try:
                 grader = int(arg.split("=", 1)[1])
             except ValueError:
                 grader = None
         elif arg.startswith("port="):
             port = int(arg.split("=", 1)[1])
-    return grader, port
+    return grader, port, prepare_only
 
 
 def print_usage() -> None:
     print("Usage:")
+    print("  python main.py score_ret prepare")
     print("  python main.py score_ret grader=1")
     print("  python main.py score_ret grader=2")
     print("  python main.py score_ret grader=3 port=8766")
+    print("prepare creates retention_review_tasks.tsv and all configured human base files without opening the browser.")
     print("grader must be any positive integer; it writes data/retention_scores_grader{int}.tsv")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
-    grader, port = parse_args(args)
+    grader, port, prepare_only = parse_args(args)
+    if prepare_only and grader is None:
+        grader = 1
     if grader is None or grader < 1:
         print_usage()
         return 1
@@ -396,6 +410,11 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"[score_ret] ERROR: {exc}", file=sys.stderr)
         return 1
+    if prepare_only:
+        print("[score_ret] Human review manifest and configured human base files are ready.")
+        print(f"[score_ret] Tasks in frozen manifest: {len(state.tasks)}")
+        print("[score_ret] Next: copy /data/ as needed, then run `python main.py score_ret grader=1` and `python main.py score_ret grader=2`.")
+        return 0
     handler = build_handler(state)
     server = ThreadingHTTPServer((HOST, port), handler)
     url = f"http://{HOST}:{port}/"

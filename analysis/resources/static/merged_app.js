@@ -61,11 +61,38 @@ function renderWarnings(warnings, options = {}) {
   return `<div class="${className}"><strong>${label}</strong><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
 }
 
+function renderChecklistText(value) {
+  const text = String(value ?? '').trim();
+  if (!text || text === '—') return '—';
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length <= 1) return escapeHtml(text);
+
+  const nodes = [];
+  let listItems = [];
+  const flushList = () => {
+    if (listItems.length) {
+      nodes.push(`<ul>${listItems.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`);
+      listItems = [];
+    }
+  };
+
+  for (const line of lines) {
+    if (line.startsWith('- ')) {
+      listItems.push(line.slice(2));
+    } else {
+      flushList();
+      nodes.push(`<p>${escapeHtml(line)}</p>`);
+    }
+  }
+  flushList();
+  return nodes.join('');
+}
+
 function validRetentionScore(value) {
   const text = String(value ?? '').trim();
-  if (!/^[0-4]$/.test(text)) return false;
+  if (!/^[0-2]$/.test(text)) return false;
   const number = Number(text);
-  return Number.isInteger(number) && number >= 0 && number <= 4;
+  return Number.isInteger(number) && number >= 0 && number <= 2;
 }
 
 function retentionConflictRow(row) {
@@ -633,8 +660,10 @@ function renderRetention(data) {
 
   if (showGrades) {
     summaryHeaders.push(
-      { key: 'ret_immediate_scored_prompt_count', label: 'Immediate scored prompts', num: true },
-      { key: 'ret_delayed_scored_prompt_count', label: 'Delayed scored prompts', num: true },
+      { key: 'ret_immediate_scored_prompt_count', label: 'Immediate scored elements', num: true },
+      { key: 'ret_delayed_scored_prompt_count', label: 'Delayed scored elements', num: true },
+      { key: 'ret_immediate_scored_component_count', label: 'Immediate scored components', num: true },
+      { key: 'ret_delayed_scored_component_count', label: 'Delayed scored components', num: true },
       { key: 'ret_immediate_mean_sd', label: 'Immediate score Mean (SD)' },
       { key: 'ret_delayed_mean_sd', label: 'Delayed score Mean (SD)' },
     );
@@ -646,6 +675,8 @@ function renderRetention(data) {
       <p>${escapeHtml(reliability.method || 'Reliability summary not available.')}</p>
       ${table([
         { key: 'group', label: 'Agreement group' },
+        { key: 'n_units', label: 'Alpha units', num: true },
+        { key: 'ordinal_krippendorff_alpha', label: 'Ordinal Krippendorff α', num: true },
         { key: 'n_double_scored', label: 'n used', num: true },
         { key: 'n_unique_double_scored', label: 'Unique reviewed n', num: true },
         { key: 'n_weighted_occurrences', label: 'Occurrence-weighted n', num: true },
@@ -659,6 +690,19 @@ function renderRetention(data) {
       Final-score conflicts still to resolve: <strong>${escapeHtml(unresolvedConflictCount)}</strong>
     </p>` : '';
 
+  const checksHtml = (retention.checks || []).length ? `
+    <section class="card">
+      <h2>Retention scoring checks</h2>
+      <p class="small">Fix the first row that is not ✅. Later rows may be waiting only because an earlier prerequisite is incomplete.</p>
+      ${table([
+        { key: 'step', label: 'Step' },
+        { key: 'check', label: 'Requirement' },
+        { key: 'status', label: 'Status' },
+        { key: 'detail', label: 'Gathered', render: row => renderChecklistText(row.detail) },
+        { key: 'action', label: 'What to do', render: row => renderChecklistText(row.action) },
+      ], retention.checks)}
+    </section>` : '';
+
   const summaryHtml = `
     <section class="card">
       <h1>Retention</h1>
@@ -666,6 +710,7 @@ function renderRetention(data) {
       ${conflictHtml}
       ${table(summaryHeaders, retention.condition_summary || [])}
     </section>
+    ${checksHtml}
     ${reliabilityHtml}`;
 
   if (!rows.length) {
@@ -996,8 +1041,8 @@ const INTERVIEW_METRICS = [
   {label:'Creature score', source:'participant', key:'logs_creature_score_of_18', kind:'score18'},
   {label:'Immediate retention score', source:'participant', key:'ret_immediate_score', kind:'proportion'},
   {label:'Delayed retention score', source:'participant', key:'ret_delayed_score', kind:'proportion'},
-  {label:'Immediate scored prompts', source:'participant', key:'ret_immediate_scored_prompt_count', kind:'number0'},
-  {label:'Delayed scored prompts', source:'participant', key:'ret_delayed_scored_prompt_count', kind:'number0'},
+  {label:'Immediate scored elements', source:'participant', key:'ret_immediate_scored_prompt_count', kind:'number0'},
+  {label:'Delayed scored elements', source:'participant', key:'ret_delayed_scored_prompt_count', kind:'number0'},
 
   {label:'Intrinsic cognitive load', source:'participant', key:'cl_intrinsic', kind:'number'},
   {label:'Extraneous cognitive load', source:'participant', key:'cl_extraneous', kind:'number'},

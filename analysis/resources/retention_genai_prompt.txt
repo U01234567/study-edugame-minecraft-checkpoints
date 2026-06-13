@@ -1,0 +1,28 @@
+GenAI prompt
+In the attachment, you should find exactly these TWO files:
+- retention_scores_genai*.tsv (containing the answers to grade)
+- scoring_rubrics.html (containing the rubrics, instructions to follow, and information to know)
+
+If any file is missing, inaccessible, unreadable, or clearly incomplete, do not continue. Stop your response and state which file(s) are missing or unusable.
+
+Strict source rule:
+Use only the attached files. Do not browse the internet. Do not look up creature names, animal facts, game facts, images, or locations online. Do not use external knowledge, model memory, or assumptions about real animals, games, Minecraft, fantasy creatures, or naming conventions. These are study-specific fictional learning materials. If something is not supported by the attached rubric, treat it as unknown.
+Source file structures:
+- retention_scores_genai*.tsv: column “q_element” contains an indication of the current question element (Q1_name, Q2_fact1, Q2_fact2, Q2_fact3, Q3_looks, Q4_chapter, Q4_env), “creature” contains the name of a creature (Abyss deer, Amethyst scarab, Axolotl dragon, Cave dweller, Ender ape, Flying bunny, Glare, Grand grassling father, Ice golem, Killer crab, Lizard knight, Mushroom bup, Orc, Prototype warden, Retro TV robot, Scrambler king, Walking robot guy, Wardigo), “answer_std” contains the standardised answer to score, “score (0-2)” is for you to fill in, “confidence (0-100%)” is for you to fill in, and “note (optional)” is for you to fill in.
+- scoring_rubrics.html: contains all rubrics needed for this task, first sorted by question element (“Creature Name” [Q1], “Creature Fact #1” [Q2], “Creature Fact #2” [Q2], “Creature Fact #3” [Q2], “Creature Looks” [Q3], “Creature Chapter Name” [Q4], and “Creature Environment” [Q4]), and then sorted by creature. Each rubric contains two main columns (“Score” and “Possible answers”), and the second column mostly contains smaller tables with the first column containing a description of a possible answer and the second column containing examples fitting this description.
+
+Task:
+Fill in the attached retention_scores_genai*.tsv file. Keep the row order exactly the same. Do not add, delete, reorder, rename, or reformat columns. For every row, evaluate the standardised retention answer using only the attached rubric and creature information. Score each row independently, using only the current q_element and creature. The same answer may receive different scores when it is scored for different rubrics, especially for Q2_fact1/Q2_fact2/Q2_fact3 and Q4_chapter/Q4_env.
+
+Columns to fill:
+- “score (0-2)”: an integer from 0 to 2 only.
+- “confidence (0-100%)”: your confidence percentage as a number from 0 to 100 only. Do not include a percent sign.
+- “note (optional)”: leave this cell empty unless a note is genuinely needed. Add a note only for ambiguity, borderline scores, uncertainty, suspected rubric tension, missing/unclear source information, or a reason a human should inspect the row. Do not add routine notes for evident answers.
+
+TSV output rules:
+- Preserve valid TSV format.
+- Preserve the original header exactly.
+- Preserve the original row order exactly.
+- Preserve all existing cell values except the three columns you are asked to fill.
+- Do not add markdown, explanations, comments, code fences, bullet points, or surrounding text around the TSV.
+- Return only the completed TSV content or a completed TSV attachment, depending on the interface you are using.

@@ -12,6 +12,10 @@ from ._shared import (
     IGNORED_SEEN_EXTRAS,
     MAX_RETENTION_SLOTS,
     RETENTION_QUESTION_SPECS,
+    RETENTION_ELEMENT_LABEL_BY_KEY,
+    RETENTION_ELEMENT_SPECS,
+    RETENTION_PROMPT_TO_ELEMENTS,
+    RETENTION_COMPONENT_SPECS,
     RETENTION_SCORES_PATH,
     canonical_condition,
     clean,
@@ -104,7 +108,7 @@ def build_retention_participants_from_survey(survey_rows: list[dict[str, str]]) 
 PROMPT_SCORE_COLUMNS = {
     "MCID",
     "creature",
-    "question",
+    "q_element",
     "answer",
     "answer_std",
     "moment",
@@ -179,21 +183,21 @@ def retention_wave_summary(row: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def prompt_score_key(moment: object, creature_id: object, question_key: object) -> str:
-    return "|".join([clean(moment), clean(creature_id), clean(question_key)])
+def prompt_score_key(moment: object, creature_id: object, q_element: object) -> str:
+    return "|".join([clean(moment), clean(creature_id), clean(q_element)])
 
 
-def _prompt_score_for_participant(participant: dict[str, Any], moment: str, creature_id: str, question_key: str) -> dict[str, Any]:
+def _prompt_score_for_participant(participant: dict[str, Any], moment: str, creature_id: str, q_element: str) -> dict[str, Any]:
     lookup = participant.get("_retention_prompt_scores") or {}
 
-    # Current serialisable schema.
-    string_key = prompt_score_key(moment, creature_id, question_key)
+    # Current serialisable schema: moment | creature_id | q_element.
+    string_key = prompt_score_key(moment, creature_id, q_element)
     if string_key in lookup:
         return lookup[string_key]
 
     # Backward compatibility if this function is called before the in-memory
     # tuple-key schema has fully disappeared.
-    return lookup.get((moment, creature_id, question_key), {})
+    return lookup.get((moment, creature_id, q_element), {})
 
 
 def _natural_source_key(label: str) -> list[Any]:
@@ -229,40 +233,45 @@ def build_retention_question_rows(participants: list[dict[str, Any]]) -> list[di
         for wave_key, moment in (("immediate", "Immediate"), ("delayed", "Delayed")):
             wave_data = participant.get(f"ret_{wave_key}_answers", {}) or {}
             for creature_id, answers in wave_data.items():
-                for suffix, label in RETENTION_QUESTION_SPECS:
+                for suffix, raw_label in RETENTION_QUESTION_SPECS:
                     answer = clean(answers.get(suffix))
-                    score_info = _prompt_score_for_participant(participant, moment, creature_id, suffix)
-                    if not answer and not score_info:
-                        continue
-                    output = {
-                        "participant_id": participant_id,
-                        "condition": condition,
-                        "moment": moment,
-                        "creature_id": creature_id,
-                        "creature_name": CREATURE_NAME_BY_ID.get(creature_id, creature_id),
-                        "question": suffix,
-                        "question_label": label,
-                        "answer": answer,
-                        "answer_std": score_info.get("answer_std"),
-                        "genai_labels": score_info.get("genai_labels") or [],
-                        "grader_labels": score_info.get("grader_labels") or [],
-                        "genai_score": score_info.get("genai_score"),
-                        "genai_confidence": score_info.get("genai_confidence"),
-                        "final_score": score_info.get("final_score_display"),
-                        "final_status": score_info.get("final_status"),
-                        "final_note_auto": score_info.get("final_note_auto"),
-                        "final_note_manual": score_info.get("final_note_manual"),
-                        "grader_notes_html": _format_grader_note(score_info),
-                    }
-                    for source_label in score_info.get("genai_labels") or []:
-                        output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
-                        output[f"{source_label}_confidence"] = score_info.get(f"{source_label}_confidence")
-                    for source_label in score_info.get("grader_labels") or []:
-                        output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
-                    # Legacy UI aliases when the first two grader files exist.
-                    output["grader1_score"] = score_info.get("grader1_score")
-                    output["grader2_score"] = score_info.get("grader2_score")
-                    rows.append(output)
+                    for q_element in RETENTION_PROMPT_TO_ELEMENTS.get(suffix, []):
+                        label = RETENTION_ELEMENT_LABEL_BY_KEY.get(q_element, q_element)
+                        score_info = _prompt_score_for_participant(participant, moment, creature_id, q_element)
+                        if not answer and not score_info:
+                            continue
+                        output = {
+                            "participant_id": participant_id,
+                            "condition": condition,
+                            "moment": moment,
+                            "creature_id": creature_id,
+                            "creature_name": CREATURE_NAME_BY_ID.get(creature_id, creature_id),
+                            "question": q_element,
+                            "q_element": q_element,
+                            "question_key": suffix,
+                            "question_label": label,
+                            "raw_question_label": raw_label,
+                            "answer": answer,
+                            "answer_std": score_info.get("answer_std"),
+                            "genai_labels": score_info.get("genai_labels") or [],
+                            "grader_labels": score_info.get("grader_labels") or [],
+                            "genai_score": score_info.get("genai_score"),
+                            "genai_confidence": score_info.get("genai_confidence"),
+                            "final_score": score_info.get("final_score_display"),
+                            "final_status": score_info.get("final_status"),
+                            "final_note_auto": score_info.get("final_note_auto"),
+                            "final_note_manual": score_info.get("final_note_manual"),
+                            "grader_notes_html": _format_grader_note(score_info),
+                        }
+                        for source_label in score_info.get("genai_labels") or []:
+                            output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
+                            output[f"{source_label}_confidence"] = score_info.get(f"{source_label}_confidence")
+                        for source_label in score_info.get("grader_labels") or []:
+                            output[f"{source_label}_score"] = score_info.get(f"{source_label}_score")
+                        # Legacy UI aliases when the first two grader files exist.
+                        output["grader1_score"] = score_info.get("grader1_score")
+                        output["grader2_score"] = score_info.get("grader2_score")
+                        rows.append(output)
 
     return rows
 
@@ -290,14 +299,14 @@ def _score_from_row(row: dict[str, str], grader_prefix: str) -> float | None:
     if clean(row.get(f"{grader_prefix}_status")) != "graded":
         return None
     score = parse_numeric(row.get(f"{grader_prefix}_score"))
-    if score is None or score < 0 or score > 4:
+    if score is None or score < 0 or score > 2:
         return None
     return score
 
 
 def _final_score_from_row(row: dict[str, str]) -> float | None:
     score = parse_numeric(row.get("final_score"))
-    if score is None or score < 0 or score > 4:
+    if score is None or score < 0 or score > 2:
         return None
     return score
 
@@ -305,14 +314,15 @@ def _final_score_from_row(row: dict[str, str]) -> float | None:
 def _load_prompt_level_scores(rows: list[dict[str, str]]) -> dict[str, Any]:
     participant_scores: dict[str, dict[str, Any]] = defaultdict(dict)
     prompt_scores_by_participant: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
-    values_by_participant_wave: dict[tuple[str, str], list[float]] = defaultdict(list)
+    values_by_participant_wave: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
 
     for row in rows:
         participant_id = clean(row.get("MCID"))
         moment = _normalise_moment(row.get("moment"))
         creature_id = clean(row.get("creature_id"))
         question_key = clean(row.get("question_key"))
-        if not participant_id or not moment or not creature_id or not question_key:
+        q_element = clean(row.get("q_element"))
+        if not participant_id or not moment or not creature_id or not q_element:
             continue
 
         genai_labels = _source_labels(row, "genai")
@@ -347,18 +357,38 @@ def _load_prompt_level_scores(rows: list[dict[str, str]]) -> dict[str, Any]:
             score_info.setdefault(f"{label}_status", clean(row.get(f"{label}_status")))
             score_info.setdefault(f"{label}_note", clean(row.get(f"{label}_note")))
 
-        prompt_scores_by_participant[participant_id][prompt_score_key(moment, creature_id, question_key)] = score_info
+        prompt_scores_by_participant[participant_id][prompt_score_key(moment, creature_id, q_element)] = score_info
         if final_score is not None:
-            values_by_participant_wave[(participant_id, moment)].append(final_score)
+            values_by_participant_wave[(participant_id, moment, creature_id, q_element)].append(final_score)
 
-    for (participant_id, moment), values in values_by_participant_wave.items():
-        proportion = sum(values) / (len(values) * 4)
+    component_values_by_participant_wave: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    element_counts_by_participant_wave: dict[tuple[str, str], int] = defaultdict(int)
+    component_counts_by_participant_wave: dict[tuple[str, str], int] = defaultdict(int)
+
+    grouped_by_creature_wave: dict[tuple[str, str, str], dict[str, float]] = defaultdict(dict)
+    for (participant_id, moment, creature_id, q_element), values in values_by_participant_wave.items():
+        if values:
+            grouped_by_creature_wave[(participant_id, moment, creature_id)][q_element] = values[0]
+            element_counts_by_participant_wave[(participant_id, moment)] += 1
+
+    for (participant_id, moment, _creature_id), element_scores in grouped_by_creature_wave.items():
+        for _component_key, _component_label, q_elements in RETENTION_COMPONENT_SPECS:
+            scores = [element_scores[q_element] for q_element in q_elements if q_element in element_scores]
+            if not scores:
+                continue
+            component_values_by_participant_wave[(participant_id, moment)].append(sum(scores) / (len(scores) * 2))
+            component_counts_by_participant_wave[(participant_id, moment)] += 1
+
+    for (participant_id, moment), values in component_values_by_participant_wave.items():
+        proportion = sum(values) / len(values) if values else None
         if moment == "Immediate":
             participant_scores[participant_id]["ret_immediate_score"] = proportion
-            participant_scores[participant_id]["ret_immediate_scored_prompt_count"] = len(values)
+            participant_scores[participant_id]["ret_immediate_scored_prompt_count"] = element_counts_by_participant_wave[(participant_id, moment)]
+            participant_scores[participant_id]["ret_immediate_scored_component_count"] = component_counts_by_participant_wave[(participant_id, moment)]
         elif moment == "Delayed":
             participant_scores[participant_id]["ret_delayed_score"] = proportion
-            participant_scores[participant_id]["ret_delayed_scored_prompt_count"] = len(values)
+            participant_scores[participant_id]["ret_delayed_scored_prompt_count"] = element_counts_by_participant_wave[(participant_id, moment)]
+            participant_scores[participant_id]["ret_delayed_scored_component_count"] = component_counts_by_participant_wave[(participant_id, moment)]
 
     for participant_id, prompt_scores in prompt_scores_by_participant.items():
         participant_scores[participant_id]["_retention_prompt_scores"] = prompt_scores
@@ -423,6 +453,8 @@ def attach_retention_scores(participants: list[dict[str, Any]], scores_by_id: di
         participant["ret_delayed_score"] = scores.get("ret_delayed_score")
         participant["ret_immediate_scored_prompt_count"] = scores.get("ret_immediate_scored_prompt_count")
         participant["ret_delayed_scored_prompt_count"] = scores.get("ret_delayed_scored_prompt_count")
+        participant["ret_immediate_scored_component_count"] = scores.get("ret_immediate_scored_component_count")
+        participant["ret_delayed_scored_component_count"] = scores.get("ret_delayed_scored_component_count")
         participant["_retention_prompt_scores"] = scores.get("_retention_prompt_scores", {})
 
 
@@ -431,7 +463,7 @@ def _valid_int_score(value: object) -> int | None:
     if number is None or not float(number).is_integer():
         return None
     score = int(number)
-    if score < 0 or score > 4:
+    if score < 0 or score > 2:
         return None
     return score
 
@@ -440,7 +472,7 @@ def quadratic_weighted_kappa(pairs: list[tuple[int, int]], categories: list[int]
     if not pairs:
         return None
 
-    cats = categories or [0, 1, 2, 3, 4]
+    cats = categories or [0, 1, 2]
     index = {cat: i for i, cat in enumerate(cats)}
     k = len(cats)
 
@@ -467,6 +499,62 @@ def quadratic_weighted_kappa(pairs: list[tuple[int, int]], categories: list[int]
     if expected == 0:
         return 1.0 if observed == 0 else None
     return 1.0 - (observed / expected)
+
+
+def ordinal_krippendorff_alpha(ratings_by_unit: list[list[int]], categories: list[int] | None = None) -> float | None:
+    """Krippendorff's alpha for ordinal 0-2 ratings.
+
+    The implementation follows the usual coincidence-matrix definition. Units
+    with fewer than two valid ratings are ignored.
+    """
+    cats = categories or [0, 1, 2]
+    index = {cat: i for i, cat in enumerate(cats)}
+    k = len(cats)
+    coincidence = [[0.0 for _ in cats] for _ in cats]
+    valid_units = 0
+
+    for raw_unit in ratings_by_unit:
+        values = [score for score in raw_unit if score in index]
+        m = len(values)
+        if m < 2:
+            continue
+        valid_units += 1
+        counts = [0 for _ in cats]
+        for score in values:
+            counts[index[score]] += 1
+        for i in range(k):
+            for j in range(k):
+                if i == j:
+                    coincidence[i][j] += counts[i] * (counts[j] - 1) / (m - 1)
+                else:
+                    coincidence[i][j] += counts[i] * counts[j] / (m - 1)
+
+    n = sum(sum(row) for row in coincidence)
+    if valid_units == 0 or n <= 1:
+        return None
+
+    marginals = [sum(row) for row in coincidence]
+    observed = 0.0
+    expected = 0.0
+    for i in range(k):
+        for j in range(k):
+            delta = ((i - j) ** 2) / ((k - 1) ** 2)
+            observed += coincidence[i][j] * delta
+            expected += marginals[i] * marginals[j] * delta / (n - 1)
+
+    if expected == 0:
+        return 1.0 if observed == 0 else None
+    return 1.0 - observed / expected
+
+
+def _alpha_row(label: str, ratings_by_unit: list[list[int]]) -> dict[str, Any]:
+    usable = [unit for unit in ratings_by_unit if len(unit) >= 2]
+    alpha = ordinal_krippendorff_alpha(usable)
+    return {
+        "group": label,
+        "n_units": len(usable),
+        "ordinal_krippendorff_alpha": None if alpha is None else round(alpha, 3),
+    }
 
 
 def _agreement_row(label: str, pairs: list[tuple[int, int]]) -> dict[str, Any]:
@@ -505,7 +593,7 @@ def _unique_rows_by_task(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     unique: list[dict[str, str]] = []
     for row in rows:
         key = clean(row.get("task_id")) or "|".join([
-            clean(row.get("question_key")),
+            clean(row.get("q_element")) or clean(row.get("question")),
             clean(row.get("creature_id")),
             clean(row.get("answer_std")),
         ])
@@ -524,7 +612,7 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
     if not rows or not PROMPT_SCORE_COLUMNS.issubset(set(rows[0])):
         return {
             "available": False,
-            "method": "Agreement requires the prompt-level retention_scores_merged.tsv schema produced by sum_merged.",
+            "method": "Agreement requires the q_element-level retention_scores_merged.tsv schema produced by sum_merged.",
             "rows": [],
         }
 
@@ -582,7 +670,7 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
             if not row_pairs:
                 continue
             weight = _row_weight(row) if "weighted" in label else 1
-            question_key = clean(row.get("question_key")) or clean(row.get("question")) or "Unknown"
+            question_key = clean(row.get("q_element")) or clean(row.get("question")) or "Unknown"
             for pair in row_pairs:
                 pairs.append(pair)
                 weights.append(weight)
@@ -590,16 +678,43 @@ def retention_reliability_summary(path: Path = RETENTION_SCORES_PATH) -> dict[st
                 weights_by_group[question_key].append(weight)
         overall = _agreement_row_weighted(label + " · Overall", pairs, weights if "weighted" in label else None)
         summary_rows.append(overall)
-        for question_key, _label in RETENTION_QUESTION_SPECS:
+        for question_key, _label in RETENTION_ELEMENT_SPECS:
             summary_rows.append(_agreement_row_weighted(
                 label + f" · {question_key}",
                 pairs_by_group.get(question_key, []),
                 weights_by_group.get(question_key, []) if "weighted" in label else None,
             ))
 
+    def all_available_ratings(row: dict[str, str]) -> list[int]:
+        ratings: list[int] = []
+        for label in _source_labels(row, "genai"):
+            score = _valid_int_score(row.get(f"{label}_score"))
+            if score is not None:
+                ratings.append(score)
+        if not _source_labels(row, "genai"):
+            score = _valid_int_score(row.get("genai_score"))
+            if score is not None:
+                ratings.append(score)
+        for label in _source_labels(row, "grader"):
+            if clean(row.get(f"{label}_status")) != "graded":
+                continue
+            score = _valid_int_score(row.get(f"{label}_score"))
+            if score is not None:
+                ratings.append(score)
+        return ratings
+
+    unique_alpha_units = [all_available_ratings(row) for row in unique_rows]
+    weighted_alpha_units: list[list[int]] = []
+    for row in rows:
+        ratings = all_available_ratings(row)
+        if ratings:
+            weighted_alpha_units.extend([ratings] * _row_weight(row))
+    summary_rows.insert(0, _alpha_row("All available graders · Unique q_element answers", unique_alpha_units))
+    summary_rows.insert(1, _alpha_row("All available graders · Occurrence-weighted", weighted_alpha_units))
+
     return {
-        "available": any(row.get("n_double_scored", 0) for row in summary_rows),
-        "method": "Reliability is reported across every available grader-file pair and every available GenAI-vs-human pair in retention_scores_merged.tsv. GenAI-vs-human pairs use rows where the human graders have a valid consensus, even when final_score is still marked for manual conflict resolution. Unique-answer rows count each reviewed standardised answer once. Occurrence-weighted rows expand each reviewed unique answer by its frequency in the original prompt-level data. Percent exact agreement and quadratic weighted Cohen's kappa use ordinal categories 0, 1, 2, 3, 4.",
+        "available": any(row.get("n_double_scored", 0) or row.get("n_units", 0) for row in summary_rows),
+        "method": "Reliability is reported from retention_scores_merged.tsv. Ordinal Krippendorff's alpha is the primary statistic across all available valid GenAI and human ratings for each q_element answer. Percent exact agreement and quadratic weighted Cohen's kappa are reported for human-human and GenAI-human pairs using ordinal categories 0, 1, 2. Unique-answer rows count each reviewed standardised answer once; occurrence-weighted rows expand each reviewed unique answer by its frequency in the q_element-level data.",
         "rows": summary_rows,
     }
 
@@ -618,6 +733,8 @@ def ret_condition_summary(participants: list[dict[str, Any]], condition_order: l
             "ret_delayed_answer_count": sum(int(p.get("ret_delayed_answer_count") or 0) for p in scoped),
             "ret_immediate_scored_prompt_count": sum(int(p.get("ret_immediate_scored_prompt_count") or 0) for p in scoped),
             "ret_delayed_scored_prompt_count": sum(int(p.get("ret_delayed_scored_prompt_count") or 0) for p in scoped),
+            "ret_immediate_scored_component_count": sum(int(p.get("ret_immediate_scored_component_count") or 0) for p in scoped),
+            "ret_delayed_scored_component_count": sum(int(p.get("ret_delayed_scored_component_count") or 0) for p in scoped),
             "ret_delayed_wave_count": sum(1 for p in scoped if p.get("completed_delayed_retention_test")),
         })
 
