@@ -20,7 +20,7 @@ from apps.summarise_survey import main as summarise_survey_main
 # all raw logs, builds the inclusion/exclusion checklist from /raw/, regenerates
 # /data/ for included MCIDs, and then performs the full report calculations from
 # /data/ only.
-PUBLIC_ROUTE = False
+PUBLIC_ROUTE = True
 
 ANALYSIS_DIR = Path(__file__).resolve().parent
 RAW_DIR = ANALYSIS_DIR / "raw"

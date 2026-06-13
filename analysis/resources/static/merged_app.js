@@ -203,6 +203,50 @@ function valuesByGroup(rows, groups, categories, categoriseRow) {
   return output;
 }
 
+function retentionSourceColours(sourceLabels) {
+  const palette = ['#2563eb', '#f97316', '#16a34a', '#9333ea', '#0f766e', '#d97706'];
+  const colours = {};
+  for (const [index, label] of (sourceLabels || []).entries()) {
+    colours[displaySourceLabel(label)] = palette[index % palette.length];
+  }
+  return colours;
+}
+
+function retentionHistogramValues(chart) {
+  const output = {};
+  for (const sourceLabel of chart.source_labels || []) {
+    const displayLabel = displaySourceLabel(sourceLabel);
+    output[displayLabel] = {};
+    for (const category of chart.categories || []) {
+      output[displayLabel][category.label] = Number(chart.counts?.[sourceLabel]?.[category.key] || 0);
+    }
+  }
+  return output;
+}
+
+function renderRetentionScoreHistograms(retention) {
+  const charts = retention.score_histograms || [];
+  if (!charts.length) return '';
+  return `<section class="card retention-score-histograms">
+    <h2>Retention score distributions by scoring file</h2>
+    <p class="small">Confident = scored without a note and without confidence below the configured GenAI low-confidence threshold. Unsure = scored with a note or with confidence below that threshold. Human grader files use notes only.</p>
+    <div class="retention-score-histogram-grid">
+      ${charts.map(chart => {
+        const categories = (chart.categories || []).map(category => category.label);
+        const groups = (chart.source_labels || []).map(displaySourceLabel);
+        if (!categories.length || !groups.length) {
+          return `<div class="chart-box retention-score-histogram"><h3>${escapeHtml(chart.label)}</h3><p class="small">No scoring files available yet.</p></div>`;
+        }
+        return `<div class="chart-box retention-score-histogram">
+          <h3>${escapeHtml(chart.label)}</h3>
+          <p class="small">Rows represented: ${escapeHtml(chart.n_answer_rows ?? 0)}${(chart.q_elements || []).length ? ` · ${escapeHtml((chart.q_elements || []).join(', '))}` : ''}</p>
+          ${groupedBarSvg(categories, groups, retentionHistogramValues(chart), retentionSourceColours(chart.source_labels || []))}
+        </div>`;
+      }).join('')}
+    </div>
+  </section>`;
+}
+
 function renderDistributionCharts(data) {
   const participants = data.participants || [];
   const groups = conditionGroups(data);
@@ -703,6 +747,8 @@ function renderRetention(data) {
       ], retention.checks)}
     </section>` : '';
 
+  const scoreHistogramsHtml = renderRetentionScoreHistograms(retention);
+
   const summaryHtml = `
     <section class="card">
       <h1>Retention</h1>
@@ -711,6 +757,7 @@ function renderRetention(data) {
       ${table(summaryHeaders, retention.condition_summary || [])}
     </section>
     ${checksHtml}
+    ${scoreHistogramsHtml}
     ${reliabilityHtml}`;
 
   if (!rows.length) {

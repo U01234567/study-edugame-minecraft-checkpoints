@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ from helpers._ret_main import (
 )
 from helpers._retention_coding import (
     CREATURE_INFO_PDF_PATH,
+    GENAI_LOW_CONFIDENCE_THRESHOLD,
     GENAI_PROMPT_PATH,
     SCORING_RUBRICS_HTML_PATH,
     SCORING_RUBRICS_PDF_PATH,
@@ -47,6 +49,7 @@ from helpers._shared import (
     INTERVIEW_MANIFEST_PATH,
     INTERVIEW_TRANSCRIPTS_DIR,
     RETENTION_SCORES_PATH,
+    RETENTION_COMPONENT_SPECS,
     RETENTION_ELEMENT_SPECS,
     CONDITION_ORDER,
     CONDITION_COLOURS,
@@ -292,6 +295,91 @@ def add_interview_comparison_summaries(interview_data: dict[str, Any], participa
     return enriched
 
 
+RETENTION_SCORE_HISTOGRAM_CATEGORIES = [
+    ("score_0_confident", "score 0 confident"),
+    ("score_0_unsure", "score 0 unsure"),
+    ("score_1_confident", "score 1 confident"),
+    ("score_1_unsure", "score 1 unsure"),
+    ("score_2_confident", "score 2 confident"),
+    ("score_2_unsure", "score 2 unsure"),
+    ("no_score", "no score"),
+]
+
+
+def _natural_source_key(label: str) -> list[Any]:
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", label)]
+
+
+def _retention_score_source_labels(scoring_rows: list[dict[str, Any]]) -> list[str]:
+    labels: set[str] = set()
+    for row in scoring_rows:
+        for key in row:
+            match = re.match(r"^((?:genai|grader)\d+(?:_\d+)?)_score$", key)
+            if match:
+                labels.add(match.group(1))
+    return sorted(labels, key=_natural_source_key)
+
+
+def _score_bucket_for_source(row: dict[str, Any], source_label: str) -> str:
+    score = parse_numeric(row.get(f"{source_label}_score"))
+    if score is None or not float(score).is_integer() or int(score) not in (0, 1, 2):
+        return "no_score"
+
+    note = clean(row.get(f"{source_label}_note"))
+    confidence = parse_numeric(clean(row.get(f"{source_label}_confidence")).replace("%", ""))
+    low_confidence = confidence is not None and confidence < GENAI_LOW_CONFIDENCE_THRESHOLD
+    suffix = "unsure" if note or low_confidence else "confident"
+    return f"score_{int(score)}_{suffix}"
+
+
+def build_retention_score_histograms(scoring_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build source-file score/confidence histograms for the Retention tab."""
+    source_labels = _retention_score_source_labels(scoring_rows)
+    if not scoring_rows or not source_labels:
+        return []
+
+    component_elements = {key: elements for key, _label, elements in RETENTION_COMPONENT_SPECS}
+    chart_specs: list[dict[str, Any]] = [
+        {"key": "Q1_name", "label": "Q1 name", "q_elements": ["Q1_name"]},
+        {"key": "Q2_merged", "label": "Q2 merged", "q_elements": component_elements.get("Q2_facts", ["Q2_fact1", "Q2_fact2", "Q2_fact3"])},
+        {"key": "Q2_fact1", "label": "Q2 fact #1", "q_elements": ["Q2_fact1"]},
+        {"key": "Q2_fact2", "label": "Q2 fact #2", "q_elements": ["Q2_fact2"]},
+        {"key": "Q2_fact3", "label": "Q2 fact #3", "q_elements": ["Q2_fact3"]},
+        {"key": "Q3_looks", "label": "Q3 looks", "q_elements": ["Q3_looks"]},
+        {"key": "Q4_merged", "label": "Q4 merged", "q_elements": component_elements.get("Q4_location", ["Q4_chapter", "Q4_env"])},
+        {"key": "Q4_chapter", "label": "Q4 chapter", "q_elements": ["Q4_chapter"]},
+        {"key": "Q4_env", "label": "Q4 environment", "q_elements": ["Q4_env"]},
+    ]
+
+    known_elements = {key for key, _label in RETENTION_ELEMENT_SPECS}
+    charts: list[dict[str, Any]] = []
+    for spec in chart_specs:
+        q_elements = [element for element in spec["q_elements"] if element in known_elements]
+        scoped_rows = [
+            row for row in scoring_rows
+            if clean(row.get("answer_std")) and clean(row.get("q_element")) in q_elements
+        ]
+        counts_by_source: dict[str, dict[str, int]] = {
+            label: {category_key: 0 for category_key, _category_label in RETENTION_SCORE_HISTOGRAM_CATEGORIES}
+            for label in source_labels
+        }
+        for row in scoped_rows:
+            for source_label in source_labels:
+                counts_by_source[source_label][_score_bucket_for_source(row, source_label)] += 1
+        charts.append({
+            "key": spec["key"],
+            "label": spec["label"],
+            "q_elements": q_elements,
+            "n_answer_rows": len(scoped_rows),
+            "source_labels": source_labels,
+            "categories": [
+                {"key": key, "label": label}
+                for key, label in RETENTION_SCORE_HISTOGRAM_CATEGORIES
+            ],
+            "counts": counts_by_source,
+        })
+
+    return charts
 
 
 def slim_interview_overview(overview: dict[str, Any]) -> dict[str, Any]:
@@ -482,6 +570,7 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
         "show_grades": bool(retention_scores),
         "unresolved_conflict_count": unresolved_retention_conflicts,
         "checks": retention_checks,
+        "score_histograms": build_retention_score_histograms(scoring_rows),
     }
 
     log_step("Building demographic and collection-context summaries.")

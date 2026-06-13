@@ -362,6 +362,16 @@ code {
   background: white;
 }
 .chart-box h3 { font-size: 16px; }
+.retention-score-histogram-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.retention-score-histogram .standalone-figure {
+  margin-top: 8px;
+}
 .standalone-figure {
   display: block;
   width: 100%;
