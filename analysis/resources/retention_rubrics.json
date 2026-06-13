@@ -270,7 +270,7 @@
       ]
     }
   },
-  "instructions_html": "<h1 class=\"c33\" id=\"h.4zsxvucmvhvu\">\n<span class=\"c37 c23\">Instructions</span>\n</h1>\n<h2 class=\"c28\" id=\"h.ydpqbvatll5e\">\n<span class=\"c10\">General</span>\n</h2>\n<p class=\"c5\">\n<span class=\"c26\">Each scoring round, you should have the current question element (Q1_name, Q2_fact1, Q2_fact2, Q2_fact3, Q3_looks, Q4_chapter, Q4_env), the current creature (Abyss deer, Amethyst scarab, Axolotl dragon, Cave dweller, Ender ape, Flying bunny, Glare, Grand grassling father, Ice golem, Killer crab, Lizard knight, Mushroom bup, Orc, Prototype warden, Retro TV robot, Scrambler king, Walking robot guy, Wardigo), and standardised answer given. </span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span>Based on the current question element and creature, select the right rubric to use. This rubric has three possible scores: 0 (= fully wrong), </span>\n<span>1 (= partially correct)</span>\n<span class=\"c26\">, and 2 (= fully correct). You always start comparing the answer to examples for the highest possible score first, and then move down if the answer does not meet these examples. Score each row independently. The same standardised answer may appear for multiple rubrics, but each row should only be scored for the current question element and current creature.</span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span class=\"c26\">When scoring, focus on content-bearing words rather than non-content words such as ‘I don’t know,’ ‘maybe,’ ‘I think,’ or ‘not sure.’ Do not penalise minor misspellings, typos, plural forms, or grammatical errors when the intended meaning is clear. </span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span>Score generously when the intended meaning is clear, but do not infer details that are not present in the answer. The answer does not need to use the exact wording of the rubric examples, unless the current rubric asks for an exact target in terms of wording. The rubric examples will also contain custom components:</span>\n</p>\n<ul class=\"c39 lst-kix_zd9bptj8929p-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c23 c35\">[SRC]</span>\n<span class=\"c35\"> </span>\n<span class=\"c26\">= Study Relevant Content. Incorrect content that comes from another creature, chapter, place, label, or fact in the study.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c23 c35\">[FAN]</span>\n<span class=\"c26\"> = Fantasy. Incorrect or unsupported content that was not part of the study, including invented content, vague invented details, fantasy descriptions, or unsupported synonyms.</span>\n</li>\n</ul>\n<h2 class=\"c22\" id=\"h.eqwpvmyridae\">\n<span class=\"c10\">General answer handling</span>\n</h2>\n<ul class=\"c39 lst-kix_9t8rvwrlqmxl-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Before scoring, remove non-answer material that would receive score = 0 by itself, such as “I don’t know”, “maybe”, “not sure”, “I think”, or similar hedging. Then score the remaining answer.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Do not remove [SRC] or [FAN] content if it is part of the actual answer.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">If an answer gives multiple genuine candidate answers, score each candidate separately, average the candidate scores, and round upward to the nearest integer in the participant’s favour. Do not use this rule for one answer with added modifiers or interfering additions.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">For all answers, minor spelling mistakes, typos, plural forms, and obvious misspellings do not reduce the score when the intended meaning is clear.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Information from another question element only earns credit when it is relevant to the current rubric. For example, a chapter name alone does not earn credit in a creature-environment rubric, and an environment description alone does not earn credit in a chapter-name rubric.</span>\n</li>\n</ul>\n<h2 class=\"c22\" id=\"h.on0wqmgd4wmv\">\n<span class=\"c10\">Question elements (+ examples)</span>\n</h2>\n<ul class=\"c39 lst-kix_b4h3gha0ailr-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span>“Creature Name”: score the exact creature name in terms of wording. Synonyms, translations, looks, facts, chapters, or environments do not count unless the actual target name is also present.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Facts”: score the semantic target of the current fact only. Other correct facts from the same creature are harmless extras when the current fact target is present, but they do not count as the current fact when the current target is absent.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Looks”: score the semantic visual description of the creature. The creature name, facts, chapter, or environment alone do not count as looks.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Chapter Name”: score the exact chapter name or chapter number. Specific place/environment descriptions alone do not count as chapter names.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Environment”: score the semantic description of the specific place where the creature was found. Chapter names or chapter numbers alone do not count as environment descriptions.</span>\n</li>\n</ul>",
+  "instructions_html": "<h1 class=\"c33\" id=\"h.4zsxvucmvhvu\">\n<span class=\"c37 c23\">Instructions</span>\n</h1>\n<h2 class=\"c28\" id=\"h.ydpqbvatll5e\">\n<span class=\"c10\">General</span>\n</h2>\n<p class=\"c5\">\n<span class=\"c26\">Each scoring round, you should have the current question element (Q1_name, Q2_fact1, Q2_fact2, Q2_fact3, Q3_looks, Q4_chapter, Q4_env), the current creature (Abyss deer, Amethyst scarab, Axolotl dragon, Cave dweller, Ender ape, Flying bunny, Glare, Grand grassling father, Ice golem, Killer crab, Lizard knight, Mushroom bup, Orc, Prototype warden, Retro TV robot, Scrambler king, Walking robot guy, Wardigo), and standardised answer given. </span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span>Based on the current question element and creature, select the right rubric to use. This rubric has three possible scores: 0 (= fully wrong), </span>\n<span>1 (= partially correct)</span>\n<span class=\"c26\">, and 2 (= fully correct). You always start comparing the answer to examples for the highest possible score first, and then move down if the answer does not meet these examples. Score each row independently. The same standardised answer may appear for multiple rubrics, but each row should only be scored for the current question element and current creature.</span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span class=\"c26\">When scoring, focus on content-bearing words rather than non-content words such as ‘I don’t know,’ ‘maybe,’ ‘I think,’ or ‘not sure.’ Do not penalise minor misspellings, typos, plural forms, or grammatical errors when the intended meaning is clear. </span>\n</p>\n<p class=\"c5 c15\">\n<span class=\"c26\"></span>\n</p>\n<p class=\"c5\">\n<span>Score generously when the intended meaning is clear, but do not infer details that are not present in the answer. The answer does not need to use the exact wording of the rubric examples, unless the current rubric asks for an exact target in terms of wording. The rubric examples will also contain custom components:</span>\n</p>\n<ul class=\"c39 lst-kix_zd9bptj8929p-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c23 c35\">[SRC]</span>\n<span class=\"c35\"> </span>\n<span class=\"c26\">= Study Relevant Content. Incorrect content that comes from another creature, chapter, place, label, or fact in the study.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c23 c35\">[FAN]</span>\n<span class=\"c26\"> = Fantasy. Incorrect or unsupported content that was not part of the study, including invented content, vague invented details, fantasy descriptions, or unsupported synonyms.</span>\n</li>\n</ul>\n<h2 class=\"c22\" id=\"h.eqwpvmyridae\">\n<span class=\"c10\">General answer handling</span>\n</h2>\n<ul class=\"c39 lst-kix_9t8rvwrlqmxl-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Before scoring, remove non-answer material that would receive score = 0 by itself, such as “I don’t know”, “maybe”, “not sure”, “I think”, or similar hedging. Then score the remaining answer.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Do not remove [SRC] or [FAN] content if it is part of the actual answer.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">If an answer gives multiple genuine candidate answers, score each candidate separately, average the candidate scores, and round upward to the nearest integer in the participant’s favour. Do not use this rule for one answer with added modifiers or interfering additions.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">For all answers, minor spelling mistakes, typos, plural forms, and obvious misspellings do not reduce the score when the intended meaning is clear.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">Information from another question element only earns credit when it is relevant to the current rubric. For example, a chapter name alone does not earn credit in a creature-environment rubric, and an environment description alone does not earn credit in a chapter-name rubric.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\"><span class=\"c26\">If a rubric row says “At least two targets”, the examples still show one target per line rather than pre-combined pairs. This means graders may freely combine any two proposed targets from that row when deciding whether an answer contains at least two targets.</span></li>\n</ul>\n<h2 class=\"c22\" id=\"h.on0wqmgd4wmv\">\n<span class=\"c10\">Question elements (+ examples)</span>\n</h2>\n<ul class=\"c39 lst-kix_b4h3gha0ailr-0 start\">\n<li class=\"c5 c32 li-bullet-0\">\n<span>“Creature Name”: score the exact creature name in terms of wording. Synonyms, translations, looks, facts, chapters, or environments do not count unless the actual target name is also present.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Facts”: score the semantic target of the current fact only. Other correct facts from the same creature are harmless extras when the current fact target is present, but they do not count as the current fact when the current target is absent.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Looks”: score the semantic visual description of the creature. The creature name, facts, chapter, or environment alone do not count as looks.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Chapter Name”: score the exact chapter name or chapter number. Specific place/environment descriptions alone do not count as chapter names.</span>\n</li>\n<li class=\"c5 c32 li-bullet-0\">\n<span class=\"c26\">“Creature Environment”: score the semantic description of the specific place where the creature was found. Chapter names or chapter numbers alone do not count as environment descriptions.</span>\n</li>\n</ul>",
   "rubrics": {
     "Q1_name": {
       "title": "Creature Name [Q1]"
@@ -316,7 +316,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature name)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature name)"
           },
           {
             "id": "s1_02",
@@ -332,7 +332,7 @@
           },
           {
             "id": "s1_05",
-            "label": "Partial target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature name)"
+            "label": "Partial target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature name)"
           }
         ],
         "0": [
@@ -370,7 +370,7 @@
           },
           {
             "id": "s2_03",
-            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not\n[SRC]\nor\n[FAN]\n)"
+            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not [SRC] or [FAN])"
           },
           {
             "id": "s2_04",
@@ -380,7 +380,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           },
           {
             "id": "s1_02",
@@ -396,7 +396,7 @@
           },
           {
             "id": "s1_05",
-            "label": "Partial target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Partial target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           }
         ],
         "0": [
@@ -430,7 +430,7 @@
           },
           {
             "id": "s2_03",
-            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not\n[SRC]\nor\n[FAN]\n)"
+            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not [SRC] or [FAN])"
           },
           {
             "id": "s2_04",
@@ -440,7 +440,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           },
           {
             "id": "s1_02",
@@ -456,7 +456,7 @@
           },
           {
             "id": "s1_05",
-            "label": "Partial target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Partial target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           }
         ],
         "0": [
@@ -490,7 +490,7 @@
           },
           {
             "id": "s2_03",
-            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not\n[SRC]\nor\n[FAN]\n)"
+            "label": "Exact target, with separate extra fact(s) from this creature (i.e., not [SRC] or [FAN])"
           },
           {
             "id": "s2_04",
@@ -500,7 +500,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           },
           {
             "id": "s1_02",
@@ -516,7 +516,7 @@
           },
           {
             "id": "s1_05",
-            "label": "Partial target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
+            "label": "Partial target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature fact)"
           }
         ],
         "0": [
@@ -556,7 +556,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "At least two exact targets, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature looks)"
+            "label": "At least two exact targets, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature looks)"
           },
           {
             "id": "s1_02",
@@ -572,7 +572,7 @@
           },
           {
             "id": "s1_05",
-            "label": "One exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature looks)"
+            "label": "One exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature looks)"
           },
           {
             "id": "s1_06",
@@ -624,7 +624,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed chapter name, even when describing incorrect aspects of this chapter)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed chapter name, even when describing incorrect aspects of this chapter)"
           },
           {
             "id": "s1_02",
@@ -672,7 +672,7 @@
         "1": [
           {
             "id": "s1_01",
-            "label": "Exact target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature environment)"
+            "label": "Exact target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature environment)"
           },
           {
             "id": "s1_02",
@@ -688,7 +688,7 @@
           },
           {
             "id": "s1_05",
-            "label": "Partial target, with interfering /\n[FAN]\n/\n[SRC]\naddition(s) (i.e., added content changes, contradicts, or confuses the proposed creature environment, even when stating incorrect chapter name or number)"
+            "label": "Partial target, with interfering / [FAN] / [SRC] addition(s) (i.e., added content changes, contradicts, or confuses the proposed creature environment, even when stating incorrect chapter name or number)"
           }
         ],
         "0": [
@@ -719,11 +719,11 @@
             "s2_03": "abyss deer, the deer/stag one\nabyss deer / hert\nabyss deer or something"
           },
           "1": {
-            "s1_01": "abyss deer / dragon\nabyss deer horse\nabyss deer monster\nabyss deer\n[SRC]\n[FAN]\nabyss deer",
+            "s1_01": "abyss deer / dragon\nabyss deer horse\nabyss deer monster\nabyss deer [SRC]\n[FAN] abyss deer",
             "s1_02": "deer abyss\ndeer of abyss\nthe deer called abyss",
             "s1_03": "abyss\ndeer",
             "s1_04": "abyss stag\nabyss elk\ndark deer",
-            "s1_05": "deer something\nsomething deer\nabyss …\n__ abyss\ndeer\n[SRC]\n[SRC]\ndeer\nabyss\n[SRC]\n[FAN]\ndeer\nabyss\n[FAN]\n[FAN]\nabyss"
+            "s1_05": "deer something\nsomething deer\nabyss …\n__ abyss\ndeer [SRC]\n[SRC] deer\nabyss [SRC]\n[FAN] deer\nabyss [FAN]\n[FAN] abyss"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -742,11 +742,11 @@
             "s2_03": "amethyst scarab, the purple beetle one\namethyst scarab / purple beetle\namethyst scarab or something"
           },
           "1": {
-            "s1_01": "amethyst scarab / flying bunny\namethyst scarab monster\namethyst scarab\n[SRC]\n[FAN]\namethyst scarab",
+            "s1_01": "amethyst scarab / flying bunny\namethyst scarab monster\namethyst scarab [SRC]\n[FAN] amethyst scarab",
             "s1_02": "scarab amethyst\nscarab of amethyst\nthe scarab called amethyst",
             "s1_03": "amethyst\nscarab",
             "s1_04": "amethyst purple beetle\ndung beetle scarab\namethyst",
-            "s1_05": "scarab something\nsomething scarab\namethyst …\nscarab\n[SRC]\nscarab\n[FAN]"
+            "s1_05": "scarab something\nsomething scarab\namethyst …\n__ amethyst\nscarab [SRC]\n[SRC] scarab\namethyst [SRC]\n[FAN] scarab\namethyst [FAN]\n[FAN] amethyst"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -765,11 +765,11 @@
             "s2_03": "axolotl dragon, the pink dragon one\naxolotl dragon / water dragon\naxolotl dragon or something"
           },
           "1": {
-            "s1_01": "axolotl dragon / amethyst scarab\naxolotl dragon monster\naxolotl dragon\n[SRC]\n[FAN]\naxolotl dragon",
+            "s1_01": "axolotl dragon / amethyst scarab\naxolotl dragon monster\naxolotl dragon [SRC]\n[FAN] axolotl dragon",
             "s1_02": "dragon axolotl\ndragon of axolotl\nthe dragon called axolotl",
             "s1_03": "axolotl\ndragon",
             "s1_04": "axolotl water dragon\npink dragon dragon\naxolotl",
-            "s1_05": "dragon something\nsomething dragon\naxolotl …\ndragon\n[SRC]\ndragon\n[FAN]"
+            "s1_05": "dragon something\nsomething dragon\naxolotl …\n__ axolotl\ndragon [SRC]\n[SRC] dragon\naxolotl [SRC]\n[FAN] dragon\naxolotl [FAN]\n[FAN] axolotl"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -788,11 +788,11 @@
             "s2_03": "cave dweller, the thin pale humanoid one\ncave dweller / cave man\ncave dweller or something"
           },
           "1": {
-            "s1_01": "cave dweller / amethyst scarab\ncave dweller monster\ncave dweller\n[SRC]\n[FAN]\ncave dweller",
+            "s1_01": "cave dweller / amethyst scarab\ncave dweller monster\ncave dweller [SRC]\n[FAN] cave dweller",
             "s1_02": "dweller cave\ndweller of cave\nthe dweller called cave",
             "s1_03": "cave\ndweller",
             "s1_04": "cave cave man\npale humanoid dweller\ncave",
-            "s1_05": "dweller something\nsomething dweller\ncave …\ndweller\n[SRC]\ndweller\n[FAN]"
+            "s1_05": "dweller something\nsomething dweller\ncave …\n__ cave\ndweller [SRC]\n[SRC] dweller\ncave [SRC]\n[FAN] dweller\ncave [FAN]\n[FAN] cave"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -811,11 +811,11 @@
             "s2_03": "ender ape, the purple ape one\nender ape / purple gorilla\nender ape or something"
           },
           "1": {
-            "s1_01": "ender ape / amethyst scarab\nender ape monster\nender ape\n[SRC]\n[FAN]\nender ape",
+            "s1_01": "ender ape / amethyst scarab\nender ape monster\nender ape [SRC]\n[FAN] ender ape",
             "s1_02": "ape ender\nape of ender\nthe ape called ender",
             "s1_03": "ender\nape",
             "s1_04": "ender purple gorilla\nmonkey ape\nender",
-            "s1_05": "ape something\nsomething ape\nender …\nape\n[SRC]\nape\n[FAN]"
+            "s1_05": "ape something\nsomething ape\nender …\n__ ender\nape [SRC]\n[SRC] ape\nender [SRC]\n[FAN] ape\nender [FAN]\n[FAN] ender"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -834,11 +834,11 @@
             "s2_03": "flying bunny, the bunny with wings one\nflying bunny / winged rabbit\nflying bunny or something"
           },
           "1": {
-            "s1_01": "flying bunny / amethyst scarab\nflying bunny monster\nflying bunny\n[SRC]\n[FAN]\nflying bunny",
+            "s1_01": "flying bunny / amethyst scarab\nflying bunny monster\nflying bunny [SRC]\n[FAN] flying bunny",
             "s1_02": "bunny flying\nbunny of flying\nthe bunny called flying",
             "s1_03": "flying\nbunny",
             "s1_04": "flying winged rabbit\nrabbit bird bunny\nflying",
-            "s1_05": "bunny something\nsomething bunny\nflying …\nbunny\n[SRC]\nbunny\n[FAN]"
+            "s1_05": "bunny something\nsomething bunny\nflying …\n__ flying\nbunny [SRC]\n[SRC] bunny\nflying [SRC]\n[FAN] bunny\nflying [FAN]\n[FAN] flying"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -857,7 +857,7 @@
             "s2_03": "glare, the green block one\nglare / stare\nglare or something"
           },
           "1": {
-            "s1_01": "glare / amethyst scarab\nglare monster\nglare\n[SRC]\n[FAN]\nglare",
+            "s1_01": "glare / amethyst scarab\nglare monster\nglare [SRC]\n[FAN] glare",
             "s1_02": "",
             "s1_03": "",
             "s1_04": "",
@@ -880,11 +880,11 @@
             "s2_03": "grand grassling father, the large grass creature one\ngrand grassling father / big grass man\ngrand grassling father or something"
           },
           "1": {
-            "s1_01": "grand grassling father / amethyst scarab\ngrand grassling father monster\ngrand grassling father\n[SRC]\n[FAN]\ngrand grassling father",
+            "s1_01": "grand grassling father / amethyst scarab\ngrand grassling father monster\ngrand grassling father [SRC]\n[FAN] grand grassling father",
             "s1_02": "father grassling grand\nfather of grand grassling\nthe father called grand grassling",
             "s1_03": "grand\ngrassling\nfather",
             "s1_04": "grand big grass man\nelder plant dad father\ngrand grassling",
-            "s1_05": "father something\nsomething father\ngrand …\nfather\n[SRC]\nfather\n[FAN]"
+            "s1_05": "father something\nsomething father\ngrand …\n__ grand\nfather [SRC]\n[SRC] father\ngrand [SRC]\n[FAN] father\ngrand [FAN]\n[FAN] grand"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -903,11 +903,11 @@
             "s2_03": "ice golem, the large blue golem one\nice golem / snow giant\nice golem or something"
           },
           "1": {
-            "s1_01": "ice golem / amethyst scarab\nice golem monster\nice golem\n[SRC]\n[FAN]\nice golem",
+            "s1_01": "ice golem / amethyst scarab\nice golem monster\nice golem [SRC]\n[FAN] ice golem",
             "s1_02": "golem ice\ngolem of ice\nthe golem called ice",
             "s1_03": "ice\ngolem",
             "s1_04": "ice snow giant\nfrozen giant golem\nice",
-            "s1_05": "golem something\nsomething golem\nice …\ngolem\n[SRC]\ngolem\n[FAN]"
+            "s1_05": "golem something\nsomething golem\nice …\n__ ice\ngolem [SRC]\n[SRC] golem\nice [SRC]\n[FAN] golem\nice [FAN]\n[FAN] ice"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -926,11 +926,11 @@
             "s2_03": "killer crab, the dark crab one\nkiller crab / evil crab\nkiller crab or something"
           },
           "1": {
-            "s1_01": "killer crab / amethyst scarab\nkiller crab monster\nkiller crab\n[SRC]\n[FAN]\nkiller crab",
+            "s1_01": "killer crab / amethyst scarab\nkiller crab monster\nkiller crab [SRC]\n[FAN] killer crab",
             "s1_02": "crab killer\ncrab of killer\nthe crab called killer",
             "s1_03": "killer\ncrab",
             "s1_04": "killer evil crab\ndeadly crab crab\nkiller",
-            "s1_05": "crab something\nsomething crab\nkiller …\ncrab\n[SRC]\ncrab\n[FAN]"
+            "s1_05": "crab something\nsomething crab\nkiller …\n__ killer\ncrab [SRC]\n[SRC] crab\nkiller [SRC]\n[FAN] crab\nkiller [FAN]\n[FAN] killer"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -949,11 +949,11 @@
             "s2_03": "lizard knight, the green lizard one\nlizard knight / reptile soldier\nlizard knight or something"
           },
           "1": {
-            "s1_01": "lizard knight / amethyst scarab\nlizard knight monster\nlizard knight\n[SRC]\n[FAN]\nlizard knight",
+            "s1_01": "lizard knight / amethyst scarab\nlizard knight monster\nlizard knight [SRC]\n[FAN] lizard knight",
             "s1_02": "knight lizard\nknight of lizard\nthe knight called lizard",
             "s1_03": "lizard\nknight",
             "s1_04": "lizard reptile soldier\ngecko knight knight\nlizard",
-            "s1_05": "knight something\nsomething knight\nlizard …\nknight\n[SRC]\nknight\n[FAN]"
+            "s1_05": "knight something\nsomething knight\nlizard …\n__ lizard\nknight [SRC]\n[SRC] knight\nlizard [SRC]\n[FAN] knight\nlizard [FAN]\n[FAN] lizard"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -972,11 +972,11 @@
             "s2_03": "mushroom bup, the mushroom creature one\nmushroom bup / mushroom person\nmushroom bup or something"
           },
           "1": {
-            "s1_01": "mushroom bup / amethyst scarab\nmushroom bup monster\nmushroom bup\n[SRC]\n[FAN]\nmushroom bup",
+            "s1_01": "mushroom bup / amethyst scarab\nmushroom bup monster\nmushroom bup [SRC]\n[FAN] mushroom bup",
             "s1_02": "bup mushroom\nbup of mushroom\nthe bup called mushroom",
             "s1_03": "mushroom\nbup",
             "s1_04": "mushroom mushroom person\ntoadstool guy bup\nmushroom",
-            "s1_05": "bup something\nsomething bup\nmushroom …\nbup\n[SRC]\nbup\n[FAN]"
+            "s1_05": "bup something\nsomething bup\nmushroom …\n__ mushroom\nbup [SRC]\n[SRC] bup\nmushroom [SRC]\n[FAN] bup\nmushroom [FAN]\n[FAN] mushroom"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -995,7 +995,7 @@
             "s2_03": "orc, the green humanoid one\norc / goblin\norc or something"
           },
           "1": {
-            "s1_01": "orc / amethyst scarab\norc monster\norc\n[SRC]\n[FAN]\norc",
+            "s1_01": "orc / amethyst scarab\norc monster\norc [SRC]\n[FAN] orc",
             "s1_02": "",
             "s1_03": "",
             "s1_04": "",
@@ -1018,11 +1018,11 @@
             "s2_03": "prototype warden, the pale monster one\nprototype warden / test warden\nprototype warden or something"
           },
           "1": {
-            "s1_01": "prototype warden / amethyst scarab\nprototype warden monster\nprototype warden\n[SRC]\n[FAN]\nprototype warden",
+            "s1_01": "prototype warden / amethyst scarab\nprototype warden monster\nprototype warden [SRC]\n[FAN] prototype warden",
             "s1_02": "warden prototype\nwarden of prototype\nthe warden called prototype",
             "s1_03": "prototype\nwarden",
             "s1_04": "prototype test warden\nwhite monster warden\nprototype",
-            "s1_05": "warden something\nsomething warden\nprototype …\nwarden\n[SRC]\nwarden\n[FAN]"
+            "s1_05": "warden something\nsomething warden\nprototype …\n__ prototype\nwarden [SRC]\n[SRC] warden\nprototype [SRC]\n[FAN] warden\nprototype [FAN]\n[FAN] prototype"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1041,11 +1041,11 @@
             "s2_03": "retro tv robot, the TV robot one\nretro tv robot / television robot\nretro tv robot or something"
           },
           "1": {
-            "s1_01": "retro tv robot / amethyst scarab\nretro tv robot monster\nretro tv robot\n[SRC]\n[FAN]\nretro tv robot",
+            "s1_01": "retro tv robot / amethyst scarab\nretro tv robot monster\nretro tv robot [SRC]\n[FAN] retro tv robot",
             "s1_02": "robot tv retro\nrobot of retro tv\nthe robot called retro tv",
             "s1_03": "retro\ntv\nrobot",
             "s1_04": "retro television robot\nold TV bot robot\nretro tv",
-            "s1_05": "robot something\nsomething robot\nretro …\nrobot\n[SRC]\nrobot\n[FAN]"
+            "s1_05": "robot something\nsomething robot\nretro …\n__ retro\nrobot [SRC]\n[SRC] robot\nretro [SRC]\n[FAN] robot\nretro [FAN]\n[FAN] retro"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1064,11 +1064,11 @@
             "s2_03": "scrambler king, the robot king one\nscrambler king / robot king\nscrambler king or something"
           },
           "1": {
-            "s1_01": "scrambler king / amethyst scarab\nscrambler king monster\nscrambler king\n[SRC]\n[FAN]\nscrambler king",
+            "s1_01": "scrambler king / amethyst scarab\nscrambler king monster\nscrambler king [SRC]\n[FAN] scrambler king",
             "s1_02": "king scrambler\nking of scrambler\nthe king called scrambler",
             "s1_03": "scrambler\nking",
             "s1_04": "scrambler robot king\nmachine king king\nscrambler",
-            "s1_05": "king something\nsomething king\nscrambler …\nking\n[SRC]\nking\n[FAN]"
+            "s1_05": "king something\nsomething king\nscrambler …\n__ scrambler\nking [SRC]\n[SRC] king\nscrambler [SRC]\n[FAN] king\nscrambler [FAN]\n[FAN] scrambler"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1087,11 +1087,11 @@
             "s2_03": "walking robot guy, the walking robot one\nwalking robot guy / walking robot\nwalking robot guy or something"
           },
           "1": {
-            "s1_01": "walking robot guy / amethyst scarab\nwalking robot guy monster\nwalking robot guy\n[SRC]\n[FAN]\nwalking robot guy",
+            "s1_01": "walking robot guy / amethyst scarab\nwalking robot guy monster\nwalking robot guy [SRC]\n[FAN] walking robot guy",
             "s1_02": "guy robot walking\nguy of walking robot\nthe guy called walking robot",
             "s1_03": "walking\nrobot\nguy",
             "s1_04": "walking walking robot\nrobot man guy\nwalking robot",
-            "s1_05": "guy something\nsomething guy\nwalking …\nguy\n[SRC]\nguy\n[FAN]"
+            "s1_05": "guy something\nsomething guy\nwalking …\n__ walking\nguy [SRC]\n[SRC] guy\nwalking [SRC]\n[FAN] guy\nwalking [FAN]\n[FAN] walking"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1110,7 +1110,7 @@
             "s2_03": "wardigo, the tall antlered monster one\nwardigo / wendigo\nwardigo or something"
           },
           "1": {
-            "s1_01": "wardigo / amethyst scarab\nwardigo monster\nwardigo\n[SRC]\n[FAN]\nwardigo",
+            "s1_01": "wardigo / amethyst scarab\nwardigo monster\nwardigo [SRC]\n[FAN] wardigo",
             "s1_02": "",
             "s1_03": "",
             "s1_04": "",
@@ -1137,10 +1137,10 @@
           },
           "1": {
             "s1_01": "they eat grass only in pairs who cannot breath air\nthey eat grass only in pairs at night.\nthey eat grass only in pairs because they are magical.\nthey eat grass only in pairs in the jungle.",
-            "s1_02": "they eat pairs of grass.\nthey remember grass in pairs.\nthey eat grass in groups.",
+            "s1_02": "not they eat grass only in pairs.\npairs in only grass eat they.\nthey graze. before they eat grass.",
             "s1_03": "they eat grass.\nthey graze.\nthey are in pairs.\nthey eat together.",
             "s1_04": "They eat grass samen or something",
-            "s1_05": "they eat something in pairs.\nsomething about grass.\nthey do something in pairs.\nthey eat grass\n[SRC]\n.\nthey are in pairs\n[SRC]\n.\nthey eat grass\n[FAN]\n.\nthey are in pairs\n[FAN]\n."
+            "s1_05": "they eat grass. and something.\nsomething about they graze.\nthey are in pairs. with something changed.\nthey eat grass. [SRC].\nthey graze. [SRC].\nthey eat grass. [FAN].\nthey graze. [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1160,10 +1160,10 @@
           },
           "1": {
             "s1_01": "their shells leave crystal dust because they are magical.\ntheir shells leave crystal dust in the museum.\ntheir shells leave crystal dust [FAN].",
-            "s1_02": "not their shells leave crystal dust.\ntheir shells leave crystal dust backwards.",
+            "s1_02": "not their shells leave crystal dust.\ndust crystal leave shells their.\ncrystal dust before shells leave dust.",
             "s1_03": "shells leave dust\ncrystal dust\nthey leave dust\namethyst dust",
             "s1_04": "shells leave dust or something",
-            "s1_05": "shells leave dust\n[SRC]\ncrystal dust\n[FAN]"
+            "s1_05": "shells leave dust and something.\nsomething about crystal dust.\nthey leave dust with something changed.\nshells leave dust [SRC].\ncrystal dust [SRC].\nshells leave dust [FAN].\ncrystal dust [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1183,10 +1183,10 @@
           },
           "1": {
             "s1_01": "males display brighter fins because they are magical.\nmales display brighter fins on the farm.\nmales display brighter fins [FAN].",
-            "s1_02": "not males display brighter fins.\nmales display brighter fins backwards.",
+            "s1_02": "not males display brighter fins.\nfins brighter display males.\nbright fins before males have brighter fins.",
             "s1_03": "males have brighter fins\nbright fins\nmale fins\nfins are brighter",
             "s1_04": "males have brighter fins or something",
-            "s1_05": "males have brighter fins\n[SRC]\nbright fins\n[FAN]"
+            "s1_05": "males have brighter fins and something.\nsomething about bright fins.\nmale fins with something changed.\nmales have brighter fins [SRC].\nbright fins [SRC].\nmales have brighter fins [FAN].\nbright fins [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1206,10 +1206,10 @@
           },
           "1": {
             "s1_01": "it follows candle smoke home because they are magical.\nit follows candle smoke home in the museum.\nit follows candle smoke home [FAN].",
-            "s1_02": "not it follows candle smoke home.\nit follows candle smoke home backwards.",
+            "s1_02": "not it follows candle smoke home.\nhome smoke candle follows it.\ncandle smoke before follows smoke.",
             "s1_03": "follows smoke\ncandle smoke\nsmoke leads it home\nfollows candles",
             "s1_04": "follows smoke or something",
-            "s1_05": "follows smoke\n[SRC]\ncandle smoke\n[FAN]"
+            "s1_05": "follows smoke and something.\nsomething about candle smoke.\nsmoke leads it home with something changed.\nfollows smoke [SRC].\ncandle smoke [SRC].\nfollows smoke [FAN].\ncandle smoke [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1229,10 +1229,10 @@
           },
           "1": {
             "s1_01": "it drums on hollow tree trunks because they are magical.\nit drums on hollow tree trunks in the museum.\nit drums on hollow tree trunks [FAN].",
-            "s1_02": "not it drums on hollow tree trunks.\nit drums on hollow tree trunks backwards.",
+            "s1_02": "not it drums on hollow tree trunks.\ntrunks tree hollow on drums it.\nhollow tree trunks before drums on trunks.",
             "s1_03": "drums on trunks\nhollow tree trunks\nit drums\ntree-trunk drumming",
             "s1_04": "drums on trunks or something",
-            "s1_05": "drums on trunks\n[SRC]\nhollow tree trunks\n[FAN]"
+            "s1_05": "drums on trunks and something.\nsomething about hollow tree trunks.\nit drums with something changed.\ndrums on trunks [SRC].\nhollow tree trunks [SRC].\ndrums on trunks [FAN].\nhollow tree trunks [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1252,10 +1252,10 @@
           },
           "1": {
             "s1_01": "they nest where bells ring because they are magical.\nthey nest where bells ring in the museum.\nthey nest where bells ring [FAN].",
-            "s1_02": "not they nest where bells ring.\nthey nest where bells ring backwards.",
+            "s1_02": "not they nest where bells ring.\nring bells where nest they.\nbells ring before nests near bells.",
             "s1_03": "nests near bells\nbells ring\nwhere bells ring\nbell nests",
             "s1_04": "nests near bells or something",
-            "s1_05": "nests near bells\n[SRC]\nbells ring\n[FAN]"
+            "s1_05": "nests near bells and something.\nsomething about bells ring.\nwhere bells ring with something changed.\nnests near bells [SRC].\nbells ring [SRC].\nnests near bells [FAN].\nbells ring [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1275,10 +1275,10 @@
           },
           "1": {
             "s1_01": "females vanish in winter because they are magical.\nfemales vanish in winter in the museum.\nfemales vanish in winter [FAN].",
-            "s1_02": "not females vanish in winter.\nfemales vanish in winter backwards.",
+            "s1_02": "not females vanish in winter.\nwinter in vanish females.\nvanish in winter before females disappear.",
             "s1_03": "females disappear\nvanish in winter\nwinter disappearance\nfemales in winter",
             "s1_04": "females disappear or something",
-            "s1_05": "females disappear\n[SRC]\nvanish in winter\n[FAN]"
+            "s1_05": "females disappear and something.\nsomething about vanish in winter.\nwinter disappearance with something changed.\nfemales disappear [SRC].\nvanish in winter [SRC].\nfemales disappear [FAN].\nvanish in winter [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1298,10 +1298,10 @@
           },
           "1": {
             "s1_01": "moss spreads after every footstep because they are magical.\nmoss spreads after every footstep on the farm.\nmoss spreads after every footstep [FAN].",
-            "s1_02": "not moss spreads after every footstep.\nmoss spreads after every footstep backwards.",
+            "s1_02": "not moss spreads after every footstep.\nfootstep every after spreads moss.\nmoss after footsteps before moss spreads.",
             "s1_03": "moss spreads\nmoss after footsteps\nfootsteps spread moss\nmoss footprints",
             "s1_04": "moss spreads or something",
-            "s1_05": "moss spreads\n[SRC]\nmoss after footsteps\n[FAN]"
+            "s1_05": "moss spreads and something.\nsomething about moss after footsteps.\nfootsteps spread moss with something changed.\nmoss spreads [SRC].\nmoss after footsteps [SRC].\nmoss spreads [FAN].\nmoss after footsteps [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1321,10 +1321,10 @@
           },
           "1": {
             "s1_01": "cold leaks from a stone heart because they are magical.\ncold leaks from a stone heart on the farm.\ncold leaks from a stone heart [FAN].",
-            "s1_02": "not cold leaks from a stone heart.\ncold leaks from a stone heart backwards.",
+            "s1_02": "not cold leaks from a stone heart.\nheart stone a from leaks cold.\nstone heart before cold leaks.",
             "s1_03": "cold leaks\nstone heart\ncold stone heart\ncold comes from the heart",
             "s1_04": "cold leaks or something",
-            "s1_05": "cold leaks\n[SRC]\nstone heart\n[FAN]"
+            "s1_05": "cold leaks and something.\nsomething about stone heart.\ncold stone heart with something changed.\ncold leaks [SRC].\nstone heart [SRC].\ncold leaks [FAN].\nstone heart [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1344,10 +1344,10 @@
           },
           "1": {
             "s1_01": "wheat roots hide its tunnels because they are magical.\nwheat roots hide its tunnels in the museum.\nwheat roots hide its tunnels [FAN].",
-            "s1_02": "not wheat roots hide its tunnels.\nwheat roots hide its tunnels backwards.",
+            "s1_02": "not wheat roots hide its tunnels.\ntunnels its hide roots wheat.\ntunnels under wheat before wheat roots hide tunnels.",
             "s1_03": "wheat roots hide tunnels\ntunnels under wheat\nroots hide it\nwheat hides tunnels",
             "s1_04": "wheat roots hide tunnels or something",
-            "s1_05": "wheat roots hide tunnels\n[SRC]\ntunnels under wheat\n[FAN]"
+            "s1_05": "wheat roots hide tunnels and something.\nsomething about tunnels under wheat.\nroots hide it with something changed.\nwheat roots hide tunnels [SRC].\ntunnels under wheat [SRC].\nwheat roots hide tunnels [FAN].\ntunnels under wheat [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1367,10 +1367,10 @@
           },
           "1": {
             "s1_01": "water keeps its armour flexible because they are magical.\nwater keeps its armour flexible in the museum.\nwater keeps its armour flexible [FAN].",
-            "s1_02": "not water keeps its armour flexible.\nwater keeps its armour flexible backwards.",
+            "s1_02": "not water keeps its armour flexible.\nflexible armour its keeps water.\narmour flexible with water before water keeps armour flexible.",
             "s1_03": "water keeps armour flexible\narmour flexible with water\nneeds water for armour\nflexible armour",
             "s1_04": "water keeps armour flexible or something",
-            "s1_05": "water keeps armour flexible\n[SRC]\narmour flexible with water\n[FAN]"
+            "s1_05": "water keeps armour flexible and something.\nsomething about armour flexible with water.\nneeds water for armour with something changed.\nwater keeps armour flexible [SRC].\narmour flexible with water [SRC].\nwater keeps armour flexible [FAN].\narmour flexible with water [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1390,10 +1390,10 @@
           },
           "1": {
             "s1_01": "it sneezes near mushroom spores because they are magical.\nit sneezes near mushroom spores in the museum.\nit sneezes near mushroom spores [FAN].",
-            "s1_02": "not it sneezes near mushroom spores.\nit sneezes near mushroom spores backwards.",
+            "s1_02": "not it sneezes near mushroom spores.\nspores mushroom near sneezes it.\nmushroom spores before sneezes near spores.",
             "s1_03": "sneezes near spores\nmushroom spores\nspores make it sneeze\nsneezes near mushrooms",
             "s1_04": "sneezes near spores or something",
-            "s1_05": "sneezes near spores\n[SRC]\nmushroom spores\n[FAN]"
+            "s1_05": "sneezes near spores and something.\nsomething about mushroom spores.\nspores make it sneeze with something changed.\nsneezes near spores [SRC].\nmushroom spores [SRC].\nsneezes near spores [FAN].\nmushroom spores [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1413,10 +1413,10 @@
           },
           "1": {
             "s1_01": "they mapped the island first because they are magical.\nthey mapped the island first in the museum.\nthey mapped the island first [FAN].",
-            "s1_02": "not they mapped the island first.\nthey mapped the island first backwards.",
+            "s1_02": "not they mapped the island first.\nfirst island the mapped they.\nmapped it first before mapped the island.",
             "s1_03": "mapped the island\nmapped it first\nfirst map makers\nisland map",
             "s1_04": "mapped the island or something",
-            "s1_05": "mapped the island\n[SRC]\nmapped it first\n[FAN]"
+            "s1_05": "mapped the island and something.\nsomething about mapped it first.\nfirst map makers with something changed.\nmapped the island [SRC].\nmapped it first [SRC].\nmapped the island [FAN].\nmapped it first [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1436,10 +1436,10 @@
           },
           "1": {
             "s1_01": "it was built for testing because they are magical.\nit was built for testing in the museum.\nit was built for testing [FAN].",
-            "s1_02": "not it was built for testing.\nit was built for testing backwards.",
+            "s1_02": "not it was built for testing.\ntesting for built was it.\nmade for tests before built for testing.",
             "s1_03": "built for testing\nmade for tests\nprototype testing\ntesting purpose",
             "s1_04": "built for testing or something",
-            "s1_05": "built for testing\n[SRC]\nmade for tests\n[FAN]"
+            "s1_05": "built for testing and something.\nsomething about made for tests.\nprototype testing with something changed.\nbuilt for testing [SRC].\nmade for tests [SRC].\nbuilt for testing [FAN].\nmade for tests [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1459,10 +1459,10 @@
           },
           "1": {
             "s1_01": "nobody knows who built it because they are magical.\nnobody knows who built it in the museum.\nnobody knows who built it [FAN].",
-            "s1_02": "not nobody knows who built it.\nnobody knows who built it backwards.",
+            "s1_02": "not nobody knows who built it.\nit built who knows nobody.\nunknown builder before nobody knows the builder.",
             "s1_03": "nobody knows the builder\nunknown builder\nwho built it is unknown\nno one knows who made it",
             "s1_04": "nobody knows the builder or something",
-            "s1_05": "nobody knows the builder\n[SRC]\nunknown builder\n[FAN]"
+            "s1_05": "nobody knows the builder and something.\nsomething about unknown builder.\nwho built it is unknown with something changed.\nnobody knows the builder [SRC].\nunknown builder [SRC].\nnobody knows the builder [FAN].\nunknown builder [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1482,10 +1482,10 @@
           },
           "1": {
             "s1_01": "nearby machines lose their rhythm because they are magical.\nnearby machines lose their rhythm on the farm.\nnearby machines lose their rhythm [FAN].",
-            "s1_02": "not nearby machines lose their rhythm.\nnearby machines lose their rhythm backwards.",
+            "s1_02": "not nearby machines lose their rhythm.\nrhythm their lose machines nearby.\nnearby machines before machines lose rhythm.",
             "s1_03": "machines lose rhythm\nnearby machines\nrhythm gets lost\nmachines are scrambled",
             "s1_04": "machines lose rhythm or something",
-            "s1_05": "machines lose rhythm\n[SRC]\nnearby machines\n[FAN]"
+            "s1_05": "machines lose rhythm and something.\nsomething about nearby machines.\nrhythm gets lost with something changed.\nmachines lose rhythm [SRC].\nnearby machines [SRC].\nmachines lose rhythm [FAN].\nnearby machines [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1505,10 +1505,10 @@
           },
           "1": {
             "s1_01": "it was designed for demonstrations because they are magical.\nit was designed for demonstrations on the farm.\nit was designed for demonstrations [FAN].",
-            "s1_02": "not it was designed for demonstrations.\nit was designed for demonstrations backwards.",
+            "s1_02": "not it was designed for demonstrations.\ndemonstrations for designed was it.\nmade for demos before designed for demonstrations.",
             "s1_03": "designed for demonstrations\nmade for demos\ndemonstration robot\ndemo purpose",
             "s1_04": "designed for demonstrations or something",
-            "s1_05": "designed for demonstrations\n[SRC]\nmade for demos\n[FAN]"
+            "s1_05": "designed for demonstrations and something.\nsomething about made for demos.\ndemonstration robot with something changed.\ndesigned for demonstrations [SRC].\nmade for demos [SRC].\ndesigned for demonstrations [FAN].\nmade for demos [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1528,10 +1528,10 @@
           },
           "1": {
             "s1_01": "it outgrew ordinary museum doors because they are magical.\nit outgrew ordinary museum doors on the farm.\nit outgrew ordinary museum doors [FAN].",
-            "s1_02": "not it outgrew ordinary museum doors.\nit outgrew ordinary museum doors backwards.",
+            "s1_02": "not it outgrew ordinary museum doors.\ndoors museum ordinary outgrew it.\ntoo big for doors before outgrew museum doors.",
             "s1_03": "outgrew museum doors\ntoo big for doors\nordinary doors too small\ngrew past doors",
             "s1_04": "outgrew museum doors or something",
-            "s1_05": "outgrew museum doors\n[SRC]\ntoo big for doors\n[FAN]"
+            "s1_05": "outgrew museum doors and something.\nsomething about too big for doors.\nordinary doors too small with something changed.\noutgrew museum doors [SRC].\ntoo big for doors [SRC].\noutgrew museum doors [FAN].\ntoo big for doors [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1553,10 +1553,10 @@
           },
           "1": {
             "s1_01": "they remember every farm gate because they are magical.\nthey remember every farm gate in the museum.\nthey remember every farm gate [FAN].",
-            "s1_02": "not they remember every farm gate.\nthey remember every farm gate backwards.",
+            "s1_02": "not they remember every farm gate.\ngate farm every remember they.\nfarm gates before they remember gates.",
             "s1_03": "they remember gates\nfarm gates\nthey remember the farm\nsomething about gates",
             "s1_04": "they remember gates or something",
-            "s1_05": "they remember gates\n[SRC]\nfarm gates\n[FAN]"
+            "s1_05": "they remember gates and something.\nsomething about farm gates.\nthey remember the farm with something changed.\nthey remember gates [SRC].\nfarm gates [SRC].\nthey remember gates [FAN].\nfarm gates [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1576,10 +1576,10 @@
           },
           "1": {
             "s1_01": "they navigate by tiny echoes because they are magical.\nthey navigate by tiny echoes in the museum.\nthey navigate by tiny echoes [FAN].",
-            "s1_02": "not they navigate by tiny echoes.\nthey navigate by tiny echoes backwards.",
+            "s1_02": "not they navigate by tiny echoes.\nechoes tiny by navigate they.\ntiny echoes before they use echoes.",
             "s1_03": "they use echoes\ntiny echoes\nthey navigate by sound\necho navigation",
             "s1_04": "they use echoes or something",
-            "s1_05": "they use echoes\n[SRC]\ntiny echoes\n[FAN]"
+            "s1_05": "they use echoes and something.\nsomething about tiny echoes.\nthey navigate by sound with something changed.\nthey use echoes [SRC].\ntiny echoes [SRC].\nthey use echoes [FAN].\ntiny echoes [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1599,10 +1599,10 @@
           },
           "1": {
             "s1_01": "museum water slows its ageing because they are magical.\nmuseum water slows its ageing on the farm.\nmuseum water slows its ageing [FAN].",
-            "s1_02": "not museum water slows its ageing.\nmuseum water slows its ageing backwards.",
+            "s1_02": "not museum water slows its ageing.\nageing its slows water museum.\nwater slows its ageing before museum water slows aging.",
             "s1_03": "museum water slows aging\nwater slows its ageing\nit ages slowly in water\nslow ageing",
             "s1_04": "museum water slows aging or something",
-            "s1_05": "museum water slows aging\n[SRC]\nwater slows its ageing\n[FAN]"
+            "s1_05": "museum water slows aging and something.\nsomething about water slows its ageing.\nit ages slowly in water with something changed.\nmuseum water slows aging [SRC].\nwater slows its ageing [SRC].\nmuseum water slows aging [FAN].\nwater slows its ageing [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1622,10 +1622,10 @@
           },
           "1": {
             "s1_01": "it dislikes enclosed wooden stalls because they are magical.\nit dislikes enclosed wooden stalls in the museum.\nit dislikes enclosed wooden stalls [FAN].",
-            "s1_02": "not it dislikes enclosed wooden stalls.\nit dislikes enclosed wooden stalls backwards.",
+            "s1_02": "not it dislikes enclosed wooden stalls.\nstalls wooden enclosed dislikes it.\nwooden stalls before dislikes stalls.",
             "s1_03": "dislikes stalls\nwooden stalls\ndoes not like enclosed spaces\nenclosed stalls",
             "s1_04": "dislikes stalls or something",
-            "s1_05": "dislikes stalls\n[SRC]\nwooden stalls\n[FAN]"
+            "s1_05": "dislikes stalls and something.\nsomething about wooden stalls.\ndoes not like enclosed spaces with something changed.\ndislikes stalls [SRC].\nwooden stalls [SRC].\ndislikes stalls [FAN].\nwooden stalls [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1645,10 +1645,10 @@
           },
           "1": {
             "s1_01": "they throw fruit before fighting because they are magical.\nthey throw fruit before fighting in the museum.\nthey throw fruit before fighting [FAN].",
-            "s1_02": "not they throw fruit before fighting.\nthey throw fruit before fighting backwards.",
+            "s1_02": "not they throw fruit before fighting.\nfighting before fruit throw they.\nfruit before fighting before throws fruit.",
             "s1_03": "throws fruit\nfruit before fighting\nthey throw before fights\nuses fruit",
             "s1_04": "throws fruit or something",
-            "s1_05": "throws fruit\n[SRC]\nfruit before fighting\n[FAN]"
+            "s1_05": "throws fruit and something.\nsomething about fruit before fighting.\nthey throw before fights with something changed.\nthrows fruit [SRC].\nfruit before fighting [SRC].\nthrows fruit [FAN].\nfruit before fighting [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1668,10 +1668,10 @@
           },
           "1": {
             "s1_01": "flying helps them look for foxes because they are magical.\nflying helps them look for foxes in the museum.\nflying helps them look for foxes [FAN].",
-            "s1_02": "not flying helps them look for foxes.\nflying helps them look for foxes backwards.",
+            "s1_02": "not flying helps them look for foxes.\nfoxes for look them helps flying.\nlooks for foxes before flying helps find foxes.",
             "s1_03": "flying helps find foxes\nlooks for foxes\nwatches for foxes\nflying for safety",
             "s1_04": "flying helps find foxes or something",
-            "s1_05": "flying helps find foxes\n[SRC]\nlooks for foxes\n[FAN]"
+            "s1_05": "flying helps find foxes and something.\nsomething about looks for foxes.\nwatches for foxes with something changed.\nflying helps find foxes [SRC].\nlooks for foxes [SRC].\nflying helps find foxes [FAN].\nlooks for foxes [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1691,10 +1691,10 @@
           },
           "1": {
             "s1_01": "its name shows how watchful it is because they are magical.\nits name shows how watchful it is in the museum.\nits name shows how watchful it is [FAN].",
-            "s1_02": "not its name shows how watchful it is.\nits name shows how watchful it is backwards.",
+            "s1_02": "not its name shows how watchful it is.\nis it watchful how shows name its.\nit is watchful before name shows watchfulness.",
             "s1_03": "name shows watchfulness\nit is watchful\nglare means watching\nwatchful name",
             "s1_04": "name shows watchfulness or something",
-            "s1_05": "name shows watchfulness\n[SRC]\nit is watchful\n[FAN]"
+            "s1_05": "name shows watchfulness and something.\nsomething about it is watchful.\nglare means watching with something changed.\nname shows watchfulness [SRC].\nit is watchful [SRC].\nname shows watchfulness [FAN].\nit is watchful [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1714,10 +1714,10 @@
           },
           "1": {
             "s1_01": "he is older than fences because they are magical.\nhe is older than fences on the farm.\nhe is older than fences [FAN].",
-            "s1_02": "not he is older than fences.\nhe is older than fences backwards.",
+            "s1_02": "not he is older than fences.\nfences than older is he.\nvery old before older than fences.",
             "s1_03": "older than fences\nvery old\nolder than the fence\nancient compared to fences",
             "s1_04": "older than fences or something",
-            "s1_05": "older than fences\n[SRC]\nvery old\n[FAN]"
+            "s1_05": "older than fences and something.\nsomething about very old.\nolder than the fence with something changed.\nolder than fences [SRC].\nvery old [SRC].\nolder than fences [FAN].\nvery old [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1737,10 +1737,10 @@
           },
           "1": {
             "s1_01": "museum lamps cannot warm it because they are magical.\nmuseum lamps cannot warm it on the farm.\nmuseum lamps cannot warm it [FAN].",
-            "s1_02": "not museum lamps cannot warm it.\nmuseum lamps cannot warm it backwards.",
+            "s1_02": "not museum lamps cannot warm it.\nit warm cannot lamps museum.\nlamps do not warm it before museum lamps cannot warm it.",
             "s1_03": "museum lamps cannot warm it\nlamps do not warm it\ncannot be warmed by lamps\nmuseum lights do not work",
             "s1_04": "museum lamps cannot warm it or something",
-            "s1_05": "museum lamps cannot warm it\n[SRC]\nlamps do not warm it\n[FAN]"
+            "s1_05": "museum lamps cannot warm it and something.\nsomething about lamps do not warm it.\ncannot be warmed by lamps with something changed.\nmuseum lamps cannot warm it [SRC].\nlamps do not warm it [SRC].\nmuseum lamps cannot warm it [FAN].\nlamps do not warm it [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1760,10 +1760,10 @@
           },
           "1": {
             "s1_01": "harvest time makes it restless because they are magical.\nharvest time makes it restless in the museum.\nharvest time makes it restless [FAN].",
-            "s1_02": "not harvest time makes it restless.\nharvest time makes it restless backwards.",
+            "s1_02": "not harvest time makes it restless.\nrestless it makes time harvest.\nrestless at harvest time before harvest makes it restless.",
             "s1_03": "harvest makes it restless\nrestless at harvest time\nharvest time\ngets restless",
             "s1_04": "harvest makes it restless or something",
-            "s1_05": "harvest makes it restless\n[SRC]\nrestless at harvest time\n[FAN]"
+            "s1_05": "harvest makes it restless and something.\nsomething about restless at harvest time.\nharvest time with something changed.\nharvest makes it restless [SRC].\nrestless at harvest time [SRC].\nharvest makes it restless [FAN].\nrestless at harvest time [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1783,10 +1783,10 @@
           },
           "1": {
             "s1_01": "it swears oaths beside rivers because they are magical.\nit swears oaths beside rivers in the museum.\nit swears oaths beside rivers [FAN].",
-            "s1_02": "not it swears oaths beside rivers.\nit swears oaths beside rivers backwards.",
+            "s1_02": "not it swears oaths beside rivers.\nrivers beside oaths swears it.\nswears oaths by rivers before oaths beside rivers.",
             "s1_03": "oaths beside rivers\nswears oaths by rivers\nriver oaths\nbeside rivers",
             "s1_04": "oaths beside rivers or something",
-            "s1_05": "oaths beside rivers\n[SRC]\nswears oaths by rivers\n[FAN]"
+            "s1_05": "oaths beside rivers and something.\nsomething about swears oaths by rivers.\nriver oaths with something changed.\noaths beside rivers [SRC].\nswears oaths by rivers [SRC].\noaths beside rivers [FAN].\nswears oaths by rivers [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1806,10 +1806,10 @@
           },
           "1": {
             "s1_01": "it prefers bread over mushrooms because they are magical.\nit prefers bread over mushrooms in the museum.\nit prefers bread over mushrooms [FAN].",
-            "s1_02": "not it prefers bread over mushrooms.\nit prefers bread over mushrooms backwards.",
+            "s1_02": "not it prefers bread over mushrooms.\nmushrooms over bread prefers it.\nbread over mushrooms before prefers bread.",
             "s1_03": "prefers bread\nbread over mushrooms\nlikes bread more\nbread not mushrooms",
             "s1_04": "prefers bread or something",
-            "s1_05": "prefers bread\n[SRC]\nbread over mushrooms\n[FAN]"
+            "s1_05": "prefers bread and something.\nsomething about bread over mushrooms.\nlikes bread more with something changed.\nprefers bread [SRC].\nbread over mushrooms [SRC].\nprefers bread [FAN].\nbread over mushrooms [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1829,10 +1829,10 @@
           },
           "1": {
             "s1_01": "they trade memory for metal because they are magical.\nthey trade memory for metal in the museum.\nthey trade memory for metal [FAN].",
-            "s1_02": "not they trade memory for metal.\nthey trade memory for metal backwards.",
+            "s1_02": "not they trade memory for metal.\nmetal for memory trade they.\nmemory for metal before trades memory for metal.",
             "s1_03": "trades memory for metal\nmemory for metal\ntrades memories\nmetal trade",
             "s1_04": "trades memory for metal or something",
-            "s1_05": "trades memory for metal\n[SRC]\nmemory for metal\n[FAN]"
+            "s1_05": "trades memory for metal and something.\nsomething about memory for metal.\ntrades memories with something changed.\ntrades memory for metal [SRC].\nmemory for metal [SRC].\ntrades memory for metal [FAN].\nmemory for metal [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1852,10 +1852,10 @@
           },
           "1": {
             "s1_01": "dry ground makes tracking harder because they are magical.\ndry ground makes tracking harder in the museum.\ndry ground makes tracking harder [FAN].",
-            "s1_02": "not dry ground makes tracking harder.\ndry ground makes tracking harder backwards.",
+            "s1_02": "not dry ground makes tracking harder.\nharder tracking makes ground dry.\ntracking harder on dry ground before dry ground makes tracking harder.",
             "s1_03": "dry ground makes tracking harder\ntracking harder on dry ground\ndry ground is hard\nharder tracking",
             "s1_04": "dry ground makes tracking harder or something",
-            "s1_05": "dry ground makes tracking harder\n[SRC]\ntracking harder on dry ground\n[FAN]"
+            "s1_05": "dry ground makes tracking harder and something.\nsomething about tracking harder on dry ground.\ndry ground is hard with something changed.\ndry ground makes tracking harder [SRC].\ntracking harder on dry ground [SRC].\ndry ground makes tracking harder [FAN].\ntracking harder on dry ground [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1875,10 +1875,10 @@
           },
           "1": {
             "s1_01": "it broadcasts only to itself because they are magical.\nit broadcasts only to itself in the museum.\nit broadcasts only to itself [FAN].",
-            "s1_02": "not true that it broadcasts only to itself.\nit broadcasts to itself.",
+            "s1_02": "not it broadcasts only to itself.\nitself to only broadcasts it.\nonly to itself before broadcasts to itself.",
             "s1_03": "broadcasts to itself\nonly to itself\nself-broadcasting\nbroadcasts alone",
             "s1_04": "broadcasts to itself or something",
-            "s1_05": "broadcasts to itself\n[SRC]\nonly to itself\n[FAN]"
+            "s1_05": "broadcasts to itself and something.\nsomething about only to itself.\nself-broadcasting with something changed.\nbroadcasts to itself [SRC].\nonly to itself [SRC].\nbroadcasts to itself [FAN].\nonly to itself [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1898,10 +1898,10 @@
           },
           "1": {
             "s1_01": "it speaks through its red chest because they are magical.\nit speaks through its red chest on the farm.\nit speaks through its red chest [FAN].",
-            "s1_02": "not it speaks through its red chest.\nit speaks through its red chest backwards.",
+            "s1_02": "not it speaks through its red chest.\nchest red its through speaks it.\nred chest speech before speaks through red chest.",
             "s1_03": "speaks through red chest\nred chest speech\ntalks through chest\nchest communicates",
             "s1_04": "speaks through red chest or something",
-            "s1_05": "speaks through red chest\n[SRC]\nred chest speech\n[FAN]"
+            "s1_05": "speaks through red chest and something.\nsomething about red chest speech.\ntalks through chest with something changed.\nspeaks through red chest [SRC].\nred chest speech [SRC].\nspeaks through red chest [FAN].\nred chest speech [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1921,10 +1921,10 @@
           },
           "1": {
             "s1_01": "red marks approved walking routes because they are magical.\nred marks approved walking routes on the farm.\nred marks approved walking routes [FAN].",
-            "s1_02": "not red marks approved walking routes.\nred marks approved walking routes backwards.",
+            "s1_02": "not red marks approved walking routes.\nroutes walking approved marks red.\napproved walking routes before red marks routes.",
             "s1_03": "red marks routes\napproved walking routes\nred route markings\nwalking route marks",
             "s1_04": "red marks routes or something",
-            "s1_05": "red marks routes\n[SRC]\napproved walking routes\n[FAN]"
+            "s1_05": "red marks routes and something.\nsomething about approved walking routes.\nred route markings with something changed.\nred marks routes [SRC].\napproved walking routes [SRC].\nred marks routes [FAN].\napproved walking routes [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1944,10 +1944,10 @@
           },
           "1": {
             "s1_01": "it grew tall because it was fed too much because they are magical.\nit grew tall because it was fed too much on the farm.\nit grew tall because it was fed too much [FAN].",
-            "s1_02": "not it grew tall because it was fed too much.\nit grew tall because it was fed too much backwards.",
+            "s1_02": "not it grew tall because it was fed too much.\nmuch too fed was it because tall grew it.\nfed too much before grew tall from too much food.",
             "s1_03": "grew tall from too much food\nfed too much\ngrew because fed\ntoo much feeding",
             "s1_04": "grew tall from too much food or something",
-            "s1_05": "grew tall from too much food\n[SRC]\nfed too much\n[FAN]"
+            "s1_05": "grew tall from too much food and something.\nsomething about fed too much.\ngrew because fed with something changed.\ngrew tall from too much food [SRC].\nfed too much [SRC].\ngrew tall from too much food [FAN].\nfed too much [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1969,10 +1969,10 @@
           },
           "1": {
             "s1_01": "herd circles calm nervous young deer because they are magical.\nherd circles calm nervous young deer in the museum.\nherd circles calm nervous young deer [FAN].",
-            "s1_02": "not herd circles calm nervous young deer.\nherd circles calm nervous young deer backwards.",
+            "s1_02": "not herd circles calm nervous young deer.\ndeer young nervous calm circles herd.\nthey calm young deer before herd circles.",
             "s1_03": "herd circles\nthey calm young deer\nnervous young deer\nthe herd calms them",
             "s1_04": "herd circles or something",
-            "s1_05": "herd circles\n[SRC]\nthey calm young deer\n[FAN]"
+            "s1_05": "herd circles and something.\nsomething about they calm young deer.\nnervous young deer with something changed.\nherd circles [SRC].\nthey calm young deer [SRC].\nherd circles [FAN].\nthey calm young deer [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -1992,10 +1992,10 @@
           },
           "1": {
             "s1_01": "they dig toward buried crystals because they are magical.\nthey dig toward buried crystals in the museum.\nthey dig toward buried crystals [FAN].",
-            "s1_02": "not they dig toward buried crystals.\nthey dig toward buried crystals backwards.",
+            "s1_02": "not they dig toward buried crystals.\ncrystals buried toward dig they.\nburied crystals before they dig.",
             "s1_03": "they dig\nburied crystals\ndig toward crystals\nthey look for crystals",
             "s1_04": "they dig or something",
-            "s1_05": "they dig\n[SRC]\nburied crystals\n[FAN]"
+            "s1_05": "they dig and something.\nsomething about buried crystals.\ndig toward crystals with something changed.\nthey dig [SRC].\nburied crystals [SRC].\nthey dig [FAN].\nburied crystals [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2015,10 +2015,10 @@
           },
           "1": {
             "s1_01": "it cannot breathe dry air because they are magical.\nit cannot breathe dry air on the farm.\nit cannot breathe dry air [FAN].",
-            "s1_02": "not it cannot breathe dry air.\nit cannot breathe dry air backwards.",
+            "s1_02": "not it cannot breathe dry air.\nair dry breathe cannot it.\ncannot breathe when dry before cannot breathe air.",
             "s1_03": "cannot breathe air\ncannot breathe when dry\nneeds water to breathe\ndry air is bad",
             "s1_04": "cannot breathe air or something",
-            "s1_05": "cannot breathe air\n[SRC]\ncannot breathe when dry\n[FAN]"
+            "s1_05": "cannot breathe air and something.\nsomething about cannot breathe when dry.\nneeds water to breathe with something changed.\ncannot breathe air [SRC].\ncannot breathe when dry [SRC].\ncannot breathe air [FAN].\ncannot breathe when dry [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2038,10 +2038,10 @@
           },
           "1": {
             "s1_01": "it counts footsteps before sleeping because they are magical.\nit counts footsteps before sleeping in the museum.\nit counts footsteps before sleeping [FAN].",
-            "s1_02": "not it counts footsteps before sleeping.\nit counts footsteps before sleeping backwards.",
+            "s1_02": "not it counts footsteps before sleeping.\nsleeping before footsteps counts it.\nfootsteps before sleeping before counts footsteps.",
             "s1_03": "counts footsteps\nfootsteps before sleeping\ncounts before sleep\nlistens to steps",
             "s1_04": "counts footsteps or something",
-            "s1_05": "counts footsteps\n[SRC]\nfootsteps before sleeping\n[FAN]"
+            "s1_05": "counts footsteps and something.\nsomething about footsteps before sleeping.\ncounts before sleep with something changed.\ncounts footsteps [SRC].\nfootsteps before sleeping [SRC].\ncounts footsteps [FAN].\nfootsteps before sleeping [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2061,10 +2061,10 @@
           },
           "1": {
             "s1_01": "groups solve fights with drum beats because they are magical.\ngroups solve fights with drum beats in the museum.\ngroups solve fights with drum beats [FAN].",
-            "s1_02": "not groups solve fights with drum beats.\ngroups solve fights with drum beats backwards.",
+            "s1_02": "not groups solve fights with drum beats.\nbeats drum with fights solve groups.\ngroups solve fights before drum beats solve fights.",
             "s1_03": "drum beats solve fights\ngroups solve fights\ndrumming stops fights\nfights with drums",
             "s1_04": "drum beats solve fights or something",
-            "s1_05": "drum beats solve fights\n[SRC]\ngroups solve fights\n[FAN]"
+            "s1_05": "drum beats solve fights and something.\nsomething about groups solve fights.\ndrumming stops fights with something changed.\ndrum beats solve fights [SRC].\ngroups solve fights [SRC].\ndrum beats solve fights [FAN].\ngroups solve fights [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2084,10 +2084,10 @@
           },
           "1": {
             "s1_01": "they eat four-leaf clovers because they are magical.\nthey eat four-leaf clovers in the museum.\nthey eat four-leaf clovers [FAN].",
-            "s1_02": "not they eat four-leaf clovers.\nthey eat four-leaf clovers backwards.",
+            "s1_02": "not they eat four-leaf clovers.\nclovers leaf four eat they.\nfour-leaf clovers before eats four-leaf clovers.",
             "s1_03": "eats four-leaf clovers\nfour-leaf clovers\nclovers\nlucky clovers",
             "s1_04": "eats four-leaf clovers or something",
-            "s1_05": "eats four-leaf clovers\n[SRC]\nfour-leaf clovers\n[FAN]"
+            "s1_05": "eats four-leaf clovers and something.\nsomething about four-leaf clovers.\nclovers with something changed.\neats four-leaf clovers [SRC].\nfour-leaf clovers [SRC].\neats four-leaf clovers [FAN].\nfour-leaf clovers [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2107,10 +2107,10 @@
           },
           "1": {
             "s1_01": "it hates ignored dark corners because they are magical.\nit hates ignored dark corners in the museum.\nit hates ignored dark corners [FAN].",
-            "s1_02": "not it hates ignored dark corners.\nit hates ignored dark corners backwards.",
+            "s1_02": "not it hates ignored dark corners.\ncorners dark ignored hates it.\nignored dark corners before hates dark corners.",
             "s1_03": "hates dark corners\nignored dark corners\ndoes not like dark corners\ndark corners bother it",
             "s1_04": "hates dark corners or something",
-            "s1_05": "hates dark corners\n[SRC]\nignored dark corners\n[FAN]"
+            "s1_05": "hates dark corners and something.\nsomething about ignored dark corners.\ndoes not like dark corners with something changed.\nhates dark corners [SRC].\nignored dark corners [SRC].\nhates dark corners [FAN].\nignored dark corners [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2130,10 +2130,10 @@
           },
           "1": {
             "s1_01": "he grows medicine from bark because they are magical.\nhe grows medicine from bark on the farm.\nhe grows medicine from bark [FAN].",
-            "s1_02": "not he grows medicine from bark.\nhe grows medicine from bark backwards.",
+            "s1_02": "not he grows medicine from bark.\nbark from medicine grows he.\nmedicine from bark before grows medicine.",
             "s1_03": "grows medicine\nmedicine from bark\nbark medicine\nhe makes medicine",
             "s1_04": "grows medicine or something",
-            "s1_05": "grows medicine\n[SRC]\nmedicine from bark\n[FAN]"
+            "s1_05": "grows medicine and something.\nsomething about medicine from bark.\nbark medicine with something changed.\ngrows medicine [SRC].\nmedicine from bark [SRC].\ngrows medicine [FAN].\nmedicine from bark [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2153,10 +2153,10 @@
           },
           "1": {
             "s1_01": "golem means crafted, not born because they are magical.\ngolem means crafted, not born on the farm.\ngolem means crafted, not born [FAN].",
-            "s1_02": "not golem means crafted, not born.\ngolem means crafted, not born backwards.",
+            "s1_02": "not golem means crafted, not born.\nborn not crafted means golem.\ngolem means crafted before crafted not born.",
             "s1_03": "crafted not born\ngolem means crafted\nnot born\nmade instead of born",
             "s1_04": "crafted not born or something",
-            "s1_05": "crafted not born\n[SRC]\ngolem means crafted\n[FAN]"
+            "s1_05": "crafted not born and something.\nsomething about golem means crafted.\nnot born with something changed.\ncrafted not born [SRC].\ngolem means crafted [SRC].\ncrafted not born [FAN].\ngolem means crafted [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2176,10 +2176,10 @@
           },
           "1": {
             "s1_01": "it snaps only when cornered because they are magical.\nit snaps only when cornered in the museum.\nit snaps only when cornered [FAN].",
-            "s1_02": "not true that it snaps only when cornered.\nit snaps when cornered.",
+            "s1_02": "not it snaps only when cornered.\ncornered when only snaps it.\nonly snaps cornered before snaps when cornered.",
             "s1_03": "snaps when cornered\nonly snaps cornered\ncornered crab snaps\nattacks if cornered",
             "s1_04": "snaps when cornered or something",
-            "s1_05": "snaps when cornered\n[SRC]\nonly snaps cornered\n[FAN]"
+            "s1_05": "snaps when cornered and something.\nsomething about only snaps cornered.\ncornered crab snaps with something changed.\nsnaps when cornered [SRC].\nonly snaps cornered [SRC].\nsnaps when cornered [FAN].\nonly snaps cornered [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2199,10 +2199,10 @@
           },
           "1": {
             "s1_01": "it guards forgotten crossing points because they are magical.\nit guards forgotten crossing points in the museum.\nit guards forgotten crossing points [FAN].",
-            "s1_02": "not it guards forgotten crossing points.\nit guards forgotten crossing points backwards.",
+            "s1_02": "not it guards forgotten crossing points.\npoints crossing forgotten guards it.\nforgotten crossing points before guards crossings.",
             "s1_03": "guards crossings\nforgotten crossing points\nguards forgotten paths\nprotects crossings",
             "s1_04": "guards crossings or something",
-            "s1_05": "guards crossings\n[SRC]\nforgotten crossing points\n[FAN]"
+            "s1_05": "guards crossings and something.\nsomething about forgotten crossing points.\nguards forgotten paths with something changed.\nguards crossings [SRC].\nforgotten crossing points [SRC].\nguards crossings [FAN].\nforgotten crossing points [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2222,10 +2222,10 @@
           },
           "1": {
             "s1_01": "it distrusts red caps entirely because they are magical.\nit distrusts red caps entirely in the museum.\nit distrusts red caps entirely [FAN].",
-            "s1_02": "not it distrusts red caps entirely.\nit distrusts red caps entirely backwards.",
+            "s1_02": "not it distrusts red caps entirely.\nentirely caps red distrusts it.\ndoes not trust red caps before distrusts red caps.",
             "s1_03": "distrusts red caps\ndoes not trust red caps\nred caps entirely\nsuspicious of red caps",
             "s1_04": "distrusts red caps or something",
-            "s1_05": "distrusts red caps\n[SRC]\ndoes not trust red caps\n[FAN]"
+            "s1_05": "distrusts red caps and something.\nsomething about does not trust red caps.\nred caps entirely with something changed.\ndistrusts red caps [SRC].\ndoes not trust red caps [SRC].\ndistrusts red caps [FAN].\ndoes not trust red caps [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2245,10 +2245,10 @@
           },
           "1": {
             "s1_01": "orc once meant island keeper because they are magical.\norc once meant island keeper in the museum.\norc once meant island keeper [FAN].",
-            "s1_02": "not orc once meant island keeper.\norc once meant island keeper backwards.",
+            "s1_02": "not orc once meant island keeper.\nkeeper island meant once orc.\norc meant island keeper before island keeper.",
             "s1_03": "island keeper\norc meant island keeper\nold meaning is island keeper\nkeeper of the island",
             "s1_04": "island keeper or something",
-            "s1_05": "island keeper\n[SRC]\norc meant island keeper\n[FAN]"
+            "s1_05": "island keeper and something.\nsomething about orc meant island keeper.\nold meaning is island keeper with something changed.\nisland keeper [SRC].\norc meant island keeper [SRC].\nisland keeper [FAN].\norc meant island keeper [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2268,10 +2268,10 @@
           },
           "1": {
             "s1_01": "salt air clogs its hearing because they are magical.\nsalt air clogs its hearing in the museum.\nsalt air clogs its hearing [FAN].",
-            "s1_02": "not salt air clogs its hearing.\nsalt air clogs its hearing backwards.",
+            "s1_02": "not salt air clogs its hearing.\nhearing its clogs air salt.\nsalt air affects hearing before salt air clogs hearing.",
             "s1_03": "salt air clogs hearing\nsalt air affects hearing\nclogged hearing\nhearing clogged by salt",
             "s1_04": "salt air clogs hearing or something",
-            "s1_05": "salt air clogs hearing\n[SRC]\nsalt air affects hearing\n[FAN]"
+            "s1_05": "salt air clogs hearing and something.\nsomething about salt air affects hearing.\nclogged hearing with something changed.\nsalt air clogs hearing [SRC].\nsalt air affects hearing [SRC].\nsalt air clogs hearing [FAN].\nsalt air affects hearing [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2291,10 +2291,10 @@
           },
           "1": {
             "s1_01": "solitude keeps its electronics stable because they are magical.\nsolitude keeps its electronics stable in the museum.\nsolitude keeps its electronics stable [FAN].",
-            "s1_02": "not solitude keeps its electronics stable.\nsolitude keeps its electronics stable backwards.",
+            "s1_02": "not solitude keeps its electronics stable.\nstable electronics its keeps solitude.\nbeing alone stabilises it before solitude keeps electronics stable.",
             "s1_03": "solitude keeps electronics stable\nbeing alone stabilises it\nelectronics stable when alone\nsolitude helps",
             "s1_04": "solitude keeps electronics stable or something",
-            "s1_05": "solitude keeps electronics stable\n[SRC]\nbeing alone stabilises it\n[FAN]"
+            "s1_05": "solitude keeps electronics stable and something.\nsomething about being alone stabilises it.\nelectronics stable when alone with something changed.\nsolitude keeps electronics stable [SRC].\nbeing alone stabilises it [SRC].\nsolitude keeps electronics stable [FAN].\nbeing alone stabilises it [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2314,10 +2314,10 @@
           },
           "1": {
             "s1_01": "only one scrambler earns the crown because they are magical.\nonly one scrambler earns the crown on the farm.\nonly one scrambler earns the crown [FAN].",
-            "s1_02": "not true that only one scrambler earns the crown.\none scrambler earns the crown.",
+            "s1_02": "not only one scrambler earns the crown.\ncrown the earns scrambler one only.\nonly one scrambler is king before one earns the crown.",
             "s1_03": "one earns the crown\nonly one scrambler is king\nearns the crown\none crown",
             "s1_04": "one earns the crown or something",
-            "s1_05": "one earns the crown\n[SRC]\nonly one scrambler is king\n[FAN]"
+            "s1_05": "one earns the crown and something.\nsomething about only one scrambler is king.\nearns the crown with something changed.\none earns the crown [SRC].\nonly one scrambler is king [SRC].\none earns the crown [FAN].\nonly one scrambler is king [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2337,10 +2337,10 @@
           },
           "1": {
             "s1_01": "the hat flags version one because they are magical.\nthe hat flags version one on the farm.\nthe hat flags version one [FAN].",
-            "s1_02": "not the hat flags version one.\nthe hat flags version one backwards.",
+            "s1_02": "not the hat flags version one.\none version flags hat the.\nhat means version one before hat flags version one.",
             "s1_03": "hat flags version one\nhat means version one\nversion one hat\nhat shows version",
             "s1_04": "hat flags version one or something",
-            "s1_05": "hat flags version one\n[SRC]\nhat means version one\n[FAN]"
+            "s1_05": "hat flags version one and something.\nsomething about hat means version one.\nversion one hat with something changed.\nhat flags version one [SRC].\nhat means version one [SRC].\nhat flags version one [FAN].\nhat means version one [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2360,10 +2360,10 @@
           },
           "1": {
             "s1_01": "bones hardened after endless growth because they are magical.\nbones hardened after endless growth on the farm.\nbones hardened after endless growth [FAN].",
-            "s1_02": "not bones hardened after endless growth.\nbones hardened after endless growth backwards.",
+            "s1_02": "not bones hardened after endless growth.\ngrowth endless after hardened bones.\nendless growth hardened bones before bones hardened.",
             "s1_03": "bones hardened\nendless growth hardened bones\nhard bones from growth\ngrowth made bones hard",
             "s1_04": "bones hardened or something",
-            "s1_05": "bones hardened\n[SRC]\nendless growth hardened bones\n[FAN]"
+            "s1_05": "bones hardened and something.\nsomething about endless growth hardened bones.\nhard bones from growth with something changed.\nbones hardened [SRC].\nendless growth hardened bones [SRC].\nbones hardened [FAN].\nendless growth hardened bones [FAN]."
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2387,7 +2387,7 @@
             "s1_02": "blue body with black stripes\nshort fat deer with blue stripes\ndeer with tiny antlers and cyan stripes",
             "s1_03": "black / dark-teal body\nbright cyan-blue stripes\ntall\nslim\nlong snout\nantlers\nfour legs",
             "s1_04": "something like cyan-blue strepen",
-            "s1_05": "blue stripes and something\ndark body with\n[SRC]\nlong snout with\n[FAN]",
+            "s1_05": "blue stripes and something\ndark body with [SRC]\nlong snout with [FAN]",
             "s1_06": "black + tall"
           },
           "0": {
@@ -2401,17 +2401,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "amethyst purple and lilac shell\nvery low beetle-like body\nflat broad layered shell\nyellow mandible-like front parts\nshort dark legs along both sides",
-            "s2_02": "it had amethyst purple and lilac shell and very low beetle-like body\nI remember very low beetle-like body with flat broad layered shell\namethyst purple and lilac shell plus yellow mandible-like front parts",
-            "s2_03": "amethyst purple and lilac shell\nvery low beetle-like body or something"
+            "s2_01": "purple or lilac shell\nvery low body\nflat broad layered shell\nyellow mandible-like front parts\nshort dark legs along the sides",
+            "s2_02": "it had purple or lilac shell and very low body\nI remember very low body with flat broad layered shell\npurple or lilac shell plus yellow mandible-like front parts",
+            "s2_03": "paarse / lila schelp\nlaag lichaam\ngele mandibels or something"
           },
           "1": {
-            "s1_01": "amethyst purple and lilac shell with flowers on it\nvery low beetle-like body and a TV screen\nflat broad layered shell with wings",
-            "s1_02": "very low beetle-like body but reversed\nsmall version with amethyst purple and lilac shell\nwrong colour but flat broad layered shell",
-            "s1_03": "amethyst purple and lilac shell\nvery low beetle-like body\npurple beetle\nshell",
-            "s1_04": "something like amethyst purple and lilac shell\nvery low beetle-like body or something",
-            "s1_05": "amethyst purple and lilac shell and something\nvery low beetle-like body with\n[SRC]\nflat broad layered shell with\n[FAN]",
-            "s1_06": "purple beetle + shell"
+            "s1_01": "purple or lilac shell with flowers on it\nvery low body and a TV screen\nflat broad layered shell with wings",
+            "s1_02": "very low body but reversed\nsmall version with purple or lilac shell\nwrong colour but flat broad layered shell",
+            "s1_03": "purple or lilac shell\nvery low body\nflat broad layered shell\nyellow mandible-like front parts\nshort dark legs along the sides",
+            "s1_04": "something like purple or lilac shell\nvery low body or something\npaarse / lila schelp\nlaag lichaam",
+            "s1_05": "purple or lilac shell and something\nvery low body with [SRC]\nflat broad layered shell with [FAN]",
+            "s1_06": "purple or lilac shell + very low body"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2424,17 +2424,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "huge long aquatic-dragon body\nbroad side fins / wing-like panels\naxolotl-like side gill frills\npink and magenta body\nlong segmented tail",
-            "s2_02": "it had huge long aquatic-dragon body and broad side fins / wing-like panels\nI remember broad side fins / wing-like panels with axolotl-like side gill frills\nhuge long aquatic-dragon body plus pink and magenta body",
-            "s2_03": "huge long aquatic-dragon body\nbroad side fins / wing-like panels or something"
+            "s2_01": "huge, long body\nrounded tail\nboard (segmented) wings\nside gill frills\npink / magenta body",
+            "s2_02": "it had huge, long body and rounded tail\nI remember rounded tail with board (segmented) wings\nhuge, long body plus side gill frills",
+            "s2_03": "lang lichaam\nroze / magenta lichaam\nkieuwfranjes or something"
           },
           "1": {
-            "s1_01": "huge long aquatic-dragon body with flowers on it\nbroad side fins / wing-like panels and a TV screen\naxolotl-like side gill frills with wings",
-            "s1_02": "broad side fins / wing-like panels but reversed\nsmall version with huge long aquatic-dragon body\nwrong colour but axolotl-like side gill frills",
-            "s1_03": "huge long aquatic-dragon body\nbroad side fins / wing-like panels\npink dragon\nfins",
-            "s1_04": "something like huge long aquatic-dragon body\nbroad side fins / wing-like panels or something",
-            "s1_05": "huge long aquatic-dragon body and something\nbroad side fins / wing-like panels with\n[SRC]\naxolotl-like side gill frills with\n[FAN]",
-            "s1_06": "pink dragon + fins"
+            "s1_01": "huge, long body with flowers on it\nrounded tail and a TV screen\nboard (segmented) wings with wings",
+            "s1_02": "rounded tail but reversed\nsmall version with huge, long body\nwrong colour but board (segmented) wings",
+            "s1_03": "huge, long body\nrounded tail\nboard (segmented) wings\nside gill frills\npink / magenta body",
+            "s1_04": "something like huge, long body\nrounded tail or something\nlang lichaam\nroze / magenta lichaam",
+            "s1_05": "huge, long body and something\nrounded tail with [SRC]\nboard (segmented) wings with [FAN]",
+            "s1_06": "huge, long body + rounded tail"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2449,14 +2449,14 @@
           "2": {
             "s2_01": "very thin upright humanoid body\ndownward-hanging elongated head\nlong teeth\nvery long arms hanging low\npale white and light-gray body",
             "s2_02": "it had very thin upright humanoid body and downward-hanging elongated head\nI remember downward-hanging elongated head with long teeth\nvery thin upright humanoid body plus very long arms hanging low",
-            "s2_03": "very thin upright humanoid body\ndownward-hanging elongated head or something"
+            "s2_03": "dun rechtop lichaam\nlange tanden\nlange armen or something"
           },
           "1": {
             "s1_01": "very thin upright humanoid body with flowers on it\ndownward-hanging elongated head and a TV screen\nlong teeth with wings",
             "s1_02": "downward-hanging elongated head but reversed\nsmall version with very thin upright humanoid body\nwrong colour but long teeth",
             "s1_03": "very thin upright humanoid body\ndownward-hanging elongated head\nthin pale humanoid\nlong limbs",
-            "s1_04": "something like very thin upright humanoid body\ndownward-hanging elongated head or something",
-            "s1_05": "very thin upright humanoid body and something\ndownward-hanging elongated head with\n[SRC]\nlong teeth with\n[FAN]",
+            "s1_04": "something like very thin upright humanoid body\ndownward-hanging elongated head or something\ndun rechtop lichaam\nlange tanden",
+            "s1_05": "very thin upright humanoid body and something\ndownward-hanging elongated head with [SRC]\nlong teeth with [FAN]",
             "s1_06": "thin pale humanoid + long limbs"
           },
           "0": {
@@ -2472,14 +2472,14 @@
           "2": {
             "s2_01": "hunched ape-like posture\noversized purple forearms\nblocky purple head\npale pink-purple face patches\nblack and very dark-purple body",
             "s2_02": "it had hunched ape-like posture and oversized purple forearms\nI remember oversized purple forearms with blocky purple head\nhunched ape-like posture plus pale pink-purple face patches",
-            "s2_03": "hunched ape-like posture\noversized purple forearms or something"
+            "s2_03": "gebogen aap\npaarse armen\ndonker lichaam or something"
           },
           "1": {
             "s1_01": "hunched ape-like posture with flowers on it\noversized purple forearms and a TV screen\nblocky purple head with wings",
             "s1_02": "oversized purple forearms but reversed\nsmall version with hunched ape-like posture\nwrong colour but blocky purple head",
             "s1_03": "hunched ape-like posture\noversized purple forearms\npurple ape\nbig arms",
-            "s1_04": "something like hunched ape-like posture\noversized purple forearms or something",
-            "s1_05": "hunched ape-like posture and something\noversized purple forearms with\n[SRC]\nblocky purple head with\n[FAN]",
+            "s1_04": "something like hunched ape-like posture\noversized purple forearms or something\ngebogen aap\npaarse armen",
+            "s1_05": "hunched ape-like posture and something\noversized purple forearms with [SRC]\nblocky purple head with [FAN]",
             "s1_06": "purple ape + big arms"
           },
           "0": {
@@ -2493,17 +2493,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "small rabbit-like body\nlarge upward wing-like appendages\nteal-green feathers\nyellow-gold feather tips\ncream and tan body with brown patches",
-            "s2_02": "it had small rabbit-like body and large upward wing-like appendages\nI remember large upward wing-like appendages with teal-green feathers\nsmall rabbit-like body plus yellow-gold feather tips",
-            "s2_03": "small rabbit-like body\nlarge upward wing-like appendages or something"
+            "s2_01": "rabbit-like body\nlarge upward wings near top of body / head\nteal / gold / orange feathers\ncream and tan body with brown patches\nblue marks on legs and feet",
+            "s2_02": "it had rabbit-like body and large upward wings near top of body / head\nI remember large upward wings near top of body / head with teal / gold / orange feathers\nrabbit-like body plus cream and tan body with brown patches",
+            "s2_03": "konijnachtig lichaam\ngrote vleugels\nteal / gouden veren or something"
           },
           "1": {
-            "s1_01": "small rabbit-like body with flowers on it\nlarge upward wing-like appendages and a TV screen\nteal-green feathers with wings",
-            "s1_02": "large upward wing-like appendages but reversed\nsmall version with small rabbit-like body\nwrong colour but teal-green feathers",
-            "s1_03": "small rabbit-like body\nlarge upward wing-like appendages\nbunny with wings\nfeathers",
-            "s1_04": "something like small rabbit-like body\nlarge upward wing-like appendages or something",
-            "s1_05": "small rabbit-like body and something\nlarge upward wing-like appendages with\n[SRC]\nteal-green feathers with\n[FAN]",
-            "s1_06": "bunny with wings + feathers"
+            "s1_01": "rabbit-like body with flowers on it\nlarge upward wings near top of body / head and a TV screen\nteal / gold / orange feathers with wings",
+            "s1_02": "large upward wings near top of body / head but reversed\nsmall version with rabbit-like body\nwrong colour but teal / gold / orange feathers",
+            "s1_03": "rabbit-like body\nlarge upward wings near top of body / head\nteal / gold / orange feathers\ncream and tan body with brown patches\nblue marks on legs and feet",
+            "s1_04": "something like rabbit-like body\nlarge upward wings near top of body / head or something\nkonijnachtig lichaam\ngrote vleugels",
+            "s1_05": "rabbit-like body and something\nlarge upward wings near top of body / head with [SRC]\nteal / gold / orange feathers with [FAN]",
+            "s1_06": "rabbit-like body + large upward wings near top of body / head"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2516,17 +2516,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "leafy green cube body\ndark horizontal face slit\nwhite rectangular eyes with red pupils\nsmall plant sprouts on top\nshort brown trunk-like legs",
-            "s2_02": "it had leafy green cube body and dark horizontal face slit\nI remember dark horizontal face slit with white rectangular eyes with red pupils\nleafy green cube body plus small plant sprouts on top",
-            "s2_03": "leafy green cube body\ndark horizontal face slit or something"
+            "s2_01": "leafy green cube body\ndark horizontal face slit\nwhite rectangular eyes with red pupils\nshort brown trunk-like legs",
+            "s2_02": "it had leafy green cube body and dark horizontal face slit\nI remember dark horizontal face slit with white rectangular eyes with red pupils\nleafy green cube body plus short brown trunk-like legs",
+            "s2_03": "groen blok lichaam\nwitte ogen\nbruine poten or something"
           },
           "1": {
             "s1_01": "leafy green cube body with flowers on it\ndark horizontal face slit and a TV screen\nwhite rectangular eyes with red pupils with wings",
             "s1_02": "dark horizontal face slit but reversed\nsmall version with leafy green cube body\nwrong colour but white rectangular eyes with red pupils",
-            "s1_03": "leafy green cube body\ndark horizontal face slit\ngreen block\nplant creature",
-            "s1_04": "something like leafy green cube body\ndark horizontal face slit or something",
-            "s1_05": "leafy green cube body and something\ndark horizontal face slit with\n[SRC]\nwhite rectangular eyes with red pupils with\n[FAN]",
-            "s1_06": "green block + plant creature"
+            "s1_03": "leafy green cube body\ndark horizontal face slit\nwhite rectangular eyes with red pupils\nshort brown trunk-like legs",
+            "s1_04": "something like leafy green cube body\ndark horizontal face slit or something\ngroen blok lichaam\nwitte ogen",
+            "s1_05": "leafy green cube body and something\ndark horizontal face slit with [SRC]\nwhite rectangular eyes with red pupils with [FAN]",
+            "s1_06": "leafy green cube body + dark horizontal face slit"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2539,17 +2539,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "broad grass-covered mound/platform\nmultiple blocky face masses under the grass\ngrass tufts / flowers on top\nbrown dirt or wood sides\nthick short brown legs",
-            "s2_02": "it had broad grass-covered mound/platform and multiple blocky face masses under the grass\nI remember multiple blocky face masses under the grass with grass tufts / flowers on top\nbroad grass-covered mound/platform plus brown dirt or wood sides",
-            "s2_03": "broad grass-covered mound/platform\nmultiple blocky face masses under the grass or something"
+            "s2_01": "broad animated circle of grass and flowers under feet\ngrass tufts / flowers on top\nbrown dirt or wood sides\nthick short brown legs\nlarge black eyes",
+            "s2_02": "it had broad animated circle of grass and flowers under feet and grass tufts / flowers on top\nI remember grass tufts / flowers on top with brown dirt or wood sides\nbroad animated circle of grass and flowers under feet plus thick short brown legs",
+            "s2_03": "gras en bloemen\ngrote zwarte ogen\nbruine poten or something"
           },
           "1": {
-            "s1_01": "broad grass-covered mound/platform with flowers on it\nmultiple blocky face masses under the grass and a TV screen\ngrass tufts / flowers on top with wings",
-            "s1_02": "multiple blocky face masses under the grass but reversed\nsmall version with broad grass-covered mound/platform\nwrong colour but grass tufts / flowers on top",
-            "s1_03": "broad grass-covered mound/platform\nmultiple blocky face masses under the grass\nlarge grass creature\nplant mound",
-            "s1_04": "something like broad grass-covered mound/platform\nmultiple blocky face masses under the grass or something",
-            "s1_05": "broad grass-covered mound/platform and something\nmultiple blocky face masses under the grass with\n[SRC]\ngrass tufts / flowers on top with\n[FAN]",
-            "s1_06": "large grass creature + plant mound"
+            "s1_01": "broad animated circle of grass and flowers under feet with flowers on it\ngrass tufts / flowers on top and a TV screen\nbrown dirt or wood sides with wings",
+            "s1_02": "grass tufts / flowers on top but reversed\nsmall version with broad animated circle of grass and flowers under feet\nwrong colour but brown dirt or wood sides",
+            "s1_03": "broad animated circle of grass and flowers under feet\ngrass tufts / flowers on top\nbrown dirt or wood sides\nthick short brown legs\nlarge black eyes",
+            "s1_04": "something like broad animated circle of grass and flowers under feet\ngrass tufts / flowers on top or something\ngras en bloemen\ngrote zwarte ogen",
+            "s1_05": "broad animated circle of grass and flowers under feet and something\ngrass tufts / flowers on top with [SRC]\nbrown dirt or wood sides with [FAN]",
+            "s1_06": "broad animated circle of grass and flowers under feet + grass tufts / flowers on top"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2562,17 +2562,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "huge pale-blue golem body\nbroad hunched shoulders\nmassive arms\njagged icy protrusions\nsmall head embedded high in the torso",
-            "s2_02": "it had huge pale-blue golem body and broad hunched shoulders\nI remember broad hunched shoulders with massive arms\nhuge pale-blue golem body plus jagged icy protrusions",
-            "s2_03": "huge pale-blue golem body\nbroad hunched shoulders or something"
+            "s2_01": "huge pale-blue body\nbroad hunched shoulders\njagged icy protrusions\nsmall head embedded high in the torso\nskeleton head\nwhite eyes\nbrown / ripped shorts\nbird-like feet\nmassive arms / claws",
+            "s2_02": "it had huge pale-blue body and broad hunched shoulders\nI remember broad hunched shoulders with jagged icy protrusions\nhuge pale-blue body plus small head embedded high in the torso",
+            "s2_03": "ijsblauw lichaam\nskelet hoofd\nklauwen or something"
           },
           "1": {
-            "s1_01": "huge pale-blue golem body with flowers on it\nbroad hunched shoulders and a TV screen\nmassive arms with wings",
-            "s1_02": "broad hunched shoulders but reversed\nsmall version with huge pale-blue golem body\nwrong colour but massive arms",
-            "s1_03": "huge pale-blue golem body\nbroad hunched shoulders\nlarge blue golem\nicy body",
-            "s1_04": "something like huge pale-blue golem body\nbroad hunched shoulders or something",
-            "s1_05": "huge pale-blue golem body and something\nbroad hunched shoulders with\n[SRC]\nmassive arms with\n[FAN]",
-            "s1_06": "large blue golem + icy body"
+            "s1_01": "huge pale-blue body with flowers on it\nbroad hunched shoulders and a TV screen\njagged icy protrusions with wings",
+            "s1_02": "broad hunched shoulders but reversed\nsmall version with huge pale-blue body\nwrong colour but jagged icy protrusions",
+            "s1_03": "huge pale-blue body\nbroad hunched shoulders\njagged icy protrusions\nsmall head embedded high in the torso\nskeleton head\nwhite eyes",
+            "s1_04": "something like huge pale-blue body\nbroad hunched shoulders or something\nijsblauw lichaam\nskelet hoofd",
+            "s1_05": "huge pale-blue body and something\nbroad hunched shoulders with [SRC]\njagged icy protrusions with [FAN]",
+            "s1_06": "huge pale-blue body + broad hunched shoulders"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2585,17 +2585,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "low spiky crab-like body\nmany thin legs along both sides\nforward red mouth / jaw area\ndark segmented carapace\nraised spikes or shell plates",
-            "s2_02": "it had low spiky crab-like body and many thin legs along both sides\nI remember many thin legs along both sides with forward red mouth / jaw area\nlow spiky crab-like body plus dark segmented carapace",
-            "s2_03": "low spiky crab-like body\nmany thin legs along both sides or something"
+            "s2_01": "low spiky body\nmany thin legs along the sides\nforward red mouth / jaw area\ndark segmented carapace\nraised spikes or shell plates",
+            "s2_02": "it had low spiky body and many thin legs along the sides\nI remember many thin legs along the sides with forward red mouth / jaw area\nlow spiky body plus dark segmented carapace",
+            "s2_03": "stekelig lichaam\nveel poten\nrode mond or something"
           },
           "1": {
-            "s1_01": "low spiky crab-like body with flowers on it\nmany thin legs along both sides and a TV screen\nforward red mouth / jaw area with wings",
-            "s1_02": "many thin legs along both sides but reversed\nsmall version with low spiky crab-like body\nwrong colour but forward red mouth / jaw area",
-            "s1_03": "low spiky crab-like body\nmany thin legs along both sides\ndark crab\nmany legs",
-            "s1_04": "something like low spiky crab-like body\nmany thin legs along both sides or something",
-            "s1_05": "low spiky crab-like body and something\nmany thin legs along both sides with\n[SRC]\nforward red mouth / jaw area with\n[FAN]",
-            "s1_06": "dark crab + many legs"
+            "s1_01": "low spiky body with flowers on it\nmany thin legs along the sides and a TV screen\nforward red mouth / jaw area with wings",
+            "s1_02": "many thin legs along the sides but reversed\nsmall version with low spiky body\nwrong colour but forward red mouth / jaw area",
+            "s1_03": "low spiky body\nmany thin legs along the sides\nforward red mouth / jaw area\ndark segmented carapace\nraised spikes or shell plates",
+            "s1_04": "something like low spiky body\nmany thin legs along the sides or something\nstekelig lichaam\nveel poten",
+            "s1_05": "low spiky body and something\nmany thin legs along the sides with [SRC]\nforward red mouth / jaw area with [FAN]",
+            "s1_06": "low spiky body + many thin legs along the sides"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2608,17 +2608,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "green lizard-like head with snout\nupright reptilian humanoid body\narmour-like torso panels\ntrailing tail\nclaw-like hands and feet",
-            "s2_02": "it had green lizard-like head with snout and upright reptilian humanoid body\nI remember upright reptilian humanoid body with armour-like torso panels\ngreen lizard-like head with snout plus trailing tail",
-            "s2_03": "green lizard-like head with snout\nupright reptilian humanoid body or something"
+            "s2_01": "green head with snout\nupright reptilian humanoid body\narmour-like shirt\ntrailing tail\nbrown shorts\npurple eyes",
+            "s2_02": "it had green head with snout and upright reptilian humanoid body\nI remember upright reptilian humanoid body with armour-like shirt\ngreen head with snout plus trailing tail",
+            "s2_03": "groene kop\nhagedis lichaam\npaarse ogen or something"
           },
           "1": {
-            "s1_01": "green lizard-like head with snout with flowers on it\nupright reptilian humanoid body and a TV screen\narmour-like torso panels with wings",
-            "s1_02": "upright reptilian humanoid body but reversed\nsmall version with green lizard-like head with snout\nwrong colour but armour-like torso panels",
-            "s1_03": "green lizard-like head with snout\nupright reptilian humanoid body\ngreen lizard\narmoured body",
-            "s1_04": "something like green lizard-like head with snout\nupright reptilian humanoid body or something",
-            "s1_05": "green lizard-like head with snout and something\nupright reptilian humanoid body with\n[SRC]\narmour-like torso panels with\n[FAN]",
-            "s1_06": "green lizard + armoured body"
+            "s1_01": "green head with snout with flowers on it\nupright reptilian humanoid body and a TV screen\narmour-like shirt with wings",
+            "s1_02": "upright reptilian humanoid body but reversed\nsmall version with green head with snout\nwrong colour but armour-like shirt",
+            "s1_03": "green head with snout\nupright reptilian humanoid body\narmour-like shirt\ntrailing tail\nbrown shorts\npurple eyes",
+            "s1_04": "something like green head with snout\nupright reptilian humanoid body or something\ngroene kop\nhagedis lichaam",
+            "s1_05": "green head with snout and something\nupright reptilian humanoid body with [SRC]\narmour-like shirt with [FAN]",
+            "s1_06": "green head with snout + upright reptilian humanoid body"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2631,17 +2631,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "oversized red mushroom cap\nwhite square spots on the cap\nsmall face hidden beneath the cap\nshort squat cream body\nstubby arms and short legs",
+            "s2_01": "oversized red mushroom cap\nwhite square spots on the cap\nsmall face hidden beneath the cap\nshort squat cream body\nstubby arms and short legs\nwhite clothes",
             "s2_02": "it had oversized red mushroom cap and white square spots on the cap\nI remember white square spots on the cap with small face hidden beneath the cap\noversized red mushroom cap plus short squat cream body",
-            "s2_03": "oversized red mushroom cap\nwhite square spots on the cap or something"
+            "s2_03": "rode paddenstoel hoed\nwitte stippen\nklein gezicht or something"
           },
           "1": {
             "s1_01": "oversized red mushroom cap with flowers on it\nwhite square spots on the cap and a TV screen\nsmall face hidden beneath the cap with wings",
             "s1_02": "white square spots on the cap but reversed\nsmall version with oversized red mushroom cap\nwrong colour but small face hidden beneath the cap",
-            "s1_03": "oversized red mushroom cap\nwhite square spots on the cap\nmushroom creature\nred cap",
-            "s1_04": "something like oversized red mushroom cap\nwhite square spots on the cap or something",
-            "s1_05": "oversized red mushroom cap and something\nwhite square spots on the cap with\n[SRC]\nsmall face hidden beneath the cap with\n[FAN]",
-            "s1_06": "mushroom creature + red cap"
+            "s1_03": "oversized red mushroom cap\nwhite square spots on the cap\nsmall face hidden beneath the cap\nshort squat cream body\nstubby arms and short legs\nwhite clothes",
+            "s1_04": "something like oversized red mushroom cap\nwhite square spots on the cap or something\nrode paddenstoel hoed\nwitte stippen",
+            "s1_05": "oversized red mushroom cap and something\nwhite square spots on the cap with [SRC]\nsmall face hidden beneath the cap with [FAN]",
+            "s1_06": "oversized red mushroom cap + white square spots on the cap"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2654,17 +2654,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "stocky green upright humanoid body\nbroad shoulders and thick arms\nsquare green head\ndark brow or hair area\nbrown belt and loincloth-like garment",
-            "s2_02": "it had stocky green upright humanoid body and broad shoulders and thick arms\nI remember broad shoulders and thick arms with square green head\nstocky green upright humanoid body plus dark brow or hair area",
-            "s2_03": "stocky green upright humanoid body\nbroad shoulders and thick arms or something"
+            "s2_01": "stocky green upright humanoid body\nbroad shoulders and thick arms\nsquare green head\ndark brow\nbrown belt and loincloth-like garment\nwhite stone-like thing on belly",
+            "s2_02": "it had stocky green upright humanoid body and broad shoulders and thick arms\nI remember broad shoulders and thick arms with square green head\nstocky green upright humanoid body plus dark brow",
+            "s2_03": "groen lichaam\nbrede schouders\ndonkere wenkbrauw or something"
           },
           "1": {
             "s1_01": "stocky green upright humanoid body with flowers on it\nbroad shoulders and thick arms and a TV screen\nsquare green head with wings",
             "s1_02": "broad shoulders and thick arms but reversed\nsmall version with stocky green upright humanoid body\nwrong colour but square green head",
-            "s1_03": "stocky green upright humanoid body\nbroad shoulders and thick arms\ngreen humanoid\nbig arms",
-            "s1_04": "something like stocky green upright humanoid body\nbroad shoulders and thick arms or something",
-            "s1_05": "stocky green upright humanoid body and something\nbroad shoulders and thick arms with\n[SRC]\nsquare green head with\n[FAN]",
-            "s1_06": "green humanoid + big arms"
+            "s1_03": "stocky green upright humanoid body\nbroad shoulders and thick arms\nsquare green head\ndark brow\nbrown belt and loincloth-like garment\nwhite stone-like thing on belly",
+            "s1_04": "something like stocky green upright humanoid body\nbroad shoulders and thick arms or something\ngroen lichaam\nbrede schouders",
+            "s1_05": "stocky green upright humanoid body and something\nbroad shoulders and thick arms with [SRC]\nsquare green head with [FAN]",
+            "s1_06": "stocky green upright humanoid body + broad shoulders and thick arms"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2677,17 +2677,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "tall pale experimental-creature body\nvertical rectangular sensor head\ndark vertical sensor-mouth strip\nblue-gray side prongs\nfour short blocky legs",
-            "s2_02": "it had tall pale experimental-creature body and vertical rectangular sensor head\nI remember vertical rectangular sensor head with dark vertical sensor-mouth strip\ntall pale experimental-creature body plus blue-gray side prongs",
-            "s2_03": "tall pale experimental-creature body\nvertical rectangular sensor head or something"
+            "s2_01": "tall pale body\nvertical rectangular head\ndark vertical mouth with teeth\nblue-gray side prongs / ears\nshort legs\nlong, hanging arms\ndark at the end of arms and legs\ndark spots on body",
+            "s2_02": "it had tall pale body and vertical rectangular head\nI remember vertical rectangular head with dark vertical mouth with teeth\ntall pale body plus blue-gray side prongs / ears",
+            "s2_03": "bleek lichaam\nrechthoekig hoofd\nlange armen or something"
           },
           "1": {
-            "s1_01": "tall pale experimental-creature body with flowers on it\nvertical rectangular sensor head and a TV screen\ndark vertical sensor-mouth strip with wings",
-            "s1_02": "vertical rectangular sensor head but reversed\nsmall version with tall pale experimental-creature body\nwrong colour but dark vertical sensor-mouth strip",
-            "s1_03": "tall pale experimental-creature body\nvertical rectangular sensor head\npale monster\nsensor head",
-            "s1_04": "something like tall pale experimental-creature body\nvertical rectangular sensor head or something",
-            "s1_05": "tall pale experimental-creature body and something\nvertical rectangular sensor head with\n[SRC]\ndark vertical sensor-mouth strip with\n[FAN]",
-            "s1_06": "pale monster + sensor head"
+            "s1_01": "tall pale body with flowers on it\nvertical rectangular head and a TV screen\ndark vertical mouth with teeth with wings",
+            "s1_02": "vertical rectangular head but reversed\nsmall version with tall pale body\nwrong colour but dark vertical mouth with teeth",
+            "s1_03": "tall pale body\nvertical rectangular head\ndark vertical mouth with teeth\nblue-gray side prongs / ears\nshort legs\nlong, hanging arms",
+            "s1_04": "something like tall pale body\nvertical rectangular head or something\nbleek lichaam\nrechthoekig hoofd",
+            "s1_05": "tall pale body and something\nvertical rectangular head with [SRC]\ndark vertical mouth with teeth with [FAN]",
+            "s1_06": "tall pale body + vertical rectangular head"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2700,17 +2700,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "CRT television head\nbright cyan-blue screen\nsmall antenna details on top\nnarrow mechanical body\nblack TV casing with thin supports",
-            "s2_02": "it had CRT television head and bright cyan-blue screen\nI remember bright cyan-blue screen with small antenna details on top\nCRT television head plus narrow mechanical body",
-            "s2_03": "CRT television head\nbright cyan-blue screen or something"
+            "s2_01": "old, thick television head\nbright cyan-blue screen\nsmall antenna details on top\nnarrow mechanical body\nthin, animated legs",
+            "s2_02": "it had old, thick television head and bright cyan-blue screen\nI remember bright cyan-blue screen with small antenna details on top\nold, thick television head plus narrow mechanical body",
+            "s2_03": "oude televisie kop\nblauw scherm\ndunne poten or something"
           },
           "1": {
-            "s1_01": "CRT television head with flowers on it\nbright cyan-blue screen and a TV screen\nsmall antenna details on top with wings",
-            "s1_02": "bright cyan-blue screen but reversed\nsmall version with CRT television head\nwrong colour but small antenna details on top",
-            "s1_03": "CRT television head\nbright cyan-blue screen\nTV robot\nblue screen",
-            "s1_04": "something like CRT television head\nbright cyan-blue screen or something",
-            "s1_05": "CRT television head and something\nbright cyan-blue screen with\n[SRC]\nsmall antenna details on top with\n[FAN]",
-            "s1_06": "TV robot + blue screen"
+            "s1_01": "old, thick television head with flowers on it\nbright cyan-blue screen and a TV screen\nsmall antenna details on top with wings",
+            "s1_02": "bright cyan-blue screen but reversed\nsmall version with old, thick television head\nwrong colour but small antenna details on top",
+            "s1_03": "old, thick television head\nbright cyan-blue screen\nsmall antenna details on top\nnarrow mechanical body\nthin, animated legs",
+            "s1_04": "something like old, thick television head\nbright cyan-blue screen or something\noude televisie kop\nblauw scherm",
+            "s1_05": "old, thick television head and something\nbright cyan-blue screen with [SRC]\nsmall antenna details on top with [FAN]",
+            "s1_06": "old, thick television head + bright cyan-blue screen"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2723,17 +2723,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "squat robotic monarch shape\nelevated monitor-like head\nlarge circular blue-black chest device with red centre\nraised side arms with small screen blocks\npale green-gray mechanical body",
-            "s2_02": "it had squat robotic monarch shape and elevated monitor-like head\nI remember elevated monitor-like head with large circular blue-black chest device with red centre\nsquat robotic monarch shape plus raised side arms with small screen blocks",
-            "s2_03": "squat robotic monarch shape\nelevated monitor-like head or something"
+            "s2_01": "non-synchronic shape\nblack square head(s) with teeth\nhead raised on long neck\nred centre in centre of body\ndark circle in centre of body\nraised side arms with black blocky feet\npale green-gray mechanical body\ntail",
+            "s2_02": "it had non-synchronic shape and black square head(s) with teeth\nI remember black square head(s) with teeth with head raised on long neck\nnon-synchronic shape plus red centre in centre of body",
+            "s2_03": "zwarte vierkante kop\nrode kern\nlange nek or something"
           },
           "1": {
-            "s1_01": "squat robotic monarch shape with flowers on it\nelevated monitor-like head and a TV screen\nlarge circular blue-black chest device with red centre with wings",
-            "s1_02": "elevated monitor-like head but reversed\nsmall version with squat robotic monarch shape\nwrong colour but large circular blue-black chest device with red centre",
-            "s1_03": "squat robotic monarch shape\nelevated monitor-like head\nrobot king\nscreen head",
-            "s1_04": "something like squat robotic monarch shape\nelevated monitor-like head or something",
-            "s1_05": "squat robotic monarch shape and something\nelevated monitor-like head with\n[SRC]\nlarge circular blue-black chest device with red centre with\n[FAN]",
-            "s1_06": "robot king + screen head"
+            "s1_01": "non-synchronic shape with flowers on it\nblack square head(s) with teeth and a TV screen\nhead raised on long neck with wings",
+            "s1_02": "black square head(s) with teeth but reversed\nsmall version with non-synchronic shape\nwrong colour but head raised on long neck",
+            "s1_03": "non-synchronic shape\nblack square head(s) with teeth\nhead raised on long neck\nred centre in centre of body\ndark circle in centre of body\nraised side arms with black blocky feet",
+            "s1_04": "something like non-synchronic shape\nblack square head(s) with teeth or something\nzwarte vierkante kop\nrode kern",
+            "s1_05": "non-synchronic shape and something\nblack square head(s) with teeth with [SRC]\nhead raised on long neck with [FAN]",
+            "s1_06": "non-synchronic shape + black square head(s) with teeth"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2746,17 +2746,17 @@
         "note": "",
         "scores": {
           "2": {
-            "s2_01": "slim upright humanoid-robot body\nsmall square head with cyan-blue eyes\nlong jointed limbs\nsegmented pelvis and legs\nred markings on the head",
-            "s2_02": "it had slim upright humanoid-robot body and small square head with cyan-blue eyes\nI remember small square head with cyan-blue eyes with long jointed limbs\nslim upright humanoid-robot body plus segmented pelvis and legs",
-            "s2_03": "slim upright humanoid-robot body\nsmall square head with cyan-blue eyes or something"
+            "s2_01": "slim upright humanoid body\nsmall square head with cyan-blue eyes\nlong jointed limbs\nsegmented pelvis and legs\ncap\nwhite and red cap\nanimated limps / running",
+            "s2_02": "it had slim upright humanoid body and small square head with cyan-blue eyes\nI remember small square head with cyan-blue eyes with long jointed limbs\nslim upright humanoid body plus segmented pelvis and legs",
+            "s2_03": "klein vierkant hoofd\nblauwe ogen\nwitte en rode pet or something"
           },
           "1": {
-            "s1_01": "slim upright humanoid-robot body with flowers on it\nsmall square head with cyan-blue eyes and a TV screen\nlong jointed limbs with wings",
-            "s1_02": "small square head with cyan-blue eyes but reversed\nsmall version with slim upright humanoid-robot body\nwrong colour but long jointed limbs",
-            "s1_03": "slim upright humanoid-robot body\nsmall square head with cyan-blue eyes\nwalking robot\ncyan eyes",
-            "s1_04": "something like slim upright humanoid-robot body\nsmall square head with cyan-blue eyes or something",
-            "s1_05": "slim upright humanoid-robot body and something\nsmall square head with cyan-blue eyes with\n[SRC]\nlong jointed limbs with\n[FAN]",
-            "s1_06": "walking robot + cyan eyes"
+            "s1_01": "slim upright humanoid body with flowers on it\nsmall square head with cyan-blue eyes and a TV screen\nlong jointed limbs with wings",
+            "s1_02": "small square head with cyan-blue eyes but reversed\nsmall version with slim upright humanoid body\nwrong colour but long jointed limbs",
+            "s1_03": "slim upright humanoid body\nsmall square head with cyan-blue eyes\nlong jointed limbs\nsegmented pelvis and legs\ncap\nwhite and red cap",
+            "s1_04": "something like slim upright humanoid body\nsmall square head with cyan-blue eyes or something\nklein vierkant hoofd\nblauwe ogen",
+            "s1_05": "slim upright humanoid body and something\nsmall square head with cyan-blue eyes with [SRC]\nlong jointed limbs with [FAN]",
+            "s1_06": "slim upright humanoid body + small square head with cyan-blue eyes"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -2771,14 +2771,14 @@
           "2": {
             "s2_01": "enormous tall skeletal-monster body\nextremely long limbs\nlarge branching antlers\nskull-like head with long snout\nexposed pale rib-like and spine-like sections",
             "s2_02": "it had enormous tall skeletal-monster body and extremely long limbs\nI remember extremely long limbs with large branching antlers\nenormous tall skeletal-monster body plus skull-like head with long snout",
-            "s2_03": "enormous tall skeletal-monster body\nextremely long limbs or something"
+            "s2_03": "lange ledematen\nskelet hoofd\ngewei or something"
           },
           "1": {
             "s1_01": "enormous tall skeletal-monster body with flowers on it\nextremely long limbs and a TV screen\nlarge branching antlers with wings",
             "s1_02": "extremely long limbs but reversed\nsmall version with enormous tall skeletal-monster body\nwrong colour but large branching antlers",
             "s1_03": "enormous tall skeletal-monster body\nextremely long limbs\ntall antlered monster\nskeletal body",
-            "s1_04": "something like enormous tall skeletal-monster body\nextremely long limbs or something",
-            "s1_05": "enormous tall skeletal-monster body and something\nextremely long limbs with\n[SRC]\nlarge branching antlers with\n[FAN]",
+            "s1_04": "something like enormous tall skeletal-monster body\nextremely long limbs or something\nlange ledematen\nskelet hoofd",
+            "s1_05": "enormous tall skeletal-monster body and something\nextremely long limbs with [SRC]\nlarge branching antlers with [FAN]",
             "s1_06": "tall antlered monster + skeletal body"
           },
           "0": {
@@ -2822,7 +2822,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -2843,7 +2843,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -2864,7 +2864,7 @@
             "s2_05": "the farm or boerderij\nfarm / boerderij\nthe farm or something"
           },
           "1": {
-            "s1_01": "the museum's farm\nthe jungle farm\nflower farm",
+            "s1_01": "the museum’s farm\njungle farm\nfarmer’s village\nthe flower farm\ngolden farm\nflower farm with jungle trees",
             "s1_02": "level 2\nsecond chapter\nch2\nchapter 2 near water",
             "s1_03": "farm (ch3)\nlevel 1 farm"
           },
@@ -2886,7 +2886,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -2907,7 +2907,7 @@
             "s2_05": "the farm or boerderij\nfarm / boerderij\nthe farm or something"
           },
           "1": {
-            "s1_01": "the museum's farm\nthe jungle farm\nflower farm",
+            "s1_01": "the museum’s farm\njungle farm\nfarmer’s village\nthe flower farm\ngolden farm\nflower farm with jungle trees",
             "s1_02": "level 2\nsecond chapter\nch2\nchapter 2 near water",
             "s1_03": "farm (ch3)\nlevel 1 farm"
           },
@@ -2929,7 +2929,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -2950,7 +2950,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -2971,7 +2971,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -2992,7 +2992,7 @@
             "s2_05": "the farm or boerderij\nfarm / boerderij\nthe farm or something"
           },
           "1": {
-            "s1_01": "the museum's farm\nthe jungle farm\nflower farm",
+            "s1_01": "the museum’s farm\njungle farm\nfarmer’s village\nthe flower farm\ngolden farm\nflower farm with jungle trees",
             "s1_02": "level 2\nsecond chapter\nch2\nchapter 2 near water",
             "s1_03": "farm (ch3)\nlevel 1 farm"
           },
@@ -3014,7 +3014,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -3035,7 +3035,7 @@
             "s2_05": "the farm or boerderij\nfarm / boerderij\nthe farm or something"
           },
           "1": {
-            "s1_01": "the museum's farm\nthe jungle farm\nflower farm",
+            "s1_01": "the museum’s farm\njungle farm\nfarmer’s village\nthe flower farm\ngolden farm\nflower farm with jungle trees",
             "s1_02": "level 2\nsecond chapter\nch2\nchapter 2 near water",
             "s1_03": "farm (ch3)\nlevel 1 farm"
           },
@@ -3057,7 +3057,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -3079,7 +3079,7 @@
             "s2_03": "the forest\nforest"
           },
           "1": {
-            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle",
+            "s1_01": "the museum's jungle\nthe farm jungle\nflower jungle\nforest jungle\nbridge jungle\njungle with pumpkins",
             "s1_02": "level 3\nthird chapter\nch3\nchapter 3 near water",
             "s1_03": "jungle (ch2)\nlevel 1 jungle"
           },
@@ -3100,7 +3100,7 @@
             "s2_05": "the farm or boerderij\nfarm / boerderij\nthe farm or something"
           },
           "1": {
-            "s1_01": "the museum's farm\nthe jungle farm\nflower farm",
+            "s1_01": "the museum’s farm\njungle farm\nfarmer’s village\nthe flower farm\ngolden farm\nflower farm with jungle trees",
             "s1_02": "level 2\nsecond chapter\nch2\nchapter 2 near water",
             "s1_03": "farm (ch3)\nlevel 1 farm"
           },
@@ -3121,7 +3121,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -3142,7 +3142,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -3163,7 +3163,7 @@
             "s2_05": "the museum or museum\nmuseum / museum\nthe museum or something"
           },
           "1": {
-            "s1_01": "the farm's museum\nthe jungle museum\nflower museum",
+            "s1_01": "the farm's museum\nthe jungle museum\nflower museum\nwater museum\nisland museum\nold museum with creatures",
             "s1_02": "level 1\nfirst chapter\nch1\nchapter 1 near water",
             "s1_03": "museum (ch2)\nlevel 2 museum"
           },
@@ -3211,7 +3211,7 @@
             "s1_02": "edge of the jungle near water and a hidden wall inside dense green jungle with many trees\ndense green jungle with many trees but reversed",
             "s1_03": "dense jungle\nforest\njungle edge\nnear water\ntrees\ngreen area\nwater",
             "s1_04": "dense jungle or something\ndense jungle / plek",
-            "s1_05": "dense jungle\n[SRC]\ndense jungle\n[FAN]"
+            "s1_05": "dense jungle [SRC]\ndense jungle [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3233,7 +3233,7 @@
             "s1_02": "after the spiral stairs with the waterfall inside large shallow pool with grass and colourful coral\nlarge shallow pool with grass and colourful coral but reversed",
             "s1_03": "pool\nwater area\nnear stairs\nnear a waterfall\ninside\nbuilding\nground floor\nupstairs",
             "s1_04": "pool or something\npool / plek",
-            "s1_05": "pool\n[SRC]\npool\n[FAN]"
+            "s1_05": "pool [SRC]\npool [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3255,7 +3255,7 @@
             "s1_02": "own fenced pen/habitat with flowers and lanterns inside big open wooden farm house with fenced habitats\nbig open wooden farm house with fenced habitats but reversed",
             "s1_03": "farm house\nwooden house\nfenced habitat\nanimal pen\noutside\nopen area\ngrass\nfield",
             "s1_04": "farm house or something\nfarm house / plek",
-            "s1_05": "farm house\n[SRC]\nfarm house\n[FAN]"
+            "s1_05": "farm house [SRC]\nfarm house [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3277,7 +3277,7 @@
             "s1_02": "edge of the jungle near water and a hidden wall inside dense green jungle with many trees\ndense green jungle with many trees but reversed",
             "s1_03": "dense jungle\nforest\njungle trees\njungle edge\ntrees\ngreen area\nwater",
             "s1_04": "dense jungle or something\ndense jungle / plek",
-            "s1_05": "dense jungle\n[SRC]\ndense jungle\n[FAN]"
+            "s1_05": "dense jungle [SRC]\ndense jungle [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3299,7 +3299,7 @@
             "s1_02": "behind the building with pumpkins, sugar cane, stairs, stove, and tools inside open farm area behind a large building with food/tools\nopen farm area behind a large building with food/tools but reversed",
             "s1_03": "behind a building\nnear a building with food\nnear the outer wall\nnear water\noutside\nopen area\ngrass\nfield",
             "s1_04": "behind a building or something\nbehind a building / plek",
-            "s1_05": "behind a building\n[SRC]\nbehind a building\n[FAN]"
+            "s1_05": "behind a building [SRC]\nbehind a building [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3321,7 +3321,7 @@
             "s1_02": "edge of the jungle near water and a hidden wall inside dense green jungle with many trees\ndense green jungle with many trees but reversed",
             "s1_03": "dense jungle\nforest\njungle trees\njungle edge\ntrees\ngreen area\nwater",
             "s1_04": "dense jungle or something\ndense jungle / plek",
-            "s1_05": "dense jungle\n[SRC]\ndense jungle\n[FAN]"
+            "s1_05": "dense jungle [SRC]\ndense jungle [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3343,7 +3343,7 @@
             "s1_02": "low broad white altar with upright light logs on the sides inside ground floor directly on the right\nground floor directly on the right but reversed",
             "s1_03": "ground floor\nright side\nnear entrance\naltar\ninside\nbuilding\nupstairs",
             "s1_04": "ground floor or something\nground floor / plek",
-            "s1_05": "ground floor\n[SRC]\nground floor\n[FAN]"
+            "s1_05": "ground floor [SRC]\nground floor [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3365,7 +3365,7 @@
             "s1_02": "room next to the spiral stairs inside ground floor on the right at the end\nground floor on the right at the end but reversed",
             "s1_03": "ground floor\nright side\nend room\nnear spiral stairs\ninside\nbuilding\nupstairs",
             "s1_04": "ground floor or something\nground floor / plek",
-            "s1_05": "ground floor\n[SRC]\nground floor\n[FAN]"
+            "s1_05": "ground floor [SRC]\nground floor [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3387,7 +3387,7 @@
             "s1_02": "wheat field near the windmill and outer wall inside hidden in the wheat near the edge of the farm\nhidden in the wheat near the edge of the farm but reversed",
             "s1_03": "wheat\nwheat field\nnear windmill\nnear outer wall\noutside\nopen area\ngrass\nfield",
             "s1_04": "wheat or something\nwheat / plek",
-            "s1_05": "wheat\n[SRC]\nwheat\n[FAN]"
+            "s1_05": "wheat [SRC]\nwheat [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3409,7 +3409,7 @@
             "s1_02": "near water at the jungle edge inside beach near the spawnpoint\nbeach near the spawnpoint but reversed",
             "s1_03": "beach\nspawnpoint\nnear water\ndense jungle\ntrees\ngreen area\nforest\nwater",
             "s1_04": "beach or something\nbeach / plek",
-            "s1_05": "beach\n[SRC]\nbeach\n[FAN]"
+            "s1_05": "beach [SRC]\nbeach [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3431,7 +3431,7 @@
             "s1_02": "closed-off area with fences and bushes on lower ground inside far corner of the farm near the outer wall\nfar corner of the farm near the outer wall but reversed",
             "s1_03": "far corner\nnear outer wall\nfenced area\nbushes\noutside\nopen area\ngrass\nfield",
             "s1_04": "far corner or something\nfar corner / plek",
-            "s1_05": "far corner\n[SRC]\nfar corner\n[FAN]"
+            "s1_05": "far corner [SRC]\nfar corner [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3453,7 +3453,7 @@
             "s1_02": "edge of the jungle near water and a hidden wall inside very edge/tip of the island\nvery edge/tip of the island but reversed",
             "s1_03": "dense jungle\njungle edge\nnear water\nhidden wall\ntrees\ngreen area\nforest\nwater",
             "s1_04": "dense jungle or something\ndense jungle / plek",
-            "s1_05": "dense jungle\n[SRC]\ndense jungle\n[FAN]"
+            "s1_05": "dense jungle [SRC]\ndense jungle [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3475,7 +3475,7 @@
             "s1_02": "near water at the jungle edge inside beach near the spawnpoint\nbeach near the spawnpoint but reversed",
             "s1_03": "beach\nspawnpoint\nnear water\ndense jungle\ntrees\ngreen area\nforest\nwater",
             "s1_04": "beach or something\nbeach / plek",
-            "s1_05": "beach\n[SRC]\nbeach\n[FAN]"
+            "s1_05": "beach [SRC]\nbeach [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3497,7 +3497,7 @@
             "s1_02": "inside a wooden house with water, a wooden box, and stone with black pixels/coal inside small wooden house/stall with lanterns\nsmall wooden house/stall with lanterns but reversed",
             "s1_03": "small wooden house\nwooden stall\nlanterns\nnear wheat\noutside\nopen area\ngrass\nfield",
             "s1_04": "small wooden house or something\nsmall wooden house / plek",
-            "s1_05": "small wooden house\n[SRC]\nsmall wooden house\n[FAN]"
+            "s1_05": "small wooden house [SRC]\nsmall wooden house [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3519,7 +3519,7 @@
             "s1_02": "low broad white altar with upright light logs on the sides inside ground floor directly on the left\nground floor directly on the left but reversed",
             "s1_03": "ground floor\nleft side\nnear entrance\naltar\ninside\nbuilding\nupstairs",
             "s1_04": "ground floor or something\nground floor / plek",
-            "s1_05": "ground floor\n[SRC]\nground floor\n[FAN]"
+            "s1_05": "ground floor [SRC]\nground floor [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3541,7 +3541,7 @@
             "s1_02": "room next to the spiral stairs inside ground floor on the left at the end\nground floor on the left at the end but reversed",
             "s1_03": "ground floor\nleft side\nend room\nnear spiral stairs\ninside\nbuilding\nupstairs",
             "s1_04": "ground floor or something\nground floor / plek",
-            "s1_05": "ground floor\n[SRC]\nground floor\n[FAN]"
+            "s1_05": "ground floor [SRC]\nground floor [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",
@@ -3563,7 +3563,7 @@
             "s1_02": "square altar with purple bricks and light wood inside top/second floor after small straight wooden stairs\ntop/second floor after small straight wooden stairs but reversed",
             "s1_03": "top floor\nsecond floor\nupstairs\nsmall wooden stairs\ninside\nbuilding\nground floor",
             "s1_04": "top floor or something\ntop floor / plek",
-            "s1_05": "top floor\n[SRC]\ntop floor\n[FAN]"
+            "s1_05": "top floor [SRC]\ntop floor [FAN]"
           },
           "0": {
             "s0_01": "— blank —\n[FAN]\n[SRC]\n[FAN] [FAN]\n[SRC] [SRC]\n[SRC] [FAN]",

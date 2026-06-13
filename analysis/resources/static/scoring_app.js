@@ -316,35 +316,79 @@ function ensureRubricAppendixCss() {
   document.head.appendChild(style);
 }
 
+function normaliseRubricTokenLines(text) {
+  const lines = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+  const tokenLine = /^\[(?:SRC|FAN)\]$/;
+  if (!lines.some(line => tokenLine.test(line))) return lines.join('\n');
+
+  const out = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!tokenLine.test(line)) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+
+    const tokens = [];
+    while (index < lines.length && tokenLine.test(lines[index])) {
+      tokens.push(lines[index]);
+      index += 1;
+    }
+
+    const hasPrevious = out.length > 0;
+    const hasNext = index < lines.length;
+    if (hasPrevious && hasNext) {
+      out[out.length - 1] = `${out[out.length - 1]} ${tokens[0]}`.trim();
+      if (tokens.length > 1) {
+        lines[index] = `${tokens.slice(1).join(' ')} ${lines[index]}`.trim();
+      }
+    } else if (hasPrevious) {
+      out[out.length - 1] = `${out[out.length - 1]} ${tokens.join(' ')}`.trim();
+    } else if (hasNext) {
+      lines[index] = `${tokens.join(' ')} ${lines[index]}`.trim();
+    } else {
+      out.push(...tokens);
+    }
+  }
+
+  return out.map(line => line.replace(/[ \t]{2,}/g, ' ').trim()).filter(Boolean).join('\n');
+}
+
 function normaliseRubricTokenSpacing(value, options = {}) {
   const collapse = Boolean(options.collapse);
   const joinTokenFragments = Boolean(options.joinTokenFragments);
   let text = String(value ?? '').replace(/\u00a0/g, ' ').trim();
   if (!text) return '';
 
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   if (collapse) {
     text = text.replace(/\s+/g, ' ').trim();
   } else {
     text = text.replace(/[ \t]*\n[ \t]*/g, '\n').trim();
+    if (joinTokenFragments) text = normaliseRubricTokenLines(text);
   }
 
-  text = text.replace(
-    /\s*\/\s*(\[(?:SRC|FAN)\])\s*\/\s*(\[(?:SRC|FAN)\])\s*/g,
-    ' / $1 / $2 '
-  );
+  text = text
+    .replace(/\s*\/\s*(\[(?:SRC|FAN)\])\s*\/\s*(\[(?:SRC|FAN)\])\s*/g, ' / $1 / $2 ')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .replace(/\s+([,.;:])/g, '$1');
 
-  if (joinTokenFragments) {
-    let previous = null;
-    while (previous !== text) {
-      previous = text;
-      text = text
-        .replace(/([^\n])\n(\[(?:SRC|FAN)\])/g, '$1 $2')
-        .replace(/(\[(?:SRC|FAN)\])\n([^\n])/g, '$1 $2');
-    }
+  if (collapse) {
+    text = text.replace(/\s+/g, ' ');
+  } else {
+    text = text.split('\n').map(line => line.replace(/[ \t]{2,}/g, ' ').trim()).join('\n');
   }
-
-  return text.replace(/[ \t]{2,}/g, ' ').trim();
+  return text.trim();
 }
+
 
 function rubricLabelHasInlineTokens(label) {
   return /\[(?:SRC|FAN)\]/.test(String(label ?? ''));

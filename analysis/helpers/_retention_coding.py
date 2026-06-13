@@ -727,6 +727,51 @@ def html_text(value: object) -> str:
     return html.escape(clean(value)).replace("\n", "<br>")
 
 
+def _normalise_rubric_token_lines(text: str) -> str:
+    """Attach standalone [SRC]/[FAN] fragments to the intended example lines.
+
+    The compact JSON intentionally stores examples as one human/AI-readable
+    answer per line. During generation some component markers may temporarily
+    appear on their own line. This normaliser keeps line breaks between answer
+    examples, while turning fragments such as ``abyss deer\n[SRC]\n[FAN]\nabyss
+    deer`` into ``abyss deer [SRC]\n[FAN] abyss deer``.
+    """
+    token_line = re.compile(r"^\[(?:SRC|FAN)\]$")
+    lines = [re.sub(r"\s+", " ", line.strip()) for line in text.split("\n")]
+    lines = [line for line in lines if line]
+    if not any(token_line.fullmatch(line) for line in lines):
+        return "\n".join(lines)
+
+    out: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not token_line.fullmatch(line):
+            out.append(line)
+            index += 1
+            continue
+
+        tokens: list[str] = []
+        while index < len(lines) and token_line.fullmatch(lines[index]):
+            tokens.append(lines[index])
+            index += 1
+
+        has_previous = bool(out)
+        has_next = index < len(lines)
+        if has_previous and has_next:
+            out[-1] = f"{out[-1]} {tokens[0]}".strip()
+            if len(tokens) > 1:
+                lines[index] = f"{' '.join(tokens[1:])} {lines[index]}".strip()
+        elif has_previous:
+            out[-1] = f"{out[-1]} {' '.join(tokens)}".strip()
+        elif has_next:
+            lines[index] = f"{' '.join(tokens)} {lines[index]}".strip()
+        else:
+            out.extend(tokens)
+
+    return "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in out if line.strip())
+
+
 def _normalise_rubric_token_spacing(
     value: object,
     *,
@@ -737,30 +782,29 @@ def _normalise_rubric_token_spacing(
     if not text:
         return ""
 
-    # Labels should behave like the PDF: no artificial line breaks around
-    # slash-separated [FAN] / [SRC] components.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     if collapse:
         text = re.sub(r"\s+", " ", text).strip()
     else:
         text = re.sub(r"[ \t]*\n[ \t]*", "\n", text).strip()
+        if join_token_fragments:
+            text = _normalise_rubric_token_lines(text)
 
+    # Slash-separated components are inline labels, not separate examples.
     text = re.sub(
         r"\s*/\s*(\[(?:SRC|FAN)\])\s*/\s*(\[(?:SRC|FAN)\])\s*",
         r" / \1 / \2 ",
         text,
     )
+    text = re.sub(r"\(\s+", "(", text)
+    text = re.sub(r"\s+\)", ")", text)
+    text = re.sub(r"\s+([,.;:])", r"\1", text)
 
-    # Some generated example strings contain token fragments on separate lines,
-    # e.g. "abyss deer\n[SRC]\n[FAN]\nabyss deer". For interfering rows,
-    # those fragments belong to the same example and should render inline.
-    if join_token_fragments:
-        previous = None
-        while previous != text:
-            previous = text
-            text = re.sub(r"([^\n])\n(\[(?:SRC|FAN)\])", r"\1 \2", text)
-            text = re.sub(r"(\[(?:SRC|FAN)\])\n([^\n])", r"\1 \2", text)
-
-    return re.sub(r"[ \t]{2,}", " ", text).strip()
+    if collapse:
+        text = re.sub(r"\s+", " ", text)
+    else:
+        text = "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in text.split("\n"))
+    return text.strip()
 
 
 def _rubric_label_has_inline_tokens(label: object) -> bool:
@@ -1351,15 +1395,21 @@ def _register_thesis_pdf_fonts() -> tuple[str, str, str]:
     return "Times-Roman", "Times-Bold", "Times-Italic"
 
 
-def _pdf_markup_text(value: object, *, preserve_breaks: bool = True, collapse: bool = False) -> str:
-    """Escape user/rubric text while formatting rubric tokens for ReportLab."""
-    text = clean(value)
+def _pdf_markup_text(
+    value: object,
+    *,
+    preserve_breaks: bool = True,
+    collapse: bool = False,
+    join_token_fragments: bool = False,
+) -> str:
+    """Escape rubric text while formatting tokens exactly as the HTML base does."""
+    text = _normalise_rubric_token_spacing(
+        value,
+        collapse=collapse,
+        join_token_fragments=join_token_fragments,
+    )
     if not text:
         return "—"
-    text = text.replace("\u00a0", " ")
-    if collapse:
-        text = re.sub(r"\s+", " ", text).strip()
-        text = text.replace("/ [FAN] / [SRC]", "/ [FAN] / [SRC]")
     escaped = html.escape(text)
     escaped = re.sub(r"\[(SRC|FAN)\]", r'<font color="#3C78D8"><b>[\1]</b></font>', escaped)
     if preserve_breaks:
@@ -1556,21 +1606,8 @@ def write_creature_info_pdf(rubric: dict[str, Any], path: Path = CREATURE_INFO_P
 
 
 def _content_rows_for_pdf(content: Any) -> list[tuple[str, str]]:
-    """Return mini-table rows as label/example pairs."""
-    if isinstance(content, dict):
-        rows: list[tuple[str, str]] = []
-        for label, examples in content.items():
-            rows.append((clean(label), clean(examples)))
-        return rows or [("", "—")]
-    if isinstance(content, list):
-        rows = []
-        for item in content:
-            if isinstance(item, dict):
-                rows.extend((clean(key), clean(value)) for key, value in item.items())
-            elif clean(item):
-                rows.append(("", clean(item)))
-        return rows or [("", "—")]
-    return [("", clean(content) or "—")]
+    """Return mini-table rows using the canonical HTML content-row logic."""
+    return _content_rows_for_html(content)
 
 
 def _mini_table_for_rubric_content(content: Any, score: str, styles: dict[str, Any], width: float) -> Any:
@@ -1580,7 +1617,14 @@ def _mini_table_for_rubric_content(content: Any, score: str, styles: dict[str, A
     table_data: list[list[Any]] = []
     for label, examples in rows:
         label_para = Paragraph(_pdf_markup_text(label or "—", collapse=True), styles["table_label"])
-        examples_para = Paragraph(_pdf_markup_text(examples or "—", preserve_breaks=True), styles["table"])
+        examples_para = Paragraph(
+            _pdf_markup_text(
+                examples or "—",
+                preserve_breaks=True,
+                join_token_fragments=_rubric_label_has_inline_tokens(label),
+            ),
+            styles["table"],
+        )
         table_data.append([label_para, examples_para])
     inner = Table(table_data, colWidths=[width * 0.66, width * 0.34], hAlign="LEFT", splitByRow=1)
     row_styles: list[tuple[Any, ...]] = [
