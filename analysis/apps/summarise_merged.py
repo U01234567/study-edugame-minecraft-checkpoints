@@ -584,11 +584,30 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     scoring_problems: list[str] = []
     scoring_rows: list[dict[str, Any]] = []
     if public_route:
-        log_step("PUBLIC_ROUTE=True: rebuilding retention_scores_merged.tsv from survey_export.tsv and all retention_scores_genai*.tsv / retention_scores_grader*.tsv source files.")
+        retention_score_path = paths.get("data_retention_scores_path", RETENTION_SCORES_PATH)
+        if retention_score_path.exists():
+            log_step(
+                "PUBLIC_ROUTE=True: using existing retention_scores_merged.tsv as a non-destructive "
+                "manual adjudication workspace. It will not be rewritten."
+            )
+        else:
+            log_step(
+                "PUBLIC_ROUTE=True: creating initial retention_scores_merged.tsv only if all configured "
+                "GenAI and human-review TSVs are complete."
+            )
+
         scoring_rows, scoring_problems = write_prompt_score_file(survey_rows, require_complete_review=True)
+
         if scoring_problems:
             log_step(_retention_scoring_problem_message(scoring_problems, paths, final_stats=True))
-        log_step(f"Retention scores merged file ready: {len(scoring_rows):,} q_element row(s).")
+
+        if retention_score_path.exists():
+            log_step(f"Retention scores merged file available: {len(scoring_rows):,} q_element row(s).")
+        else:
+            log_step(
+                f"Retention scores merged file not written yet. Preview rows available in memory: "
+                f"{len(scoring_rows):,} q_element row(s)."
+            )
     else:
         log_step("PUBLIC_ROUTE=False: preparing retention_answers.tsv, configured GenAI score file(s), and GenAI prompt support files.")
         retention_prepare = prepare_retention_answer_files(survey_rows)

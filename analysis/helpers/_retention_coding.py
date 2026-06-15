@@ -1854,19 +1854,33 @@ def load_one_genai_scores(path: Path) -> tuple[dict[tuple[str, str, str], dict[s
 
 
 def load_genai_score_sources() -> tuple[dict[str, dict[tuple[str, str, str], dict[str, str]]], list[str]]:
-    labelled_paths = labelled_source_paths(discover_genai_score_paths(), kind="genai")
-    if not labelled_paths:
-        return {}, [
-            "No retention_scores_genai*.tsv files found. Run sum_merged with PUBLIC_ROUTE=False to generate "
-            "the GenAI score file(s), then fill the score/confidence columns using data/config/genai_prompt.txt."
-        ]
+    """Load exactly the configured GenAI source files.
+
+    Do not discover a partial set and proceed. AMOUNT_GENAI is the contract.
+    Extra files are ignored and reported so old/accidental TSVs cannot affect
+    the merged scoring file.
+    """
+    expected_paths = configured_genai_score_paths()
+    labelled_paths = labelled_source_paths(expected_paths, kind="genai")
+
+    discovered_paths = discover_genai_score_paths()
+    expected_names = {path.name for path in expected_paths}
+    unexpected_names = sorted(path.name for path in discovered_paths if path.name not in expected_names)
 
     sources: dict[str, dict[tuple[str, str, str], dict[str, str]]] = {}
     problems: list[str] = []
+
+    if unexpected_names:
+        problems.append(
+            f"Unexpected GenAI score file(s) ignored because AMOUNT_GENAI={AMOUNT_GENAI} expects exactly "
+            f"{', '.join(path.name for path in expected_paths)}: {', '.join(unexpected_names)}"
+        )
+
     for label, path in labelled_paths:
         lookup, source_problems = load_one_genai_scores(path)
         sources[label] = lookup
         problems.extend(source_problems)
+
     return sources, problems
 
 
@@ -1893,33 +1907,56 @@ def load_genai_scores(path: Path | None = None) -> tuple[dict[tuple[str, str, st
 
 
 def load_grader_score_sources() -> tuple[dict[str, dict[str, dict[str, str]]], list[str]]:
-    labelled_paths = labelled_source_paths(discover_grader_score_paths(), kind="grader")
-    discovered_by_name = {path.name: (label, path) for label, path in labelled_paths}
+    """Load exactly the configured human-grader files.
+
+    Human files are expected only for the frozen review manifest, not for all
+    q_element answers. AMOUNT_HUMAN is the contract.
+    """
+    expected_paths = configured_grader_score_paths()
+    labelled_paths = labelled_source_paths(expected_paths, kind="grader")
+
+    discovered_paths = discover_grader_score_paths()
+    expected_names = {path.name for path in expected_paths}
+    unexpected_names = sorted(path.name for path in discovered_paths if path.name not in expected_names)
+
     sources: dict[str, dict[str, dict[str, str]]] = {}
     problems: list[str] = []
 
-    for expected_path in configured_grader_score_paths():
-        if expected_path.name not in discovered_by_name:
-            problems.append(
-                f"Missing expected human grader file {expected_path.name}. Run python main.py score_ret grader=1 "
-                f"after GenAI scoring to create all AMOUNT_HUMAN={AMOUNT_HUMAN} base files, then complete each grader file."
-            )
+    if unexpected_names:
+        problems.append(
+            f"Unexpected human grader file(s) ignored because AMOUNT_HUMAN={AMOUNT_HUMAN} expects exactly "
+            f"{', '.join(path.name for path in expected_paths)}: {', '.join(unexpected_names)}"
+        )
 
     for label, path in labelled_paths:
-        rows = read_tsv(path)
-        if rows:
-            missing_columns = [column for column in GRADER_SCORE_FIELDNAMES if column not in rows[0]]
-            if missing_columns:
-                problems.append(f"{path.name} is missing column(s): {', '.join(missing_columns)}")
-            for index, row in enumerate(rows, start=2):
-                status = clean(row.get("status"))
-                if status == "graded" and not score_is_valid(row.get("score (0-2)")):
-                    problems.append(f"{path.name} row {index}: score (0-2) must be an integer from 0 to 2 when status is graded.")
-                if status and status not in {"graded", "skipped", "flagged"}:
-                    problems.append(f"{path.name} row {index}: status must be graded, skipped, or flagged.")
-        sources[label] = load_grader_scores(path)
-    return sources, problems
+        if not path.exists():
+            problems.append(
+                f"Missing expected human grader file {path.name}. Run python main.py score_ret grader=1 "
+                f"after GenAI scoring to create all AMOUNT_HUMAN={AMOUNT_HUMAN} base files, then complete each grader file."
+            )
+            sources[label] = {}
+            continue
 
+        rows = read_tsv(path)
+        if not rows:
+            problems.append(f"{path.name} is empty.")
+            sources[label] = {}
+            continue
+
+        missing_columns = [column for column in GRADER_SCORE_FIELDNAMES if column not in rows[0]]
+        if missing_columns:
+            problems.append(f"{path.name} is missing column(s): {', '.join(missing_columns)}")
+
+        for index, row in enumerate(rows, start=2):
+            status = clean(row.get("status"))
+            if status == "graded" and not score_is_valid(row.get("score (0-2)")):
+                problems.append(f"{path.name} row {index}: score (0-2) must be an integer from 0 to 2 when status is graded.")
+            if status and status not in {"graded", "skipped", "flagged"}:
+                problems.append(f"{path.name} row {index}: status must be graded, skipped, or flagged.")
+
+        sources[label] = load_grader_scores(path)
+
+    return sources, problems
 
 
 def task_id_for_unique(question: str, creature: str, answer_std: str) -> str:
@@ -2160,6 +2197,109 @@ def validate_genai_completeness(prompt_rows: list[dict[str, str]], genai_lookup:
     return ["Missing GenAI score rows for: " + " | ".join(preview) + suffix]
 
 
+def preview_score_keys(keys: set[tuple[str, str, str]] | list[tuple[str, str, str]], *, limit: int = 10) -> str:
+    ordered = sorted(
+        keys,
+        key=lambda key: (QUESTION_SORT_INDEX.get(key[0], 999), key[1].lower(), key[2]),
+    )
+    preview = [f"{q} / {creature} / {answer[:80]}" for q, creature, answer in ordered[:limit]]
+    suffix = f"; plus {len(ordered) - limit} more" if len(ordered) > limit else ""
+    return " | ".join(preview) + suffix
+
+
+def preview_task_ids(task_ids: set[str] | list[str], *, limit: int = 10) -> str:
+    ordered = sorted(clean(task_id) for task_id in task_ids if clean(task_id))
+    preview = ordered[:limit]
+    suffix = f"; plus {len(ordered) - limit} more" if len(ordered) > limit else ""
+    return ", ".join(preview) + suffix
+
+
+def retention_source_readiness_blockers(survey_rows: list[dict[str, str]]) -> list[str]:
+    """Return blockers that should prevent initial creation of retention_scores_merged.tsv.
+
+    This checks source-file readiness only. Score disagreements are not blockers
+    here, because disagreements are exactly what the merged adjudication file is
+    for. The blockers are missing files, malformed files, incomplete GenAI scores,
+    missing frozen review manifest, or incomplete human-review scores.
+    """
+    prompt_rows = build_prompt_rows_from_survey(survey_rows)
+    blockers: list[str] = []
+
+    expected_genai_keys = {
+        (row["q_element"], row["creature"], row["answer_std"])
+        for row in build_unique_genai_rows(prompt_rows)
+        if clean(row.get("answer_std"))
+    }
+
+    genai_sources, genai_problems = load_genai_score_sources()
+    blockers.extend(genai_problems)
+
+    for label, lookup in genai_sources.items():
+        actual_keys = set(lookup)
+        missing_keys = expected_genai_keys - actual_keys
+        extra_keys = actual_keys - expected_genai_keys
+
+        if missing_keys:
+            blockers.append(
+                f"{label} is incomplete: missing GenAI score row(s): {preview_score_keys(missing_keys)}"
+            )
+        if extra_keys:
+            blockers.append(
+                f"{label} contains unexpected GenAI score row(s), probably from stale data: {preview_score_keys(extra_keys)}"
+            )
+
+    genai_lookup = merge_genai_sources_for_lookup(genai_sources)
+
+    review_tasks = read_review_manifest()
+    if not review_tasks:
+        blockers.append(
+            "retention_review_tasks.tsv is missing; run python main.py score_ret grader=1 after GenAI scoring "
+            "to freeze the human review queue."
+        )
+        return blockers
+
+    current_review_ids = {task["task_id"] for task in build_review_tasks(prompt_rows, genai_lookup)}
+    manifest_ids = review_task_id_set(review_tasks)
+
+    missing_from_current = manifest_ids - current_review_ids
+    if missing_from_current:
+        blockers.append(
+            "Frozen human review manifest contains task_id(s) no longer present in the current data/GenAI rows: "
+            + preview_task_ids(missing_from_current)
+        )
+
+    grader_sources, grader_problems = load_grader_score_sources()
+    blockers.extend(grader_problems)
+
+    for label, source in grader_sources.items():
+        actual_ids = set(source)
+        missing_ids = manifest_ids - actual_ids
+        extra_ids = actual_ids - manifest_ids
+
+        if missing_ids:
+            blockers.append(
+                f"{label} is incomplete: missing human review task_id(s): {preview_task_ids(missing_ids)}"
+            )
+        if extra_ids:
+            blockers.append(
+                f"{label} contains unexpected human review task_id(s), probably from a stale manifest: {preview_task_ids(extra_ids)}"
+            )
+
+        incomplete_ids: list[str] = []
+        for task_id in sorted(manifest_ids):
+            source_row = source.get(task_id, {})
+            if clean(source_row.get("status")) != "graded" or not score_is_valid(source_row.get("score (0-2)")):
+                incomplete_ids.append(task_id)
+
+        if incomplete_ids:
+            blockers.append(
+                f"{label} is not fully graded: every frozen human-review task must have status='graded' "
+                f"and a valid score 0-2. Incomplete task_id(s): {preview_task_ids(incomplete_ids)}"
+            )
+
+    return list(dict.fromkeys(blockers))
+
+
 def append_problem(problems: list[str], message: str, *, limit: int = 75) -> None:
     if len(problems) < limit:
         problems.append(message)
@@ -2204,8 +2344,47 @@ def auto_final_note_for_scores(genai_scores: dict[str, str], grader_scores: dict
     """Describe why the automatic final score was or was not resolved."""
     genai_scores = {label: score for label, score in genai_scores.items() if score}
     grader_scores = {label: score for label, score in grader_scores.items() if score}
+
     if _all_scores_agree([genai_scores, grader_scores]):
-        return "full agreement"
+        if grader_scores:
+            return "four-way agreement"
+        return "GenAI agreement"
+
+    genai_count = len(genai_scores)
+    grader_count = len(grader_scores)
+    genai_group = _agreement_phrase(genai_count, "GenAI", "GenAI") if genai_count else ""
+    grader_group = _agreement_phrase(grader_count, "grader", "graders") if grader_count else ""
+    genai_agreement = consensus_score(genai_scores) if genai_count else ""
+    grader_agreement = consensus_score(grader_scores) if grader_count else ""
+
+    if genai_count and not grader_count:
+        return f"{genai_group} do not agree"
+    if grader_count and not genai_count:
+        return f"{grader_group} do not agree"
+
+    if genai_count == 1 and grader_count == 1:
+        return "grader (1x) and GenAI (1x) do not agree"
+
+    if genai_count == 1 and grader_count >= 2:
+        if grader_agreement:
+            return f"graders ({grader_count}x) agree with each other, but not with GenAI (1x)"
+        return f"graders ({grader_count}x) do not agree with each other or with GenAI (1x)"
+
+    if genai_count >= 2 and grader_count == 1:
+        if genai_agreement:
+            return f"grader (1x) does not agree with GenAI ({genai_count}x), which agree with each other"
+        return f"grader (1x) and GenAI ({genai_count}x) have no agreement at all"
+
+    if genai_count >= 2 and grader_count >= 2:
+        if genai_agreement and grader_agreement:
+            return f"graders ({grader_count}x) agree with each other and GenAI ({genai_count}x) agree with each other, but the groups do not agree"
+        if genai_agreement and not grader_agreement:
+            return f"GenAI ({genai_count}x) agree with each other, but graders ({grader_count}x) do not agree"
+        if grader_agreement and not genai_agreement:
+            return f"graders ({grader_count}x) agree with each other, but GenAI ({genai_count}x) do not agree"
+        return f"graders ({grader_count}x) and GenAI ({genai_count}x) have no agreement at all"
+
+    return "score disagreement"
 
     genai_count = len(genai_scores)
     grader_count = len(grader_scores)
@@ -2260,7 +2439,9 @@ def auto_final_fields_for_row(
 
     agreed_score = _all_scores_agree([genai_scores, grader_scores])
     if agreed_score:
-        return agreed_score, old_status or "full_agreement", "full agreement", FINAL_NOTE_MANUAL_NOT_NEEDED
+        if grader_scores:
+            return agreed_score, "four_way_agreement", "four-way agreement", FINAL_NOTE_MANUAL_NOT_NEEDED
+        return agreed_score, "genai_agreement", "GenAI agreement", FINAL_NOTE_MANUAL_NOT_NEEDED
 
     return FINAL_SCORE_PLACEHOLDER, "needs_adjudication", auto_final_note_for_scores(genai_scores, grader_scores), ""
 
@@ -2286,17 +2467,55 @@ def merged_row_identity_key(row: dict[str, Any]) -> tuple[str, str, str, str, st
     )
 
 
+MANUAL_FINAL_STATUS_VALUES = {
+    "manual",
+    "manual_adjudicated",
+    "adjudicated",
+    "resolved",
+    "researcher_resolved",
+}
+
+AUTO_RESOLVED_FINAL_NOTES = {
+    "blank answer",
+    "GenAI agreement",
+    "genai agreement",
+    "four-way agreement",
+    "full agreement",
+}
+
+
 def load_existing_merged_rows(path: Path = RETENTION_MERGED_PATH) -> tuple[list[dict[str, str]], list[str], bool]:
     if not path.exists():
         return [], [], False
     rows = read_tsv(path)
     header = list(rows[0]) if rows else []
     final_columns = [field for field in header if field.startswith("final_")]
-    # Older generated files already had final_score/final_status, but those were
-    # not manual audit columns. Preserve final_* cells only after the new manual
-    # audit schema has appeared at least once.
-    preserve_final_values = "final_note_auto" in header or "final_note_manual" in header
+    preserve_final_values = "final_note_manual" in header
     return rows, final_columns, preserve_final_values
+
+
+def existing_row_has_manual_final_value(row: dict[str, str]) -> bool:
+    """Return True only for likely researcher adjudication, not auto-generated finals."""
+    final_score = score_text(row.get("final_score"))
+    if not final_score:
+        return False
+
+    manual_note = clean(row.get("final_note_manual"))
+    if manual_note and manual_note != FINAL_NOTE_MANUAL_NOT_NEEDED:
+        return True
+
+    status = clean(row.get("final_status")).lower()
+    if status in MANUAL_FINAL_STATUS_VALUES:
+        return True
+
+    # Safety net: if a previously unresolved row now has a numeric final_score
+    # but no manual note yet, treat it as manual work rather than deleting it
+    # during an explicit forced rebuild.
+    auto_note = clean(row.get("final_note_auto"))
+    if auto_note and auto_note not in AUTO_RESOLVED_FINAL_NOTES:
+        return True
+
+    return False
 
 
 def apply_existing_final_values(
@@ -2306,17 +2525,33 @@ def apply_existing_final_values(
     *,
     preserve_final_values: bool,
 ) -> None:
+    """Preserve manual adjudication only.
+
+    This function is used only for an explicit forced rebuild. Normal sum_merged
+    runs do not rewrite retention_scores_merged.tsv at all.
+    """
     if not preserve_final_values or not existing_rows or not final_columns:
         return
 
     existing_by_key = {merged_row_exact_key(row): row for row in existing_rows}
+
     for row in rows:
         existing = existing_by_key.get(merged_row_exact_key(row))
-        if not existing:
+        if not existing or not existing_row_has_manual_final_value(existing):
             continue
+
         for column in final_columns:
+            if column == "final_note_auto":
+                continue
+
             value = clean(existing.get(column))
-            if value:
+            if not value:
+                continue
+
+            if column == "final_status":
+                status = value.lower()
+                row[column] = value if status in MANUAL_FINAL_STATUS_VALUES else "manual_adjudicated"
+            else:
                 row[column] = value
 
 
@@ -2560,19 +2795,61 @@ def build_prompt_score_rows(
     return rows, problems
 
 
-def write_prompt_score_file(survey_rows: list[dict[str, str]], *, require_complete_review: bool = False) -> tuple[list[dict[str, Any]], list[str]]:
+def write_prompt_score_file(
+    survey_rows: list[dict[str, str]],
+    *,
+    require_complete_review: bool = False,
+    rebuild: bool = False,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Create retention_scores_merged.tsv only when safe.
+
+    Default behaviour is non-destructive:
+    - if retention_scores_merged.tsv already exists, read and return it;
+    - do not rewrite source columns;
+    - do not recompute final_score;
+    - do not touch manual notes.
+
+    Initial creation is blocked until the configured GenAI files and configured
+    human-review files are complete. Disagreements are not blockers: they become
+    manual-adjudication rows in the merged file.
+    """
     existing_rows, existing_final_columns, preserve_final_values = load_existing_merged_rows(RETENTION_MERGED_PATH)
-    rows, problems = build_prompt_score_rows(survey_rows, require_complete_review=require_complete_review)
-    if rows:
-        apply_existing_final_values(
-            rows,
-            existing_rows,
-            existing_final_columns,
-            preserve_final_values=preserve_final_values,
+
+    if existing_rows and not rebuild:
+        print(
+            "[retention_scores_merged] Existing merged file found; using it as the manual adjudication workspace. "
+            "sum_merged will not rewrite it. Use an explicit rebuild=True debug call only when you deliberately "
+            "want to regenerate it.",
+            flush=True,
         )
+        return existing_rows, []
+
+    blockers = retention_source_readiness_blockers(survey_rows) if require_complete_review else []
+    rows, problems = build_prompt_score_rows(survey_rows, require_complete_review=require_complete_review)
+
+    if require_complete_review and blockers:
+        print(
+            "[retention_scores_merged] Not creating retention_scores_merged.tsv because the configured source TSVs "
+            "are not complete yet.",
+            flush=True,
+        )
+        return rows, list(dict.fromkeys(blockers + problems))
+
+    if rows:
+        if existing_rows and rebuild:
+            # Protect the current adjudication file before any deliberate forced rewrite.
+            backup_retention_tsv(RETENTION_MERGED_PATH)
+            apply_existing_final_values(
+                rows,
+                existing_rows,
+                existing_final_columns,
+                preserve_final_values=preserve_final_values,
+            )
+
         fieldnames = merged_score_fieldnames_from_rows(rows, extra_final_fieldnames=existing_final_columns)
         warn_on_non_final_drift(rows, existing_rows, fieldnames)
         write_tsv(RETENTION_MERGED_PATH, fieldnames, rows)
+
     return rows, problems
 
 
