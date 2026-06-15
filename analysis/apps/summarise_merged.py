@@ -27,6 +27,7 @@ from helpers._main_overview import (
 from helpers._raw_data_pipeline import decrypt_all_log_archives, publish_data_for_included_mcids
 from helpers._ret_main import (
     attach_retention_scores,
+    build_final_retention_descriptives,
     build_retention_question_rows,
     load_retention_scores,
     ret_condition_summary,
@@ -296,13 +297,15 @@ def add_interview_comparison_summaries(interview_data: dict[str, Any], participa
 
 
 RETENTION_SCORE_HISTOGRAM_CATEGORIES = [
-    ("score_0_confident", "score 0 confident"),
-    ("score_0_unsure", "score 0 unsure"),
-    ("score_1_confident", "score 1 confident"),
-    ("score_1_unsure", "score 1 unsure"),
-    ("score_2_confident", "score 2 confident"),
-    ("score_2_unsure", "score 2 unsure"),
-    ("no_score", "no score"),
+    ("score_0", "0"),
+    ("score_1", "1"),
+    ("score_2", "2"),
+    ("unknown", "Unknown"),
+]
+
+RETENTION_SCORE_HISTOGRAM_SEGMENTS = [
+    ("confident", "Confident"),
+    ("unsure", "Unsure"),
 ]
 
 
@@ -320,16 +323,88 @@ def _retention_score_source_labels(scoring_rows: list[dict[str, Any]]) -> list[s
     return sorted(labels, key=_natural_source_key)
 
 
-def _score_bucket_for_source(row: dict[str, Any], source_label: str) -> str:
+def _score_category_and_segment_for_source(row: dict[str, Any], source_label: str) -> tuple[str, str]:
     score = parse_numeric(row.get(f"{source_label}_score"))
     if score is None or not float(score).is_integer() or int(score) not in (0, 1, 2):
-        return "no_score"
+        return "unknown", "unsure"
 
     note = clean(row.get(f"{source_label}_note"))
     confidence = parse_numeric(clean(row.get(f"{source_label}_confidence")).replace("%", ""))
     low_confidence = confidence is not None and confidence < GENAI_LOW_CONFIDENCE_THRESHOLD
-    suffix = "unsure" if note or low_confidence else "confident"
-    return f"score_{int(score)}_{suffix}"
+    segment = "unsure" if note or low_confidence else "confident"
+    return f"score_{int(score)}", segment
+
+
+def _valid_source_score(row: dict[str, Any], source_label: str) -> float | None:
+    score = parse_numeric(row.get(f"{source_label}_score"))
+    if score is None or score < 0 or score > 2:
+        return None
+    return score
+
+
+def build_retention_full_score_distributions(scoring_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build manuscript-style full retention scores per participant, source file, and test occasion.
+
+    Scores stay on the original 0-2 rubric scale. Within each participant/source/moment,
+    rubric rows are first averaged into component scores (Q2 facts and Q4 location are
+    averaged within component), then component scores are averaged across administered
+    components. Missing or invalid scores are omitted rather than treated as 0.
+    """
+    source_labels = _retention_score_source_labels(scoring_rows)
+    if not scoring_rows or not source_labels:
+        return {"source_labels": [], "moments": [], "values": {}}
+
+    known_elements = {key for key, _label in RETENTION_ELEMENT_SPECS}
+    creature_element_scores: dict[tuple[str, str, str, str], dict[str, float]] = {}
+
+    for row in scoring_rows:
+        participant_id = clean(row.get("MCID"))
+        moment = clean(row.get("moment"))
+        creature_id = clean(row.get("creature_id"))
+        q_element = clean(row.get("q_element"))
+        if (
+            not participant_id
+            or not moment
+            or not creature_id
+            or q_element not in known_elements
+            or not clean(row.get("answer_std"))
+        ):
+            continue
+
+        for source_label in source_labels:
+            score = _valid_source_score(row, source_label)
+            if score is None:
+                continue
+            key = (source_label, moment, participant_id, creature_id)
+            creature_element_scores.setdefault(key, {})[q_element] = score
+
+    component_values_by_participant: dict[tuple[str, str, str], list[float]] = {}
+    for (source_label, moment, participant_id, _creature_id), element_scores in creature_element_scores.items():
+        for _component_key, _component_label, q_elements in RETENTION_COMPONENT_SPECS:
+            component_scores = [element_scores[q_element] for q_element in q_elements if q_element in element_scores]
+            if component_scores:
+                component_values_by_participant.setdefault((source_label, moment, participant_id), []).append(
+                    sum(component_scores) / len(component_scores)
+                )
+
+    values: dict[str, dict[str, list[float]]] = {source_label: {} for source_label in source_labels}
+    for (source_label, moment, _participant_id), component_values in component_values_by_participant.items():
+        if component_values:
+            values[source_label].setdefault(moment, []).append(sum(component_values) / len(component_values))
+
+    moment_order = ["Immediate", "Delayed"]
+    extra_moments = sorted({moment for source_values in values.values() for moment in source_values} - set(moment_order))
+    moments = [moment for moment in moment_order if any(moment in source_values for source_values in values.values())] + extra_moments
+
+    for source_label in source_labels:
+        for moment in moments:
+            values[source_label].setdefault(moment, [])
+
+    return {
+        "source_labels": source_labels,
+        "moments": moments,
+        "values": values,
+    }
 
 
 def build_retention_score_histograms(scoring_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -359,13 +434,17 @@ def build_retention_score_histograms(scoring_rows: list[dict[str, Any]]) -> list
             row for row in scoring_rows
             if clean(row.get("answer_std")) and clean(row.get("q_element")) in q_elements
         ]
-        counts_by_source: dict[str, dict[str, int]] = {
-            label: {category_key: 0 for category_key, _category_label in RETENTION_SCORE_HISTOGRAM_CATEGORIES}
+        counts_by_source: dict[str, dict[str, dict[str, int]]] = {
+            label: {
+                category_key: {segment_key: 0 for segment_key, _segment_label in RETENTION_SCORE_HISTOGRAM_SEGMENTS}
+                for category_key, _category_label in RETENTION_SCORE_HISTOGRAM_CATEGORIES
+            }
             for label in source_labels
         }
         for row in scoped_rows:
             for source_label in source_labels:
-                counts_by_source[source_label][_score_bucket_for_source(row, source_label)] += 1
+                category_key, segment_key = _score_category_and_segment_for_source(row, source_label)
+                counts_by_source[source_label][category_key][segment_key] += 1
         charts.append({
             "key": spec["key"],
             "label": spec["label"],
@@ -377,6 +456,10 @@ def build_retention_score_histograms(scoring_rows: list[dict[str, Any]]) -> list
                 for key, label in RETENTION_SCORE_HISTOGRAM_CATEGORIES
             ],
             "counts": counts_by_source,
+            "segments": [
+                {"key": key, "label": label}
+                for key, label in RETENTION_SCORE_HISTOGRAM_SEGMENTS
+            ],
         })
 
     return charts
@@ -561,6 +644,11 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     retention = {
         "warnings": retention_warnings + scoring_warning_summary + scoring_problems,
         "condition_summary": ret_condition_summary(participants, CONDITION_ORDER),
+        "final_descriptives": build_final_retention_descriptives(
+            participants,
+            retention_score_path,
+            CONDITION_ORDER,
+        ),
         "reliability": retention_reliability_summary(retention_score_path),
         "answer_rows": retention_question_rows,
         "questions": [
@@ -570,6 +658,7 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
         "show_grades": bool(retention_scores),
         "unresolved_conflict_count": unresolved_retention_conflicts,
         "checks": retention_checks,
+        "full_score_distributions": build_retention_full_score_distributions(scoring_rows),
         "score_histograms": build_retention_score_histograms(scoring_rows),
     }
 

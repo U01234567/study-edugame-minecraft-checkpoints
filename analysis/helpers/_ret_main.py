@@ -25,6 +25,7 @@ from ._shared import (
     mcid_from_row,
     mean_sd_text,
     parse_numeric,
+    summarise,
 )
 from ._survey_io import detect_text_encoding
 
@@ -309,6 +310,305 @@ def _final_score_from_row(row: dict[str, str]) -> float | None:
     if score is None or score < 0 or score > 2:
         return None
     return score
+
+
+FINAL_RETENTION_PLACEHOLDER = "x should appear here when scoring is finished"
+
+FINAL_RETENTION_REQUIRED_COLUMNS = {
+    "MCID",
+    "moment",
+    "creature_id",
+    "q_element",
+    "final_score",
+}
+
+FINAL_RETENTION_MOMENTS = [
+    ("Immediate", "immediate"),
+    ("Delayed", "delayed"),
+]
+
+FINAL_RETENTION_QUESTION_TABLE_SPECS = [
+    {
+        "key": "q1_name",
+        "title": "Retention question 1: Creature name",
+        "note": "Retention scores range from 0 (= fully wrong) to 2 (= fully correct).",
+        "items": [("Q1_name", "Creature name")],
+    },
+    {
+        "key": "q2_facts",
+        "title": "Retention question 2: Three creature facts",
+        "note": "Retention scores range from 0 (= fully wrong) to 2 (= fully correct).",
+        "items": [
+            ("Q2_fact1", "Fact #1"),
+            ("Q2_fact2", "Fact #2"),
+            ("Q2_fact3", "Fact #3"),
+        ],
+    },
+    {
+        "key": "q3_looks",
+        "title": "Retention question 3: Creature looks",
+        "note": "Retention scores range from 0 (= fully wrong) to 2 (= fully correct).",
+        "items": [("Q3_looks", "Creature looks")],
+    },
+    {
+        "key": "q4_location",
+        "title": "Retention question 4: Chapter and creature environment",
+        "note": "Retention scores range from 0 (= fully wrong) to 2 (= fully correct).",
+        "items": [
+            ("Q4_chapter", "Chapter name"),
+            ("Q4_env", "Creature environment"),
+        ],
+    },
+]
+
+
+def _final_number_text(value: object) -> str:
+    if value is None:
+        return "—"
+    return f"{float(value):.2f}"
+
+
+def _final_stat_cell(values: list[float], expected_n: int) -> dict[str, Any]:
+    summary = summarise(values)
+    valid_n = int(summary["n"] or 0)
+    has_values = valid_n > 0
+
+    return {
+        "n_valid": valid_n,
+        "n_expected": expected_n,
+        "complete": expected_n > 0 and valid_n == expected_n,
+        "mean": _final_number_text(summary["mean"]) if has_values else FINAL_RETENTION_PLACEHOLDER,
+        "sd": _final_number_text(summary["sd"]) if summary["sd"] is not None else ("—" if has_values else FINAL_RETENTION_PLACEHOLDER),
+        "min": _final_number_text(summary["min"]) if has_values else FINAL_RETENTION_PLACEHOLDER,
+        "max": _final_number_text(summary["max"]) if has_values else FINAL_RETENTION_PLACEHOLDER,
+    }
+
+
+def _load_final_retention_rows(path: Path = RETENTION_SCORES_PATH) -> dict[str, Any]:
+    if not path.exists():
+        return {
+            "available": False,
+            "rows": [],
+            "warnings": [f"Final retention tables should appear here when scoring is finished. Missing file: {path}."],
+        }
+
+    rows = _load_plain_delimited(path)
+    if not rows:
+        return {
+            "available": False,
+            "rows": [],
+            "warnings": [f"Final retention tables should appear here when scoring is finished. Empty file: {path}."],
+        }
+
+    header = set(rows[0])
+    missing = sorted(FINAL_RETENTION_REQUIRED_COLUMNS - header)
+    if missing:
+        return {
+            "available": False,
+            "rows": [],
+            "warnings": [
+                "Final retention tables should appear here when scoring is finished. "
+                f"The final retention file is missing required column(s): {', '.join(missing)}."
+            ],
+        }
+
+    duplicate_counts: dict[tuple[str, str, str, str], int] = defaultdict(int)
+    for row in rows:
+        key = (
+            clean(row.get("MCID")),
+            _normalise_moment(row.get("moment")),
+            clean(row.get("creature_id")),
+            clean(row.get("q_element")),
+        )
+        duplicate_counts[key] += 1
+
+    known_elements = {key for key, _label in RETENTION_ELEMENT_SPECS}
+    known_moments = {label for label, _key in FINAL_RETENTION_MOMENTS}
+
+    normalised_rows: list[dict[str, Any]] = []
+    duplicate_row_count = 0
+    skipped_identity_count = 0
+    skipped_unknown_count = 0
+
+    for row in rows:
+        participant_id = clean(row.get("MCID"))
+        moment = _normalise_moment(row.get("moment"))
+        creature_id = clean(row.get("creature_id"))
+        q_element = clean(row.get("q_element"))
+        identity = (participant_id, moment, creature_id, q_element)
+
+        if not all(identity):
+            skipped_identity_count += 1
+            continue
+
+        if duplicate_counts[identity] > 1:
+            duplicate_row_count += 1
+            continue
+
+        if moment not in known_moments or q_element not in known_elements:
+            skipped_unknown_count += 1
+            continue
+
+        output = dict(row)
+        output["MCID"] = participant_id
+        output["moment"] = moment
+        output["creature_id"] = creature_id
+        output["q_element"] = q_element
+        output["_final_score_numeric"] = _final_score_from_row(row)
+        normalised_rows.append(output)
+
+    warnings: list[str] = []
+    if duplicate_row_count:
+        warnings.append(
+            f"{duplicate_row_count} duplicate final-score row(s) were excluded from the final retention descriptives. "
+            "Each MCID × moment × creature_id × q_element should appear only once."
+        )
+    if skipped_identity_count:
+        warnings.append(
+            f"{skipped_identity_count} final-score row(s) were excluded because MCID, moment, creature_id, or q_element was missing."
+        )
+    if skipped_unknown_count:
+        warnings.append(
+            f"{skipped_unknown_count} final-score row(s) were excluded because moment or q_element was not recognised."
+        )
+    if not normalised_rows:
+        warnings.append("Final retention tables should appear here when scoring is finished; no usable final-score rows were available.")
+
+    return {
+        "available": bool(normalised_rows),
+        "rows": normalised_rows,
+        "warnings": warnings,
+    }
+
+
+def _build_complete_final_participant_scores(
+    final_rows: list[dict[str, Any]],
+    condition_by_id: dict[str, str],
+) -> list[dict[str, Any]]:
+    expected_rows_by_participant_moment: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    element_scores_by_creature: dict[tuple[str, str, str], dict[str, float]] = defaultdict(dict)
+
+    for row in final_rows:
+        participant_id = clean(row.get("MCID"))
+        moment = clean(row.get("moment"))
+        creature_id = clean(row.get("creature_id"))
+        q_element = clean(row.get("q_element"))
+        score = row.get("_final_score_numeric")
+
+        expected_rows_by_participant_moment[(participant_id, moment)].append(row)
+        if score is not None:
+            element_scores_by_creature[(participant_id, moment, creature_id)][q_element] = float(score)
+
+    final_scores: list[dict[str, Any]] = []
+    for (participant_id, moment), expected_rows in expected_rows_by_participant_moment.items():
+        if any(row.get("_final_score_numeric") is None for row in expected_rows):
+            continue
+
+        component_values: list[float] = []
+        creature_ids = sorted({clean(row.get("creature_id")) for row in expected_rows})
+        for creature_id in creature_ids:
+            element_scores = element_scores_by_creature.get((participant_id, moment, creature_id), {})
+            for _component_key, _component_label, q_elements in RETENTION_COMPONENT_SPECS:
+                scores = [element_scores[q_element] for q_element in q_elements if q_element in element_scores]
+                if scores:
+                    component_values.append(sum(scores) / len(scores))
+
+        if not component_values:
+            continue
+
+        final_scores.append({
+            "participant_id": participant_id,
+            "condition": condition_by_id.get(participant_id, "Missing / invalid"),
+            "moment": moment,
+            "score": sum(component_values) / len(component_values),
+        })
+
+    return final_scores
+
+
+def build_final_retention_descriptives(
+    participants: list[dict[str, Any]],
+    path: Path = RETENTION_SCORES_PATH,
+    condition_order: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build Retention-tab descriptives from adjudicated final_score only.
+
+    Participant-level retention is calculated on the 0-2 rubric scale. A
+    participant/test-occasion score is included only when every expected
+    q_element row for that participant and moment has a valid final_score.
+    Question-element tables can preview partial scoring, with red n shown in
+    the browser whenever valid_n < expected_n.
+    """
+    condition_order = condition_order or []
+    loaded = _load_final_retention_rows(path)
+    final_rows = loaded["rows"]
+
+    condition_by_id = {
+        participant.get("participant_id"): participant.get("condition", "Missing / invalid")
+        for participant in participants
+        if participant.get("participant_id")
+    }
+
+    complete_participant_scores = _build_complete_final_participant_scores(final_rows, condition_by_id)
+
+    expected_ids_by_condition_moment: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for row in final_rows:
+        participant_id = clean(row.get("MCID"))
+        moment = clean(row.get("moment"))
+        condition = condition_by_id.get(participant_id, "Missing / invalid")
+        expected_ids_by_condition_moment[(condition, moment)].add(participant_id)
+        expected_ids_by_condition_moment[("Overall", moment)].add(participant_id)
+
+    scores_by_condition_moment: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for row in complete_participant_scores:
+        condition = clean(row.get("condition")) or "Missing / invalid"
+        moment = clean(row.get("moment"))
+        score = float(row["score"])
+        scores_by_condition_moment[(condition, moment)].append(score)
+        scores_by_condition_moment[("Overall", moment)].append(score)
+
+    condition_rows: list[dict[str, Any]] = []
+    for condition in condition_order + ["Overall"]:
+        output: dict[str, Any] = {"condition": condition}
+        for moment_label, moment_key in FINAL_RETENTION_MOMENTS:
+            values = scores_by_condition_moment.get((condition, moment_label), [])
+            expected_n = len(expected_ids_by_condition_moment.get((condition, moment_label), set()))
+            output[moment_key] = _final_stat_cell(values, expected_n)
+        condition_rows.append(output)
+
+    question_tables: list[dict[str, Any]] = []
+    for table_spec in FINAL_RETENTION_QUESTION_TABLE_SPECS:
+        table_rows: list[dict[str, Any]] = []
+        for q_element, item_label in table_spec["items"]:
+            output: dict[str, Any] = {"item": item_label}
+            for moment_label, moment_key in FINAL_RETENTION_MOMENTS:
+                scoped = [
+                    row for row in final_rows
+                    if row.get("q_element") == q_element and row.get("moment") == moment_label
+                ]
+                values = [
+                    float(row["_final_score_numeric"])
+                    for row in scoped
+                    if row.get("_final_score_numeric") is not None
+                ]
+                output[moment_key] = _final_stat_cell(values, len(scoped))
+            table_rows.append(output)
+
+        question_tables.append({
+            "key": table_spec["key"],
+            "title": table_spec["title"],
+            "note": table_spec["note"],
+            "rows": table_rows,
+        })
+
+    return {
+        "available": loaded["available"],
+        "placeholder": FINAL_RETENTION_PLACEHOLDER,
+        "warnings": loaded["warnings"],
+        "condition_rows": condition_rows,
+        "question_tables": question_tables,
+        "boxplot_rows": complete_participant_scores,
+    }
 
 
 def _load_prompt_level_scores(rows: list[dict[str, str]]) -> dict[str, Any]:

@@ -212,35 +212,272 @@ function retentionSourceColours(sourceLabels) {
   return colours;
 }
 
+
+function hexToRgb(hex) {
+  const value = String(hex || '').trim().replace(/^#/, '');
+  const normalised = value.length === 3
+    ? value.split('').map(char => char + char).join('')
+    : value;
+  if (!/^[0-9a-f]{6}$/i.test(normalised)) return null;
+  const number = parseInt(normalised, 16);
+  return {
+    r: (number >> 16) & 255,
+    g: (number >> 8) & 255,
+    b: number & 255,
+  };
+}
+
+function mixHexColour(hex, target, amount) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex || '#111827';
+  const clamp = value => Math.max(0, Math.min(255, Math.round(value)));
+  const mixed = {
+    r: clamp(rgb.r + (target.r - rgb.r) * amount),
+    g: clamp(rgb.g + (target.g - rgb.g) * amount),
+    b: clamp(rgb.b + (target.b - rgb.b) * amount),
+  };
+  return `#${[mixed.r, mixed.g, mixed.b].map(value => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function darkerSourceColour(hex) {
+  return mixHexColour(hex, { r: 0, g: 0, b: 0 }, 0.22);
+}
+
+function lighterSourceColour(hex) {
+  return mixHexColour(hex, { r: 255, g: 255, b: 255 }, 0.52);
+}
+
+function stackedGroupedBarSvg(categories, groups, segments, valuesByGroupCategorySegment, colours) {
+  const width = 820;
+  const height = 360;
+  const margin = { top: 70, right: 24, bottom: 64, left: 52 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const totals = groups.flatMap(group => categories.map(category => (
+    segments.reduce((sum, segment) => sum + Number(valuesByGroupCategorySegment[group]?.[category]?.[segment] || 0), 0)
+  )));
+  const maxCount = Math.max(1, ...totals);
+  const categoryWidth = innerWidth / Math.max(1, categories.length);
+  const barWidth = Math.max(5, (categoryWidth - 10) / Math.max(1, groups.length));
+
+  const legend = groups.map((group, index) => {
+    const x = margin.left + (index % 4) * 170;
+    const y = 18 + Math.floor(index / 4) * 20;
+    const colour = colours[group] || '#111827';
+    return `<g><rect x="${x}" y="${y - 10}" width="12" height="12" rx="2" fill="${escapeHtml(colour)}" stroke="rgba(0,0,0,.25)"></rect><text x="${x + 18}" y="${y}" font-size="12">${escapeHtml(group)}</text></g>`;
+  }).join('');
+
+  const segmentLegendX = width - 195;
+  const segmentLegend = `<g>
+    <rect x="${segmentLegendX}" y="40" width="12" height="12" rx="2" fill="#4b5563"></rect><text x="${segmentLegendX + 18}" y="50" font-size="11">Confident = darker</text>
+    <rect x="${segmentLegendX}" y="58" width="12" height="12" rx="2" fill="#d1d5db"></rect><text x="${segmentLegendX + 18}" y="68" font-size="11">Unsure/unknown = lighter</text>
+  </g>`;
+
+  const bars = categories.map((category, categoryIndex) => groups.map((group, groupIndex) => {
+    const baseColour = colours[group] || '#111827';
+    const segmentColours = {
+      Confident: darkerSourceColour(baseColour),
+      Unsure: lighterSourceColour(baseColour),
+    };
+    const x = margin.left + categoryIndex * categoryWidth + 5 + groupIndex * barWidth;
+    let yCursor = margin.top + innerHeight;
+    const total = segments.reduce((sum, segment) => sum + Number(valuesByGroupCategorySegment[group]?.[category]?.[segment] || 0), 0);
+    const rects = segments.map(segment => {
+      const count = Number(valuesByGroupCategorySegment[group]?.[category]?.[segment] || 0);
+      const barHeight = innerHeight * count / maxCount;
+      yCursor -= barHeight;
+      if (!count) return '';
+      const fill = segmentColours[segment] || baseColour;
+      return `<rect x="${x}" y="${yCursor}" width="${Math.max(1, barWidth - 1)}" height="${barHeight}" fill="${escapeHtml(fill)}" stroke="rgba(0,0,0,.12)">
+        <title>${escapeHtml(group)} | ${escapeHtml(category)} | ${escapeHtml(segment)}: ${count}</title>
+      </rect>`;
+    }).join('');
+    const labelY = Math.max(margin.top + 11, yCursor - 5);
+    return `<g>${rects}<text x="${x + Math.max(1, barWidth - 1) / 2}" y="${labelY}" text-anchor="middle" font-size="10">${total || ''}</text></g>`;
+  }).join('')).join('');
+
+  const labels = categories.map((category, index) => {
+    const x = margin.left + index * categoryWidth + categoryWidth / 2;
+    return `<text x="${x}" y="${height - 28}" text-anchor="middle" font-size="12">${escapeHtml(category)}</text>`;
+  }).join('');
+
+  const yTicks = [];
+  const tickStep = Math.max(1, Math.ceil(maxCount / 5));
+  for (let value = 0; value <= maxCount; value += tickStep) {
+    const y = margin.top + innerHeight - (innerHeight * value / maxCount);
+    yTicks.push(`<g><line x1="${margin.left - 4}" x2="${margin.left + innerWidth}" y1="${y}" y2="${y}" stroke="#d9e0e4"></line><text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="11">${value}</text></g>`);
+  }
+
+  return `<svg class="standalone-figure" viewBox="0 0 ${width} ${height}" role="img">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
+    ${legend}
+    ${segmentLegend}
+    ${yTicks.join('')}
+    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerHeight}" stroke="#5f6c73"></line>
+    <line x1="${margin.left}" y1="${margin.top + innerHeight}" x2="${margin.left + innerWidth}" y2="${margin.top + innerHeight}" stroke="#5f6c73"></line>
+    ${bars}
+    ${labels}
+  </svg>`;
+}
+
+function numericArray(values) {
+  return (values || []).map(Number).filter(Number.isFinite);
+}
+
+function sampleSd(values) {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(Math.max(0, variance));
+}
+
+function gaussianDensity(values, x, bandwidth) {
+  if (!values.length || bandwidth <= 0) return 0;
+  const normaliser = 1 / (values.length * bandwidth * Math.sqrt(2 * Math.PI));
+  return normaliser * values.reduce((sum, value) => {
+    const z = (x - value) / bandwidth;
+    return sum + Math.exp(-0.5 * z * z);
+  }, 0);
+}
+
+function ridgelineDensitySvg(valuesByGroup, groups, colours, options = {}) {
+  const minValue = Number.isFinite(options.min) ? options.min : 0;
+  const maxValue = Number.isFinite(options.max) ? options.max : 2;
+  const width = 820;
+  const rowHeight = 64;
+  const height = 118 + rowHeight * Math.max(1, groups.length);
+  const margin = { top: 36, right: 34, bottom: 58, left: 94 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const ridgeHeight = Math.min(44, rowHeight * 0.68);
+  const rowGap = innerHeight / Math.max(1, groups.length);
+  const xSteps = Array.from({ length: 121 }, (_item, index) => minValue + (index / 120) * (maxValue - minValue));
+  const scaleX = value => margin.left + ((value - minValue) / Math.max(0.001, maxValue - minValue)) * innerWidth;
+
+  const densitiesByGroup = {};
+  let maxDensity = 0;
+  for (const group of groups) {
+    const values = numericArray(valuesByGroup[group]);
+    const sd = sampleSd(values);
+    const bandwidth = values.length > 1
+      ? Math.max(0.08, 1.06 * (sd || 0.12) * values.length ** -0.2)
+      : 0.12;
+    const densities = xSteps.map(x => gaussianDensity(values, x, bandwidth));
+    densitiesByGroup[group] = { values, densities };
+    maxDensity = Math.max(maxDensity, ...densities);
+  }
+  maxDensity = Math.max(maxDensity, 0.001);
+
+  const xTicks = [0, 0.5, 1, 1.5, 2].map(value => {
+    const x = scaleX(value);
+    return `<g><line x1="${x}" x2="${x}" y1="${margin.top}" y2="${margin.top + innerHeight}" stroke="#edf2f7"></line><text x="${x}" y="${height - 24}" text-anchor="middle" font-size="11">${value}</text></g>`;
+  }).join('');
+
+  const ridges = groups.map((group, index) => {
+    const { values, densities } = densitiesByGroup[group];
+    const baseY = margin.top + rowGap * index + rowGap * 0.76;
+    const colour = colours[group] || '#111827';
+    const points = xSteps.map((x, pointIndex) => [
+      scaleX(x),
+      baseY - (densities[pointIndex] / maxDensity) * ridgeHeight,
+    ]);
+    const linePath = points.map(([x, y], pointIndex) => `${pointIndex ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const areaPath = `M${scaleX(minValue).toFixed(1)},${baseY.toFixed(1)} ${points.map(([x, y]) => `L${x.toFixed(1)},${y.toFixed(1)}`).join(' ')} L${scaleX(maxValue).toFixed(1)},${baseY.toFixed(1)} Z`;
+    const rugs = values.map(value => {
+      const x = scaleX(Math.max(minValue, Math.min(maxValue, value)));
+      return `<line x1="${x}" x2="${x}" y1="${baseY + 3}" y2="${baseY + 12}" stroke="${escapeHtml(colour)}" stroke-width="1.2"><title>${escapeHtml(group)}: ${value.toFixed(3)}</title></line>`;
+    }).join('');
+    return `<g>
+      <text x="${margin.left - 10}" y="${baseY + 4}" text-anchor="end" font-size="12">${escapeHtml(group)}</text>
+      <path d="${areaPath}" fill="${escapeHtml(lighterSourceColour(colour))}" stroke="none" opacity="0.9"></path>
+      <path d="${linePath}" fill="none" stroke="${escapeHtml(darkerSourceColour(colour))}" stroke-width="2"></path>
+      <line x1="${margin.left}" x2="${margin.left + innerWidth}" y1="${baseY}" y2="${baseY}" stroke="#d9e0e4"></line>
+      ${rugs}
+      <text x="${width - margin.right}" y="${baseY + 4}" text-anchor="end" font-size="11">n=${values.length}</text>
+    </g>`;
+  }).join('');
+
+  return `<svg class="standalone-figure retention-full-score-density" viewBox="0 0 ${width} ${height}" role="img">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
+    ${xTicks}
+    <line x1="${margin.left}" y1="${margin.top + innerHeight}" x2="${margin.left + innerWidth}" y2="${margin.top + innerHeight}" stroke="#5f6c73"></line>
+    ${ridges}
+    <text x="${margin.left + innerWidth / 2}" y="${height - 6}" text-anchor="middle" font-size="12">Full retention score (0-2)</text>
+  </svg>`;
+}
+
 function retentionHistogramValues(chart) {
   const output = {};
+  const segments = (chart.segments || [
+    { key: 'confident', label: 'Confident' },
+    { key: 'unsure', label: 'Unsure' },
+  ]);
   for (const sourceLabel of chart.source_labels || []) {
     const displayLabel = displaySourceLabel(sourceLabel);
     output[displayLabel] = {};
     for (const category of chart.categories || []) {
-      output[displayLabel][category.label] = Number(chart.counts?.[sourceLabel]?.[category.key] || 0);
+      output[displayLabel][category.label] = {};
+      const categoryCounts = chart.counts?.[sourceLabel]?.[category.key];
+      if (typeof categoryCounts === 'number') {
+        output[displayLabel][category.label].Confident = categoryCounts;
+        output[displayLabel][category.label].Unsure = 0;
+      } else {
+        for (const segment of segments) {
+          output[displayLabel][category.label][segment.label] = Number(categoryCounts?.[segment.key] || 0);
+        }
+      }
     }
   }
   return output;
+}
+
+function renderRetentionFullScoreDistributions(retention) {
+  const distribution = retention.full_score_distributions || {};
+  const sourceLabels = distribution.source_labels || [];
+  const moments = distribution.moments || [];
+  if (!sourceLabels.length || !moments.length) return '';
+  const groups = sourceLabels.map(displaySourceLabel);
+  const colours = retentionSourceColours(sourceLabels);
+
+  return `<section class="card retention-full-score-distributions">
+    <h2>Full retention score distributions by scoring file</h2>
+    <p class="small">Each curve is one full retention score per participant per test occasion and scoring file, calculated on the original 0-2 rubric scale. Components are averaged first, then component means are averaged; missing/unadministered scores are omitted.</p>
+    <div class="retention-full-score-grid">
+      ${moments.map(moment => {
+        const valuesByGroup = {};
+        for (const sourceLabel of sourceLabels) {
+          valuesByGroup[displaySourceLabel(sourceLabel)] = distribution.values?.[sourceLabel]?.[moment] || [];
+        }
+        return `<div class="chart-box retention-full-score-chart">
+          <h3>${escapeHtml(moment)} full retention</h3>
+          ${ridgelineDensitySvg(valuesByGroup, groups, colours, { min: 0, max: 2 })}
+        </div>`;
+      }).join('')}
+    </div>
+  </section>`;
 }
 
 function renderRetentionScoreHistograms(retention) {
   const charts = retention.score_histograms || [];
   if (!charts.length) return '';
   return `<section class="card retention-score-histograms">
-    <h2>Retention score distributions by scoring file</h2>
-    <p class="small">Confident = scored without a note and without confidence below the configured GenAI low-confidence threshold. Unsure = scored with a note or with confidence below that threshold. Human grader files use notes only.</p>
+    <h2>Retention rubric-score distributions by scoring file</h2>
+    <p class="small">Bars are grouped into 0, 1, 2, and Unknown. Within each bar, the darker segment is confident and the lighter segment is unsure. Confident = scored without a note and without confidence below the configured GenAI low-confidence threshold. Human grader files use notes only.</p>
     <div class="retention-score-histogram-grid">
       ${charts.map(chart => {
         const categories = (chart.categories || []).map(category => category.label);
         const groups = (chart.source_labels || []).map(displaySourceLabel);
+        const segments = (chart.segments || [
+          { key: 'confident', label: 'Confident' },
+          { key: 'unsure', label: 'Unsure' },
+        ]).map(segment => segment.label);
         if (!categories.length || !groups.length) {
           return `<div class="chart-box retention-score-histogram"><h3>${escapeHtml(chart.label)}</h3><p class="small">No scoring files available yet.</p></div>`;
         }
         return `<div class="chart-box retention-score-histogram">
           <h3>${escapeHtml(chart.label)}</h3>
           <p class="small">Rows represented: ${escapeHtml(chart.n_answer_rows ?? 0)}${(chart.q_elements || []).length ? ` · ${escapeHtml((chart.q_elements || []).join(', '))}` : ''}</p>
-          ${groupedBarSvg(categories, groups, retentionHistogramValues(chart), retentionSourceColours(chart.source_labels || []))}
+          ${stackedGroupedBarSvg(categories, groups, segments, retentionHistogramValues(chart), retentionSourceColours(chart.source_labels || []))}
         </div>`;
       }).join('')}
     </div>
@@ -612,13 +849,32 @@ function renderMain(data) {
 
   const labSlotRows = sortedLabSlotRows(controlling.lab_slot_summary || []);
   const conditionOrder = data.condition_order || ['Required continue', 'Required pauses', 'Optional pauses'];
-  const locationHeaders = [
-    { key: 'location', label: 'Location' },
-    ...conditionOrder.map(condition => ({ key: condition, label: condition, num: true })),
-    { key: 'n', labelHtml: '<em>n</em>', num: true },
-    { key: 'same_room_participants', label: 'Same-room participants', html: true },
+  const locationRows = controlling.location_condition_summary || [];
+  const preferredLocations = ['Creative Space', 'Living Room', 'At home', 'Missing / not set'];
+  const nonLocationKeys = new Set(['condition', 'n', 'same_room_participants']);
+  const observedLocations = new Set();
+
+  for (const row of locationRows) {
+    for (const key of Object.keys(row || {})) {
+      if (!nonLocationKeys.has(key)) observedLocations.add(key);
+    }
+  }
+
+  const orderedLocations = [
+    ...preferredLocations.filter(location => observedLocations.has(location)),
+    ...[...observedLocations].filter(location => !preferredLocations.includes(location)).sort(),
   ];
 
+  const locationHeaders = [
+    { key: 'condition', label: 'Condition' },
+    { key: 'n', labelHtml: '<em>n</em>', num: true },
+    ...orderedLocations.map(location => ({
+      key: location,
+      label: location === 'At home' ? 'Remote' : location,
+      num: true,
+    })),
+    { key: 'same_room_participants', label: 'Other same-room participants', html: true },
+  ];
   main.innerHTML = `
     <section class="card report-header">
       <h1>${escapeHtml(data.meta?.title || 'Merged study summary')}</h1>
@@ -663,8 +919,8 @@ function renderMain(data) {
     <section class="card">
       <h2>Collection Context</h2>
       <p class="small">Remote sessions are coded as At home. Lab sessions use <code>/data/config/collection_locations.json</code>. Lab slots are based on the parsed start of each participant’s <code>/data/logs/</code> file. Same-room participants are calculated over occupied lab slots only.</p>
-      <h3>Location by Condition</h3>
-      ${table(locationHeaders, controlling.location_condition_summary || [], { className: 'location-context-table' })}
+      <h3>Collection context by condition</h3>
+      ${table(locationHeaders, locationRows, { className: 'location-context-table' })}
 
       <details class="details-block">
         <summary>Lab Slots</summary>
@@ -678,6 +934,179 @@ function renderMain(data) {
     </section>
   `;
   renderDistributionCharts(data);
+}
+
+function finalRetentionSingleNHtml(cell) {
+  if (!cell) return '—';
+
+  const expected = Number(cell.n_expected || 0);
+  const valid = Number(cell.n_valid || 0);
+  if (!expected) return '—';
+
+  const text = cell.complete ? String(valid) : `${valid}/${expected}`;
+  return cell.complete
+    ? escapeHtml(text)
+    : `<span class="retention-final-n-incomplete">${escapeHtml(text)}</span>`;
+}
+
+function finalRetentionNCellHtml(immediateCell, delayedCell) {
+  const items = [
+    { label: 'Imm.', cell: immediateCell },
+    { label: 'Del.', cell: delayedCell },
+  ];
+
+  const available = items.filter(item => item.cell);
+  if (!available.length) return '—';
+
+  const first = available[0].cell;
+  const sameN = available.every(item => (
+    Number(item.cell.n_expected || 0) === Number(first.n_expected || 0)
+    && Number(item.cell.n_valid || 0) === Number(first.n_valid || 0)
+    && Boolean(item.cell.complete) === Boolean(first.complete)
+  ));
+
+  if (sameN) return finalRetentionSingleNHtml(first);
+
+  return `<span class="retention-final-n-stack">${
+    items.map(item => (
+      `<span><strong>${escapeHtml(item.label)}</strong> ${finalRetentionSingleNHtml(item.cell)}</span>`
+    )).join('')
+  }</span>`;
+}
+
+function finalRetentionCellHtml(cell) {
+  if (!cell) return '—';
+
+  const expected = Number(cell.n_expected || 0);
+  const valid = Number(cell.n_valid || 0);
+  if (!expected || !valid) {
+    return `<p class="small retention-final-placeholder">${escapeHtml(cell.mean || 'x should appear here when scoring is finished')}</p>`;
+  }
+
+  return `<table class="micro-stat-table"><tbody>
+    <tr><th>Mean</th><td>${escapeHtml(cell.mean)}</td></tr>
+    <tr><th><em>SD</em></th><td>${escapeHtml(cell.sd)}</td></tr>
+    <tr><th>Min</th><td>${escapeHtml(cell.min)}</td></tr>
+    <tr><th>Max</th><td>${escapeHtml(cell.max)}</td></tr>
+  </tbody></table>`;
+}
+
+function finalRetentionBoxplotSvg(data, finalBlock) {
+  const rows = finalBlock.boxplot_rows || [];
+  if (!rows.length) {
+    return `<p class="small retention-final-placeholder">${escapeHtml(finalBlock.placeholder || 'x should appear here when scoring is finished')}</p>`;
+  }
+
+  const metricKeys = [
+    { key: 'Immediate', label: 'Immediate retention' },
+    { key: 'Delayed', label: 'Delayed retention' },
+  ];
+  const conditionGroupsForPlot = data.condition_order || ['Required continue', 'Required pauses', 'Optional pauses'];
+  const colours = conditionColours(data);
+  const width = 920;
+  const height = 440;
+  const margin = { top: 62, right: 24, bottom: 92, left: 58 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const minValue = 0;
+  const maxValue = 2;
+  const scaleY = value => margin.top + innerHeight - ((value - minValue) / Math.max(0.001, maxValue - minValue)) * innerHeight;
+  const slotWidth = innerWidth / Math.max(1, metricKeys.length);
+  const boxWidthOffset = 44;
+
+  const yTicks = [];
+  for (let value = minValue; value <= maxValue; value += 1) {
+    yTicks.push(`<g><line x1="${margin.left - 4}" x2="${margin.left + innerWidth}" y1="${scaleY(value)}" y2="${scaleY(value)}" stroke="#d9e0e4"></line><text x="${margin.left - 8}" y="${scaleY(value) + 4}" text-anchor="end" font-size="11">${value}</text></g>`);
+  }
+
+  const legend = conditionGroupsForPlot.map((condition, index) => {
+    const x = margin.left + (index % 3) * 210;
+    const y = 20 + Math.floor(index / 3) * 20;
+    const colour = colours[condition] || '#111827';
+    return `<g><rect x="${x}" y="${y - 10}" width="12" height="12" rx="2" fill="white" stroke="${escapeHtml(colour)}" stroke-width="2"></rect><text x="${x + 18}" y="${y}" font-size="12">${escapeHtml(condition)}</text></g>`;
+  }).join('');
+
+  const boxes = [];
+  metricKeys.forEach((metric, metricIndex) => {
+    conditionGroupsForPlot.forEach((condition, conditionIndex) => {
+      const values = rows
+        .filter(row => row.condition === condition && row.moment === metric.key)
+        .map(row => Number(row.score))
+        .filter(value => Number.isFinite(value));
+      const stats = boxStats(values);
+      if (!stats) return;
+
+      const centreOffset = (conditionIndex - (conditionGroupsForPlot.length - 1) / 2) * boxWidthOffset;
+      const x = margin.left + metricIndex * slotWidth + slotWidth / 2 + centreOffset;
+      boxes.push(boxGroup(metric.label, condition, x, colours[condition] || '#111827', stats, scaleY));
+    });
+  });
+
+  const xLabels = metricKeys.map((metric, index) => {
+    const x = margin.left + index * slotWidth + slotWidth / 2;
+    return `<text x="${x}" y="${height - 46}" text-anchor="middle" font-size="12">${escapeHtml(metric.label)}</text>`;
+  }).join('');
+
+  return `<p class="small">Standalone SVG: centre line = median; boxes = Q1–Q3; whiskers = min–max; labels show <em>n</em> and median.</p>
+    <svg class="standalone-figure" viewBox="0 0 ${width} ${height}" role="img">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
+      ${legend}
+      ${yTicks.join('')}
+      <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerHeight}" stroke="#5f6c73"></line>
+      <line x1="${margin.left}" y1="${margin.top + innerHeight}" x2="${margin.left + innerWidth}" y2="${margin.top + innerHeight}" stroke="#5f6c73"></line>
+      ${boxes.join('')}
+      ${xLabels}
+    </svg>`;
+}
+
+function renderFinalRetentionDescriptives(data, retention) {
+  const finalBlock = retention.final_descriptives || {};
+  const conditionRows = (finalBlock.condition_rows || []).map(row => ({
+    condition: row.condition,
+    n: finalRetentionNCellHtml(row.immediate, row.delayed),
+    immediate: finalRetentionCellHtml(row.immediate),
+    delayed: finalRetentionCellHtml(row.delayed),
+  }));
+
+  const questionTablesHtml = (finalBlock.question_tables || []).map(questionTable => {
+    const rows = (questionTable.rows || []).map(row => ({
+      item: row.item,
+      n: finalRetentionNCellHtml(row.immediate, row.delayed),
+      immediate: finalRetentionCellHtml(row.immediate),
+      delayed: finalRetentionCellHtml(row.delayed),
+    }));
+
+    return `<section class="subcard">
+      <h3>${escapeHtml(questionTable.title)}</h3>
+      ${table([
+        { key: 'item', label: 'Item' },
+        { key: 'n', labelHtml: '<em>n</em>', html: true },
+        { key: 'immediate', label: 'Immediate', html: true },
+        { key: 'delayed', label: 'Delayed', html: true },
+      ], rows, { className: 'scale-table scale-retention-final-table' })}
+      <p class="small"><em>Note.</em> ${escapeHtml(questionTable.note || 'Retention scores range from 0 (= fully wrong) to 2 (= fully correct).')}</p>
+    </section>`;
+  }).join('');
+
+  return `<section class="card retention-final-descriptives">
+    <h2>Final retention descriptives</h2>
+    <p class="small">These tables use only adjudicated <code>final_score</code> values from <code>retention_scores_merged.tsv</code>. Red <em>n</em> values indicate that not every expected final score is valid yet.</p>
+    ${renderWarnings(finalBlock.warnings || [])}
+
+    <h3>Final retention score by condition</h3>
+    ${table([
+      { key: 'condition', label: 'Condition' },
+      { key: 'n', labelHtml: '<em>n</em>', html: true },
+      { key: 'immediate', label: 'Immediate retention', html: true },
+      { key: 'delayed', label: 'Delayed retention', html: true },
+    ], conditionRows, { className: 'scale-table scale-merged-table' })}
+
+    <h3>Final retention score by question element</h3>
+    ${questionTablesHtml || `<p class="small retention-final-placeholder">${escapeHtml(finalBlock.placeholder || 'x should appear here when scoring is finished')}</p>`}
+
+    <h3>Final retention score boxplot</h3>
+    ${finalRetentionBoxplotSvg(data, finalBlock)}
+  </section>`;
 }
 
 function renderRetention(data) {
@@ -747,6 +1176,8 @@ function renderRetention(data) {
       ], retention.checks)}
     </section>` : '';
 
+  const finalRetentionHtml = renderFinalRetentionDescriptives(data, retention);
+  const fullScoreDistributionsHtml = renderRetentionFullScoreDistributions(retention);
   const scoreHistogramsHtml = renderRetentionScoreHistograms(retention);
 
   const summaryHtml = `
@@ -757,6 +1188,8 @@ function renderRetention(data) {
       ${table(summaryHeaders, retention.condition_summary || [])}
     </section>
     ${checksHtml}
+    ${finalRetentionHtml}
+    ${fullScoreDistributionsHtml}
     ${scoreHistogramsHtml}
     ${reliabilityHtml}`;
 

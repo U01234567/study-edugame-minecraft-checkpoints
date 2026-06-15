@@ -361,9 +361,10 @@ def attach_collection_context(participants: list[dict[str, Any]], collection_loc
 
     for group in occupied_lab_slot_groups(participants).values():
         slot_size = len(group)
+        same_room_n = max(0, slot_size - 1)
         for participant in group:
             participant["same_room_participants_n"] = slot_size
-        participant["same_room_n"] = max(0, slot_size - 1)
+            participant["same_room_n"] = same_room_n
 
     return sorted(warning_set)
 
@@ -570,38 +571,40 @@ def demographic_distributions(participants: list[dict[str, Any]]) -> dict[str, l
 
 
 def location_condition_summary(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Summarise collection location by condition and occupied room slots.
+    """Summarise collection location and same-room context by condition.
 
-    Same-room participants are calculated over occupied lab slots only. A slot
-    with one included participant therefore has a value of 1, and unused slots
-    are not included in the mean, SD, min, or max.
+    Location counts are participant counts. Same-room participants are the number
+    of other included participants in the same date, time slot, and lab location;
+    this is defined only for Creative Space and Living Room participants.
     """
     locations = sorted({clean(participant.get("room_type")) or "Missing / not set" for participant in participants})
     preferred = ["Creative Space", "Living Room", "At home", "Missing / not set"]
-    ordered = [location for location in preferred if location in locations]
-    ordered.extend(location for location in locations if location not in ordered)
-
-    occupied_slots = occupied_lab_slot_groups(participants)
+    ordered_locations = [location for location in preferred if location in locations]
+    ordered_locations.extend(location for location in locations if location not in ordered_locations)
 
     rows: list[dict[str, Any]] = []
-    for location in ordered:
-        scoped = [
+    for condition in CONDITION_ORDER + ["Overall"]:
+        scoped = participants if condition == "Overall" else [
             participant for participant in participants
-            if (clean(participant.get("room_type")) or "Missing / not set") == location
-        ]
-        occupied_slot_sizes = [
-            len(group)
-            for (_date, _slot, slot_location), group in occupied_slots.items()
-            if slot_location == location
+            if participant.get("condition") == condition
         ]
 
-        row = {
-            "location": location,
+        same_room_values = [
+            participant.get("same_room_n")
+            for participant in scoped
+            if clean(participant.get("room_type")) in ALLOWED_COLLECTION_LOCATIONS
+        ]
+
+        row: dict[str, Any] = {
+            "condition": condition,
             "n": len(scoped),
-            "same_room_participants": stat_micro_table(occupied_slot_sizes),
+            "same_room_participants": stat_micro_table(same_room_values),
         }
-        for condition in CONDITION_ORDER:
-            row[condition] = sum(1 for participant in scoped if participant.get("condition") == condition)
+        for location in ordered_locations:
+            row[location] = sum(
+                1 for participant in scoped
+                if (clean(participant.get("room_type")) or "Missing / not set") == location
+            )
         rows.append(row)
     return rows
 
