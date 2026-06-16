@@ -542,8 +542,10 @@ function prepareClientIndexes() {
 
   RUBRIC_ROWS_BY_KEY = {};
   const tables = STATE.rubric.question_rubric_tables || {};
+  const scoreOrder = ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2]).slice().reverse();
+
   for (const [questionKey, table] of Object.entries(tables)) {
-    for (const row of expandedRubricRows(table)) {
+    for (const row of expandedRubricRows({...table, score_order: scoreOrder})) {
       const lookupKey = `${questionKey}\u0000${row.creature_id || ''}`;
       if (!RUBRIC_ROWS_BY_KEY[lookupKey]) RUBRIC_ROWS_BY_KEY[lookupKey] = [];
       RUBRIC_ROWS_BY_KEY[lookupKey].push(row);
@@ -559,14 +561,18 @@ function getQuestionShortLabel(questionKey) {
 
 function expandedRubricRows(table) {
   const rows = [];
-  const scoreOrder = (Array.isArray(table.score_order) ? table.score_order : ((STATE && STATE.rubric && STATE.rubric.score_scale) || [0, 1, 2])).map(score => String(score));
+  const explicitScoreOrder = Array.isArray(table.score_order)
+    ? table.score_order.map(score => String(score))
+    : null;
 
   const appendScoreRows = (scoresByValue, baseRow) => {
-    const remainingScores = Object.keys(scoresByValue).filter(score => !scoreOrder.includes(score));
-    const scores = [
-      ...scoreOrder.filter(score => Object.prototype.hasOwnProperty.call(scoresByValue, score)),
-      ...remainingScores
-    ];
+    const sourceScores = Object.keys(scoresByValue);
+    const scores = explicitScoreOrder
+      ? [
+          ...explicitScoreOrder.filter(score => Object.prototype.hasOwnProperty.call(scoresByValue, score)),
+          ...sourceScores.filter(score => !explicitScoreOrder.includes(score))
+        ]
+      : sourceScores;
 
     for (const score of scores) {
       rows.push({
@@ -732,7 +738,7 @@ function getRubricRows(task) {
   const questionDefaultRows = RUBRIC_ROWS_BY_KEY[questionDefaultKey];
   if (questionDefaultRows && questionDefaultRows.length) return questionDefaultRows;
 
-  return (STATE.rubric.score_scale || [0, 1, 2]).map(score => ({
+  return [2, 1, 0].map(score => ({
     score,
     note: ''
   }));
