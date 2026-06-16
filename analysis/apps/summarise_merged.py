@@ -34,13 +34,18 @@ from helpers._ret_main import (
     retention_reliability_summary,
 )
 from helpers._retention_coding import (
+    AMOUNT_GENAI,
+    AMOUNT_HUMAN,
     CREATURE_INFO_PDF_PATH,
     GENAI_LOW_CONFIDENCE_THRESHOLD,
     GENAI_PROMPT_PATH,
     SCORING_RUBRICS_HTML_PATH,
     SCORING_RUBRICS_PDF_PATH,
     build_retention_scoring_checks,
+    configured_grader_score_paths,
+    load_grader_scores,
     prepare_retention_answer_files,
+    read_review_manifest,
     write_prompt_score_file,
 )
 from helpers._shared import (
@@ -407,6 +412,201 @@ def build_retention_full_score_distributions(scoring_rows: list[dict[str, Any]])
     }
 
 
+def _configured_retention_source_labels(kind: str, amount: int) -> list[str]:
+    return [f"{kind}{index}" for index in range(1, max(0, int(amount)) + 1)]
+
+
+def _display_retention_source_label(label: str) -> str:
+    text = clean(label)
+    match = re.match(r"^(genai|grader)(\d+)(?:_(\d+))?$", text, flags=re.IGNORECASE)
+    if not match:
+        return text or "Unknown source"
+
+    source_type, number, duplicate = match.groups()
+    base = "GenAI" if source_type.lower() == "genai" else "Grader"
+    suffix = f" / {duplicate}" if duplicate else ""
+    return f"{base} #{number}{suffix}"
+
+
+def _valid_retention_integer_score(value: object) -> int | None:
+    score = parse_numeric(value)
+    if score is None or not float(score).is_integer():
+        return None
+    score_int = int(score)
+    return score_int if score_int in (0, 1, 2) else None
+
+
+def _format_percent(numerator: int, denominator: int) -> str:
+    if denominator <= 0:
+        return "—"
+    return f"{100 * numerator / denominator:.1f}%"
+
+
+def build_retention_human_genai_comparison(scoring_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compare each configured human grader's completed exact-answer tasks with configured GenAI sources.
+
+    The denominator for human progress is the frozen human-review queue/grader TSV,
+    not the participant-occurrence rows in retention_scores_merged.tsv. Comparisons
+    are made by task_id, which is derived from q_element + creature + answer_std.
+    """
+    genai_labels = _configured_retention_source_labels("genai", AMOUNT_GENAI)
+    grader_paths = configured_grader_score_paths(AMOUNT_HUMAN)
+    grader_labels = _configured_retention_source_labels("grader", AMOUNT_HUMAN)
+
+    scoring_by_task_id: dict[str, dict[str, Any]] = {}
+    for row in scoring_rows:
+        task_id = clean(row.get("task_id"))
+        if task_id and clean(row.get("answer_std")) and task_id not in scoring_by_task_id:
+            scoring_by_task_id[task_id] = row
+
+    manifest_task_ids = [
+        task_id
+        for task_id in (clean(row.get("task_id")) for row in read_review_manifest())
+        if task_id
+    ]
+
+    summary_rows: list[dict[str, Any]] = []
+    matrix_sections: list[dict[str, Any]] = []
+
+    for grader_label, grader_path in zip(grader_labels, grader_paths):
+        grader_display = _display_retention_source_label(grader_label)
+        grader_source = load_grader_scores(grader_path) if grader_path.exists() else {}
+        task_ids = list(dict.fromkeys(manifest_task_ids or sorted(grader_source)))
+        total_tasks = len(task_ids)
+
+        status_counts = {"graded": 0, "todo": 0, "skipped": 0, "flagged": 0, "invalid": 0}
+        graded_tasks: list[tuple[str, int]] = []
+
+        for task_id in task_ids:
+            source_row = grader_source.get(task_id, {})
+            status = clean(source_row.get("status"))
+            score = _valid_retention_integer_score(source_row.get("score (0-2)"))
+
+            if status == "graded" and score is not None:
+                status_counts["graded"] += 1
+                graded_tasks.append((task_id, score))
+            elif status == "graded":
+                status_counts["invalid"] += 1
+            elif status in {"skipped", "flagged"}:
+                status_counts[status] += 1
+            else:
+                status_counts["todo"] += 1
+
+        graded_count = len(graded_tasks)
+
+        summary_rows.append({
+            "grader_label": grader_label,
+            "grader": grader_display,
+            "comparison": "Progress",
+            "value": f"{grader_display} scored {graded_count} out of {total_tasks}",
+            "detail": (
+                f"graded={status_counts['graded']}; todo={status_counts['todo']}; "
+                f"skipped={status_counts['skipped']}; flagged={status_counts['flagged']}; "
+                f"invalid graded scores={status_counts['invalid']}"
+            ),
+        })
+
+        for genai_label in genai_labels:
+            genai_display = _display_retention_source_label(genai_label)
+
+            matrix: dict[int, dict[int | str, int]] = {
+                grader_score: {0: 0, 1: 0, 2: 0, "missing": 0}
+                for grader_score in (0, 1, 2)
+            }
+
+            identical = 0
+            comparable = 0
+            grader_higher = 0
+            genai_higher = 0
+            missing_genai = 0
+
+            for task_id, grader_score in graded_tasks:
+                scoring_row = scoring_by_task_id.get(task_id, {})
+
+                genai_score = _valid_retention_integer_score(scoring_row.get(f"{genai_label}_score"))
+                if genai_score is None and genai_label == "genai1":
+                    genai_score = _valid_retention_integer_score(scoring_row.get("genai_score"))
+
+                if genai_score is None:
+                    matrix[grader_score]["missing"] += 1
+                    missing_genai += 1
+                    continue
+
+                matrix[grader_score][genai_score] += 1
+                comparable += 1
+
+                if grader_score == genai_score:
+                    identical += 1
+                elif grader_score > genai_score:
+                    grader_higher += 1
+                else:
+                    genai_higher += 1
+
+            summary_rows.append({
+                "grader_label": grader_label,
+                "grader": grader_display,
+                "comparison": f"Exact match with {genai_display}",
+                "value": f"From {graded_count}, {_format_percent(identical, graded_count)} is identical to the scoring of {genai_display}",
+                "detail": (
+                    f"{identical}/{graded_count} identical; compared={comparable}; "
+                    f"{grader_display} higher={grader_higher}; {genai_display} higher={genai_higher}; "
+                    f"missing/invalid {genai_display} score={missing_genai}"
+                ),
+            })
+
+            if graded_count:
+                column_totals = {
+                    score: sum(matrix[grader_score][score] for grader_score in (0, 1, 2))
+                    for score in (0, 1, 2)
+                }
+                missing_total = sum(matrix[grader_score]["missing"] for grader_score in (0, 1, 2))
+
+                matrix_rows = []
+                for grader_score in (0, 1, 2):
+                    row_total = (
+                        sum(matrix[grader_score][source_score] for source_score in (0, 1, 2))
+                        + matrix[grader_score]["missing"]
+                    )
+                    matrix_rows.append({
+                        "grader_score": f"{grader_display} score {grader_score}",
+                        "source_score_0": matrix[grader_score][0],
+                        "source_score_1": matrix[grader_score][1],
+                        "source_score_2": matrix[grader_score][2],
+                        "source_missing": matrix[grader_score]["missing"],
+                        "total": row_total,
+                    })
+
+                matrix_rows.append({
+                    "grader_score": f"Column total ({genai_display})",
+                    "source_score_0": column_totals[0],
+                    "source_score_1": column_totals[1],
+                    "source_score_2": column_totals[2],
+                    "source_missing": missing_total,
+                    "total": graded_count,
+                })
+
+                matrix_sections.append({
+                    "grader_label": grader_label,
+                    "grader": grader_display,
+                    "source_label": genai_label,
+                    "source": genai_display,
+                    "title": f"{grader_display} compared with {genai_display}",
+                    "summary": (
+                        f"Identical: {identical}/{graded_count} ({_format_percent(identical, graded_count)}); "
+                        f"{grader_display} higher: {grader_higher}; {genai_display} higher: {genai_higher}; "
+                        f"missing/invalid {genai_display}: {missing_genai}."
+                    ),
+                    "rows": matrix_rows,
+                })
+
+    return {
+        "configured_genai_count": AMOUNT_GENAI,
+        "configured_human_count": AMOUNT_HUMAN,
+        "summary_rows": summary_rows,
+        "matrix_sections": matrix_sections,
+    }
+
+
 def build_retention_score_histograms(scoring_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build source-file score/confidence histograms for the Retention tab."""
     source_labels = _retention_score_source_labels(scoring_rows)
@@ -679,6 +879,7 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
         "checks": retention_checks,
         "full_score_distributions": build_retention_full_score_distributions(scoring_rows),
         "score_histograms": build_retention_score_histograms(scoring_rows),
+        "human_genai_comparison": build_retention_human_genai_comparison(scoring_rows),
     }
 
     log_step("Building demographic and collection-context summaries.")

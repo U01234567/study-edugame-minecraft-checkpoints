@@ -457,6 +457,43 @@ function renderRetentionFullScoreDistributions(retention) {
   </section>`;
 }
 
+function renderRetentionHumanGenaiComparison(retention) {
+  const block = retention.human_genai_comparison || {};
+  const summaryRows = block.summary_rows || [];
+  const matrixSections = block.matrix_sections || [];
+  if (!summaryRows.length && !matrixSections.length) return '';
+
+  const matrixHtml = matrixSections.length ? `
+    <h3>How scores differ</h3>
+    <p class="small">Rows are human scores; columns are GenAI scores for the same exact <code>task_id</code> / standardised answer. Off-diagonal cells show where the two sources differ.</p>
+    ${matrixSections.map(section => `
+      <section class="retention-comparison-matrix">
+        <h4>${escapeHtml(section.title || 'Human–GenAI comparison')}</h4>
+        <p class="small">${escapeHtml(section.summary || '')}</p>
+        ${table([
+          { key: 'grader_score', label: 'Human score' },
+          { key: 'source_score_0', label: 'GenAI score 0', num: true },
+          { key: 'source_score_1', label: 'GenAI score 1', num: true },
+          { key: 'source_score_2', label: 'GenAI score 2', num: true },
+          { key: 'source_missing', label: 'GenAI missing/invalid', num: true },
+          { key: 'total', label: 'Total', num: true },
+        ], section.rows || [], { className: 'scale-table retention-comparison-table' })}
+      </section>`).join('')}
+  ` : '';
+
+  return `<section class="card retention-human-genai-comparison">
+    <h2>Human-vs-GenAI comparison for exact reviewed answers</h2>
+    <p class="small">This uses the frozen human-review task IDs, so duplicate participant occurrences of the same standardised answer are counted once. The denominator for each progress row is that grader's configured review queue.</p>
+    ${table([
+      { key: 'grader', label: 'Human grader' },
+      { key: 'comparison', label: 'Metric' },
+      { key: 'value', label: 'Value' },
+      { key: 'detail', label: 'Details' },
+    ], summaryRows, { className: 'scale-table retention-human-genai-summary' })}
+    ${matrixHtml}
+  </section>`;
+}
+
 function renderRetentionScoreHistograms(retention) {
   const charts = retention.score_histograms || [];
   if (!charts.length) return '';
@@ -1178,6 +1215,7 @@ function renderRetention(data) {
 
   const finalRetentionHtml = renderFinalRetentionDescriptives(data, retention);
   const fullScoreDistributionsHtml = renderRetentionFullScoreDistributions(retention);
+  const humanGenaiComparisonHtml = renderRetentionHumanGenaiComparison(retention);
   const scoreHistogramsHtml = renderRetentionScoreHistograms(retention);
 
   const summaryHtml = `
@@ -1188,6 +1226,7 @@ function renderRetention(data) {
       ${table(summaryHeaders, retention.condition_summary || [])}
     </section>
     ${checksHtml}
+    ${humanGenaiComparisonHtml}
     ${finalRetentionHtml}
     ${fullScoreDistributionsHtml}
     ${scoreHistogramsHtml}
