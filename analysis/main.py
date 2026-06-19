@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+from apps.resolve_disagreements import main as resolve_disagreements_main
 from apps.score_retention import main as score_retention_main
 from apps.summarise_last_session import main as summarise_last_session_main
 from apps.summarise_merged import main as merged_summary_main
@@ -43,6 +44,7 @@ DATA_RETENTION_SCORES_PATH = DATA_DIR / "retention_scores_merged.tsv"
 
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"
+RESOLVE_DISAGREEMENTS_OUTPUT_PATH = OUTPUT_DIR / "resolve_disagreements.html"
 
 APP_PATHS = {
     "analysis_dir": ANALYSIS_DIR,
@@ -63,6 +65,7 @@ APP_PATHS = {
     "data_retention_scores_path": DATA_RETENTION_SCORES_PATH,
     "merged_output_path": MERGED_OUTPUT_PATH,
     "included_mcids_output_path": INCLUDED_MCIDS_OUTPUT_PATH,
+    "resolve_disagreements_output_path": RESOLVE_DISAGREEMENTS_OUTPUT_PATH,
 }
 
 
@@ -76,6 +79,9 @@ def print_usage() -> None:
     print("  python main.py score_ret grader=1")
     print("  python main.py score_ret grader=2")
     print("  python main.py score_ret grader=x port=8766")
+    print("  python main.py resolve_disagreements")
+    print("  python main.py resolve_disagreements port=8767")
+    print("  python main.py resolve_disagreements input=./data/retention_scores_merged.tsv port=8767")
     print()
     print(f"Current route: PUBLIC_ROUTE={PUBLIC_ROUTE}")
 
@@ -90,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     - sum_merged: build the merged report; in private mode, /raw/ is used only
       to regenerate /data/, and all downstream calculations use /data/
     - score_ret: open blind retention scoring interface
+    - resolve_disagreements: open the final retention adjudication app; it first
+      auto-fills safe conflicts with backups, then lets you manually resolve the rest
     """
     args = argv if argv is not None else sys.argv[1:]
 
@@ -110,6 +118,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "score_ret":
         return score_retention_main(args[1:])
+
+    if command in {"resolve_disagreements", "resolve_dis"}:
+        return resolve_disagreements_main(args[1:])
 
     print(f"Unknown command: {command}")
     print_usage()

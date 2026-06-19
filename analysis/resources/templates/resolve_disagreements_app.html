@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resolve retention disagreements</title>
+  <link rel="stylesheet" href="/static/scoring_app.css">
+  <link rel="stylesheet" href="/static/resolve_disagreements_app.css">
+</head>
+<body>
+  <main id="app">
+    <section id="loading" aria-live="polite">
+      <div class="loading-card">
+        <p class="eyebrow">Final retention adjudication</p>
+        <h1>Loading disagreements…</h1>
+        <div class="loading-bar" aria-hidden="true"><span id="loading-bar-fill"></span></div>
+        <p id="loading-message">Starting resolve-disagreements interface.</p>
+        <p id="loading-detail" class="small">The server first applies safe automatic rules and writes a backup before changing the merged TSV.</p>
+        <ol id="loading-log" class="loading-log"></ol>
+      </div>
+    </section>
+
+    <section id="fatal" class="doc-card resolve-fatal" hidden>
+      <p class="eyebrow">Final retention adjudication</p>
+      <h1>Cannot start resolve-disagreements app</h1>
+      <p id="fatal-message"></p>
+    </section>
+
+    <section id="done" hidden>
+      <div class="checkmark">✓</div>
+      <h1>All remaining disagreements are resolved or flagged</h1>
+      <p>The current queue has no unhandled task groups.</p>
+      <button id="review" type="button">Review flagged / resolved items</button>
+    </section>
+
+    <section id="workspace" hidden>
+      <header id="topbar">
+        <div>
+          <p id="app-eyebrow" class="eyebrow">Final retention adjudication</p>
+          <h1 id="app-title">Resolve retention disagreements</h1>
+        </div>
+        <nav id="tabs" aria-label="Resolve disagreements tabs">
+          <button class="tab-button active" type="button" data-tab="start">Start</button>
+          <button class="tab-button" type="button" data-tab="score">Resolve</button>
+          <button class="tab-button" type="button" data-tab="overview">Overview</button>
+          <button class="tab-button" type="button" data-tab="full-rubric">All rubrics</button>
+        </nav>
+      </header>
+
+      <section id="tab-start" class="tab-panel active" data-panel="start">
+        <article class="doc-card">
+          <h2>Automatic startup pass</h2>
+          <p>This app has already applied the two safe automatic rules to <code id="input-path-label"></code>. No source-score columns were changed.</p>
+          <div class="resolve-metrics">
+            <div class="resolve-metric">
+              <span class="label">Rows filled with majority rule</span>
+              <strong id="auto-majority-rows">0</strong>
+              <span class="small">final_note_manual = <code>Went with majority (3/4)</code></span>
+            </div>
+            <div class="resolve-metric">
+              <span class="label">Rows filled with human-agreement rule</span>
+              <strong id="auto-human-rows">0</strong>
+              <span class="small">final_note_manual = <code>Went with human agreement where GenAI (2x) disagree with each other</code></span>
+            </div>
+            <div class="resolve-metric">
+              <span class="label">Manual adjudication task groups</span>
+              <strong id="remaining-task-groups">0</strong>
+              <span class="small">Includes unresolved, flagged, and manually scored rows; excludes automatic startup resolutions.</span>
+            </div>
+          </div>
+          <div id="instructions-content"></div>
+          <button id="resolve-rest" class="primary-action" type="button">Resolve the rest</button>
+        </article>
+      </section>
+
+      <section id="tab-score" class="tab-panel" data-panel="score">
+        <div id="screen">
+          <aside id="left">
+            <p id="resolver-label" class="eyebrow"></p>
+            <h1 id="creature-name"></h1>
+            <button id="creature-image-button" type="button" aria-label="Enlarge creature image">
+              <img id="creature-image" alt="Creature image">
+            </button>
+            <p id="creature-meta" class="small"></p>
+            <ul id="creature-facts"></ul>
+          </aside>
+
+          <section id="middle">
+            <p id="rubric-key" class="eyebrow"></p>
+            <h2 id="rubric-title"></h2>
+            <div id="score-options"></div>
+          </section>
+
+          <section id="right">
+            <nav id="score-nav" aria-label="Score navigation">
+              <button id="previous" type="button">Previous</button>
+              <div id="local-status-strip" aria-label="Nearby answer status"></div>
+              <button id="next" type="button">Next</button>
+            </nav>
+
+            <article class="answer-card">
+              <h2>Question</h2>
+              <p id="question"></p>
+              <h2>Answer</h2>
+              <p id="answer"></p>
+            </article>
+          </section>
+        </div>
+
+        <footer id="actions">
+          <label>
+            Required final manual note
+            <textarea id="note" rows="2" placeholder="Required before finalising, e.g. 'Chose 1 because answer names a related but incorrect feature.'"></textarea>
+          </label>
+          <button id="flag" type="button">Flag</button>
+          <button id="finalise" type="button">Finalise score</button>
+          <div id="progress"></div>
+        </footer>
+      </section>
+
+      <section id="tab-overview" class="tab-panel" data-panel="overview">
+        <article class="doc-card">
+          <div class="overview-header">
+            <h2>Resolution overview</h2>
+            <div class="legend" aria-label="Status legend">
+              <span><i class="legend-square scored"></i> Green = resolved</span>
+              <span><i class="legend-square todo"></i> Gray = todo</span>
+              <span><i class="legend-square flagged"></i> Amber = flagged</span>
+              <span><i class="legend-square note"></i> Dot = manual note present</span>
+            </div>
+          </div>
+          <div id="overview-grid"></div>
+        </article>
+      </section>
+
+      <section id="tab-full-rubric" class="tab-panel" data-panel="full-rubric">
+        <article class="doc-card">
+          <h2>All rubrics</h2>
+          <div id="full-rubric-content"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <div id="image-modal" hidden>
+    <button id="image-modal-close" type="button" aria-label="Close enlarged image">×</button>
+    <img id="image-modal-img" alt="Enlarged creature image">
+  </div>
+
+  <script src="/static/resolve_disagreements_app.js"></script>
+</body>
+</html>

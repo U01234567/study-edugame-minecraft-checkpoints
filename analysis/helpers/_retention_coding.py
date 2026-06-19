@@ -114,13 +114,6 @@ MERGED_SCORE_BASE_FIELDNAMES = [
     "answer_std",
 ]
 
-# Backward-compatible aliases that summarise the primary GenAI source.
-MERGED_SCORE_GENAI_ALIAS_FIELDNAMES = [
-    "genai_score",
-    "genai_confidence",
-    "genai_note",
-]
-
 MERGED_SCORE_METADATA_FIELDNAMES = [
     "moment",
     "creature_id",
@@ -275,7 +268,6 @@ def merged_score_fieldnames(
 
     fields: list[str] = []
     fields.extend(MERGED_SCORE_BASE_FIELDNAMES)
-    fields.extend(MERGED_SCORE_GENAI_ALIAS_FIELDNAMES)
     for label in genai_labels:
         fields.extend(source_fields(label, ("score", "confidence", "note")))
     for label in grader_labels:
@@ -2660,7 +2652,6 @@ def build_prompt_score_rows(
             for label, source_lookup in genai_sources.items()
             if row["answer_std"]
         }
-        primary_genai = primary_source_row(genai_rows_for_key)
         genai_scores = score_source_values(genai_rows_for_key)
         genai_agreement_score = consensus_score(genai_scores)
         genai_missing_labels = [
@@ -2757,9 +2748,6 @@ def build_prompt_score_rows(
             "q_element": row["q_element"],
             "answer": row["answer"],
             "answer_std": row["answer_std"],
-            "genai_score": score_text(primary_genai.get("score (0-2)")),
-            "genai_confidence": clean(primary_genai.get("confidence (0-100%)")),
-            "genai_note": clean(primary_genai.get("note (optional)")),
             "moment": row["moment"],
             "creature_id": row["creature_id"],
             "question_key": row["question_key"],
