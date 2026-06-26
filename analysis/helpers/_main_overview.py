@@ -237,9 +237,16 @@ def _format_stat_value(value: float | int | None, *, duration: bool) -> str:
     return _format_number(value)
 
 
-def stat_micro_table(values: list[float | int | None], *, duration: bool = False) -> str:
-    """Return a compact in-cell mean/SD/min/max table."""
-    summary = summarise(values)
+def stat_micro_table(values: list[float | int | None], *, duration: bool = False, include_sum: bool = False) -> str:
+    """Return a compact in-cell mean/SD/min/max table, optionally including the sum."""
+    valid = []
+    for value in values:
+        if value is None:
+            continue
+        numeric = float(value)
+        if numeric == numeric:
+            valid.append(numeric)
+    summary = summarise(valid)
     if not summary["n"]:
         return "—"
     rows = [
@@ -248,6 +255,8 @@ def stat_micro_table(values: list[float | int | None], *, duration: bool = False
         ("Min", _format_stat_value(summary["min"], duration=duration)),
         ("Max", _format_stat_value(summary["max"], duration=duration)),
     ]
+    if include_sum:
+        rows.append(("Sum", _format_stat_value(sum(valid), duration=duration)))
     return "<table class=\"micro-stat-table\"><tbody>" + "".join(
         f"<tr><th>{label}</th><td>{value}</td></tr>" for label, value in rows
     ) + "</tbody></table>"
@@ -538,7 +547,11 @@ def condition_summary(participants: list[dict[str, Any]]) -> list[dict[str, Any]
             "completed_delayed_retention_count": sum(1 for participant in scoped if participant.get("completed_delayed_retention_test")),
             "age": stat_micro_table([participant.get("age") for participant in scoped]),
             "creature_score": stat_micro_table([participant.get("logs_creature_score_of_18") for participant in scoped]),
-            "game_duration": stat_micro_table([participant.get("game_duration_seconds") for participant in scoped], duration=True),
+            "game_duration": stat_micro_table(
+                [participant.get("game_duration_seconds") for participant in scoped],
+                duration=True,
+                include_sum=condition == "Overall",
+            ),
             "questionnaire_duration": stat_micro_table([participant.get("questionnaire_duration_seconds") for participant in scoped], duration=True),
             "delayed_duration": stat_micro_table([participant.get("delayed_duration_seconds") for participant in scoped], duration=True),
             "total_duration": stat_micro_table([participant.get("total_duration_seconds") for participant in scoped], duration=True),
