@@ -25,6 +25,8 @@ from ._shared import (
     RETENTION_QUESTION_SPECS,
     RETENTION_ELEMENT_LABEL_BY_KEY,
     RETENTION_ELEMENT_SPECS,
+    RETENTION_COMPONENT_SPECS,
+    RETENTION_FINAL_SCORES_PATH,
     RETENTION_PROMPT_TO_ELEMENTS,
     SURVEY_EXPORT_PATH,
     clean,
@@ -129,6 +131,8 @@ MERGED_SCORE_FINAL_FIELDNAMES = [
     "final_note_auto",
     "final_note_manual",
 ]
+
+RETENTION_FINAL_SCORE_FIELDNAMES = ["MCID", "score_immediate", "score_delayed"]
 
 FINAL_SCORE_PLACEHOLDER = "[resolve conflict]"
 FINAL_NOTE_MANUAL_NOT_NEEDED = "—"
@@ -351,6 +355,519 @@ def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]], *, 
     if backup:
         backup_retention_tsv(path)
 
+
+def _normalise_retention_moment(value: object) -> str:
+    text = clean(value).lower()
+    if text.startswith("imm"):
+        return "Immediate"
+    if text.startswith("del"):
+        return "Delayed"
+    return clean(value)
+
+
+def _valid_final_score(value: object) -> float | None:
+    number = parse_numeric(value)
+    if number is None or not float(number).is_integer() or int(number) not in {0, 1, 2}:
+        return None
+    return float(int(number))
+
+
+def _final_retention_score_text(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.6g}"
+
+
+RETENTION_FINAL_SCORE_MODE = "clean"
+# Available modes:
+#   "clean"                     = mean of creature averages over creatures with administered scores
+#   "divide_by_18"              = sum of creature averages divided by 18
+#   "card_open_count_penalty"   = each creature average divided by card-open count, then averaged
+#   "card_read_seconds_penalty" = each creature average divided by total card-open seconds, then averaged
+RETENTION_FINAL_EXPECTED_CREATURE_COUNT = 18
+RETENTION_FINAL_MIN_CARD_OPEN_COUNT = 1
+RETENTION_FINAL_MIN_CARD_READ_SECONDS = 1.0
+
+
+def _normalise_retention_creature_id(value: object) -> str:
+    """Return a creature id comparable across retention rows and raw logs."""
+    text = clean(value).lower()
+    if not text:
+        return ""
+    text = text.replace("minecraft:", "")
+    text = re.sub(r"_[a-z]$", "", text)
+    text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+
+    label_lookup = {
+        re.sub(r"[^a-z0-9]+", "_", clean(label).lower()).strip("_"): creature_id
+        for creature_id, label in CREATURE_NAME_BY_ID.items()
+    }
+    return label_lookup.get(text, text)
+
+
+def _retention_creature_scores_for_participant_moment(
+    participant_id: str,
+    moment: str,
+    creature_ids: set[str],
+    scores_by_creature: dict[tuple[str, str, str], dict[str, float]],
+) -> dict[str, float]:
+    """Return one creature-level score per participant/test occasion/creature.
+
+    This keeps the currently correct logic: Immediate and Delayed are occasions,
+    not fixed mappings to Q1/Q2 or Q3/Q4. For each creature, use whichever
+    q_elements are actually present in retention_scores_merged for that
+    participant and occasion.
+    """
+    creature_scores: dict[str, float] = {}
+
+    for raw_creature_id in sorted(creature_ids):
+        creature_id = _normalise_retention_creature_id(raw_creature_id)
+        element_scores = scores_by_creature.get((participant_id, moment, creature_id), {})
+        if not element_scores:
+            continue
+
+        question_means: list[float] = []
+        for _component_key, _component_label, q_elements in RETENTION_COMPONENT_SPECS:
+            values = [
+                element_scores[q_element]
+                for q_element in q_elements
+                if q_element in element_scores
+            ]
+            if values:
+                question_means.append(sum(values) / len(values))
+
+        if question_means:
+            creature_scores[creature_id] = sum(question_means) / len(question_means)
+
+    return creature_scores
+
+
+def _candidate_retention_log_paths() -> list[Path]:
+    """Return plausible individual-log files without depending on other modules."""
+    roots = [
+        DATA_DIR / "logs",
+        DATA_DIR / "log",
+        DATA_DIR / "raw_logs",
+        DATA_DIR / "raw",
+        DATA_DIR.parent / "logs",
+        DATA_DIR.parent / "log",
+        DATA_DIR.parent / "raw_logs",
+        DATA_DIR.parent / "raw",
+    ]
+    suffixes = {".csv", ".jsonl", ".ndjson", ".json", ".log", ".txt"}
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in suffixes:
+                continue
+            if path.name.startswith("retention_scores_"):
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            paths.append(path)
+    return sorted(paths)
+
+
+def _coerce_log_datetime(value: object) -> datetime | None:
+    text = clean(value)
+    if not text:
+        return None
+    number = parse_numeric(text)
+    if number is not None:
+        # Treat very large numeric timestamps as milliseconds; otherwise seconds.
+        if number > 10_000_000_000:
+            number = number / 1000.0
+        try:
+            return datetime.fromtimestamp(float(number))
+        except (OSError, OverflowError, ValueError):
+            return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _event_value(event: dict[str, Any], names: list[str]) -> str:
+    fields = event.get("fields") if isinstance(event.get("fields"), dict) else {}
+    for name in names:
+        value = event.get(name)
+        if clean(value):
+            return clean(value)
+        value = fields.get(name)
+        if clean(value):
+            return clean(value)
+    return ""
+
+
+def _event_number(event: dict[str, Any], names: list[str]) -> float | None:
+    text = _event_value(event, names)
+    return parse_numeric(text)
+
+
+def _event_datetime(event: dict[str, Any]) -> datetime | None:
+    return _coerce_log_datetime(_event_value(event, [
+        "timestamp",
+        "timestamp_dt",
+        "datetime",
+        "date_time",
+        "time",
+        "created_at",
+        "logged_at",
+    ]))
+
+
+def _event_type(event: dict[str, Any]) -> str:
+    return clean(_event_value(event, [
+        "event",
+        "event_type",
+        "type",
+        "name",
+        "action",
+        "message",
+    ])).lower()
+
+
+def _event_participant_id(event: dict[str, Any], fallback: str) -> str:
+    value = _event_value(event, [
+        "MCID",
+        "mcid",
+        "participant_id",
+        "participant",
+        "session_id",
+        "session",
+        "user_id",
+        "player_id",
+    ])
+    return clean(value or fallback).upper()
+
+
+def _event_creature_id(event: dict[str, Any]) -> str:
+    return _normalise_retention_creature_id(_event_value(event, [
+        "creature_id",
+        "creature",
+        "creature_name",
+        "species",
+        "entity",
+        "entity_type",
+        "mob",
+        "mob_type",
+        "card_creature",
+    ]))
+
+
+def _read_retention_log_events(path: Path) -> list[dict[str, Any]]:
+    """Parse CSV, JSON/JSONL, or simple text logs into event-like dictionaries."""
+    try:
+        encoding = detect_text_encoding(path)
+        text = path.read_text(encoding=encoding, errors="replace")
+    except OSError:
+        return []
+
+    if path.suffix.lower() == ".csv":
+        try:
+            return [dict(row) for row in csv.DictReader(io.StringIO(text))]
+        except csv.Error:
+            return []
+
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    if path.suffix.lower() == ".json":
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            rows = payload.get("events") or payload.get("rows") or payload.get("data")
+            if isinstance(rows, list):
+                return [item for item in rows if isinstance(item, dict)]
+            return [payload]
+
+    events: list[dict[str, Any]] = []
+    key_value_re = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(\"[^\"]*\"|'[^']*'|[^,\s]+)")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            events.append(payload)
+            continue
+
+        lowered = line.lower()
+        if "creature_card_open" not in lowered and "creature_card_close" not in lowered:
+            continue
+        event_name = "creature_card_closed" if "creature_card_close" in lowered else "creature_card_opened"
+        event: dict[str, Any] = {"event": event_name, "raw": line}
+        for key, value in key_value_re.findall(line):
+            event[key] = value.strip("'\"")
+        events.append(event)
+    return events
+
+
+def _retention_card_exposure_index() -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], float], list[str]]:
+    """Return per-participant/per-creature card-open counts and card-open seconds.
+
+    This is intentionally local to _retention_coding.py. It does not rely on
+    sum_merged internals. It counts creature_card_opened events and estimates
+    card-open seconds from explicit duration fields on close events, falling back
+    to close timestamp minus the latest unmatched open timestamp for the same
+    participant/creature.
+    """
+    open_counts: dict[tuple[str, str], int] = defaultdict(int)
+    open_seconds: dict[tuple[str, str], float] = defaultdict(float)
+    open_stacks: dict[tuple[str, str], list[datetime]] = defaultdict(list)
+    warnings: list[str] = []
+
+    paths = _candidate_retention_log_paths()
+    if not paths:
+        return open_counts, open_seconds, [
+            "No individual log files were found for the selected retention final-score card-exposure penalty."
+        ]
+
+    for path in paths:
+        events = _read_retention_log_events(path)
+        if not events:
+            continue
+        fallback_participant = path.stem
+        for event in events:
+            event_name = _event_type(event)
+            if "creature_card" not in event_name:
+                continue
+            is_open = "open" in event_name and "close" not in event_name
+            is_close = "close" in event_name or "closed" in event_name
+            if not is_open and not is_close:
+                continue
+
+            participant_id = _event_participant_id(event, fallback_participant)
+            creature_id = _event_creature_id(event)
+            if not participant_id or not creature_id:
+                continue
+
+            key = (participant_id, creature_id)
+            if is_open:
+                open_counts[key] += 1
+                timestamp = _event_datetime(event)
+                if timestamp is not None:
+                    open_stacks[key].append(timestamp)
+                continue
+
+            duration_ms = _event_number(event, [
+                "read_duration_ms",
+                "duration_ms",
+                "open_duration_ms",
+                "card_open_duration_ms",
+                "card_duration_ms",
+                "elapsed_ms",
+            ])
+            if duration_ms is not None and duration_ms >= 0:
+                open_seconds[key] += float(duration_ms) / 1000.0
+                if open_stacks.get(key):
+                    open_stacks[key].pop()
+                continue
+
+            duration_seconds = _event_number(event, [
+                "read_duration_seconds",
+                "duration_seconds",
+                "open_duration_seconds",
+                "card_open_duration_seconds",
+                "card_duration_seconds",
+                "elapsed_seconds",
+                "seconds",
+            ])
+            if duration_seconds is not None and duration_seconds >= 0:
+                open_seconds[key] += float(duration_seconds)
+                if open_stacks.get(key):
+                    open_stacks[key].pop()
+                continue
+
+            closed_at = _event_datetime(event)
+            if closed_at is not None and open_stacks.get(key):
+                opened_at = open_stacks[key].pop()
+                seconds = (closed_at - opened_at).total_seconds()
+                if seconds >= 0:
+                    open_seconds[key] += seconds
+
+    if not open_counts and not open_seconds:
+        warnings.append(
+            "Individual log files were found, but no creature-card exposure events could be matched."
+        )
+    return open_counts, open_seconds, warnings
+
+
+def _participant_moment_retention_final_score(
+    participant_id: str,
+    moment: str,
+    creature_ids: set[str],
+    scores_by_creature: dict[tuple[str, str, str], dict[str, float]],
+    *,
+    card_open_counts: dict[tuple[str, str], int] | None = None,
+    card_open_seconds: dict[tuple[str, str], float] | None = None,
+) -> float | None:
+    """Return the final participant/moment score using the selected mode.
+
+    The base creature score always uses the correct administered-q_element logic:
+    it does not map Immediate to Q1/Q2 or Delayed to Q3/Q4.
+    """
+    creature_scores = _retention_creature_scores_for_participant_moment(
+        participant_id,
+        moment,
+        creature_ids,
+        scores_by_creature,
+    )
+    if not creature_scores:
+        return None
+
+    if RETENTION_FINAL_SCORE_MODE == "clean":
+        return sum(creature_scores.values()) / len(creature_scores)
+
+    if RETENTION_FINAL_SCORE_MODE == "divide_by_18":
+        return sum(creature_scores.values()) / float(RETENTION_FINAL_EXPECTED_CREATURE_COUNT)
+
+    if RETENTION_FINAL_SCORE_MODE == "card_open_count_penalty":
+        adjusted_scores: list[float] = []
+        for creature_id, score in creature_scores.items():
+            opened = RETENTION_FINAL_MIN_CARD_OPEN_COUNT
+            if card_open_counts is not None:
+                opened = max(
+                    RETENTION_FINAL_MIN_CARD_OPEN_COUNT,
+                    int(card_open_counts.get((participant_id, creature_id), 0) or 0),
+                )
+            adjusted_scores.append(score / opened)
+        return sum(adjusted_scores) / len(adjusted_scores) if adjusted_scores else None
+
+    if RETENTION_FINAL_SCORE_MODE == "card_read_seconds_penalty":
+        adjusted_scores = []
+        for creature_id, score in creature_scores.items():
+            seconds = RETENTION_FINAL_MIN_CARD_READ_SECONDS
+            if card_open_seconds is not None:
+                seconds = max(
+                    RETENTION_FINAL_MIN_CARD_READ_SECONDS,
+                    float(card_open_seconds.get((participant_id, creature_id), 0.0) or 0.0),
+                )
+            adjusted_scores.append(score / seconds)
+        return sum(adjusted_scores) / len(adjusted_scores) if adjusted_scores else None
+
+    raise ValueError(
+        "RETENTION_FINAL_SCORE_MODE must be one of: "
+        "clean, divide_by_18, card_open_count_penalty, card_read_seconds_penalty"
+    )
+
+
+def build_retention_scores_final_rows(scoring_rows: list[dict[str, Any]]) -> tuple[list[dict[str, str]], list[str]]:
+    """Build participant-level final retention scores from complete merged final_score rows.
+
+    The output is intentionally narrow: MCID, score_immediate, and score_delayed.
+    Scores stay on the 0-2 rubric scale before any selected penalty mode is
+    applied. Missing test occasions are written as empty cells. If any available
+    q_element row has a missing/invalid final_score, no rows are returned so
+    callers do not publish a partial final-score file.
+
+    Scoring is creature-first: within each participant and moment, each creature
+    receives one average from the administered question components present for
+    that creature. Immediate and Delayed are test occasions, not fixed mappings
+    to Q1/Q2 or Q3/Q4.
+    """
+    warnings: list[str] = []
+    if not scoring_rows:
+        return [], ["No retention_scores_merged rows were available for retention_scores_final.tsv."]
+
+    known_elements = {key for key, _label in RETENTION_ELEMENT_SPECS}
+    scores_by_creature: dict[tuple[str, str, str], dict[str, float]] = defaultdict(dict)
+    creatures_by_participant_moment: dict[tuple[str, str], set[str]] = defaultdict(set)
+    all_mcids: set[str] = set()
+    invalid_rows: list[str] = []
+    skipped_rows = 0
+
+    for index, row in enumerate(scoring_rows, start=2):
+        participant_id = clean(row.get("MCID")).upper()
+        moment = _normalise_retention_moment(row.get("moment"))
+        creature_id = _normalise_retention_creature_id(row.get("creature_id"))
+        q_element = clean(row.get("q_element"))
+        if not participant_id:
+            skipped_rows += 1
+            continue
+        all_mcids.add(participant_id)
+        if moment not in {"Immediate", "Delayed"} or not creature_id or q_element not in known_elements:
+            skipped_rows += 1
+            continue
+
+        creatures_by_participant_moment[(participant_id, moment)].add(creature_id)
+        score = _valid_final_score(row.get("final_score"))
+        if score is None:
+            invalid_rows.append(str(index))
+            continue
+        scores_by_creature[(participant_id, moment, creature_id)][q_element] = score
+
+    if invalid_rows:
+        preview = ", ".join(invalid_rows[:25])
+        suffix = f"; plus {len(invalid_rows) - 25} more" if len(invalid_rows) > 25 else ""
+        return [], [
+            "retention_scores_final.tsv was not written because retention_scores_merged.tsv still has "
+            f"missing/invalid final_score value(s) on row(s): {preview}{suffix}."
+        ]
+
+    if skipped_rows:
+        return [], [
+            "retention_scores_final.tsv was not written because retention_scores_merged.tsv has "
+            f"{skipped_rows} row(s) with missing/unknown MCID, moment, creature_id, or q_element."
+        ]
+
+    card_open_counts: dict[tuple[str, str], int] | None = None
+    card_open_seconds: dict[tuple[str, str], float] | None = None
+    if RETENTION_FINAL_SCORE_MODE in {"card_open_count_penalty", "card_read_seconds_penalty"}:
+        card_open_counts, card_open_seconds, exposure_warnings = _retention_card_exposure_index()
+        warnings.extend(exposure_warnings)
+
+    participant_scores: dict[str, dict[str, float | None]] = {
+        participant_id: {"Immediate": None, "Delayed": None}
+        for participant_id in all_mcids
+    }
+
+    for (participant_id, moment), creature_ids in creatures_by_participant_moment.items():
+        participant_scores.setdefault(participant_id, {"Immediate": None, "Delayed": None})[moment] = (
+            _participant_moment_retention_final_score(
+                participant_id,
+                moment,
+                creature_ids,
+                scores_by_creature,
+                card_open_counts=card_open_counts,
+                card_open_seconds=card_open_seconds,
+            )
+        )
+
+    output_rows = [
+        {
+            "MCID": participant_id,
+            "score_immediate": _final_retention_score_text(scores.get("Immediate")),
+            "score_delayed": _final_retention_score_text(scores.get("Delayed")),
+        }
+        for participant_id, scores in sorted(participant_scores.items())
+    ]
+    return output_rows, warnings
+
+
+def write_retention_scores_final_if_complete(
+    scoring_rows: list[dict[str, Any]],
+    path: Path = RETENTION_FINAL_SCORES_PATH,
+) -> tuple[bool, int, list[str]]:
+    """Write data/retention_scores_final.tsv only when all merged final_score values are usable."""
+    rows, warnings = build_retention_scores_final_rows(scoring_rows)
+    if not rows:
+        return False, 0, warnings
+    write_tsv(path, RETENTION_FINAL_SCORE_FIELDNAMES, rows)
+    return True, len(rows), warnings
 
 
 def _score_key(value: object) -> str:

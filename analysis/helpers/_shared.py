@@ -26,6 +26,7 @@ RETENTION_RUBRICS_PATH = DATA_CONFIG_DIR / "retention_rubrics.json"
 CONCEPTUAL_MODEL_PATH = STATIC_DIR / "conceptual-model-v00.06.png"
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
 RETENTION_SCORES_PATH = DATA_DIR / "retention_scores_merged.tsv"
+RETENTION_FINAL_SCORES_PATH = DATA_DIR / "retention_scores_final.tsv"
 RETENTION_ANSWERS_PATH = DATA_DIR / "retention_answers.tsv"
 MERGED_OUTPUT_PATH = OUTPUT_DIR / "merged_summary.html"
 INCLUDED_MCIDS_OUTPUT_PATH = OUTPUT_DIR / "included_MCIDs.csv"
@@ -37,6 +38,7 @@ DISPLAY_SOURCE_PATHS = {
     "Retention scores GenAI source files": r".\data\retention_scores_genai*.tsv",
     "Retention scores grader source files": r".\data\retention_scores_grader*.tsv",
     "Retention scores merged": r".\data\retention_scores_merged.tsv",
+    "Retention final scores": r".\data\retention_scores_final.tsv",
     "Interview transcript CSVs": r".\data\transcripts\*.csv",
     "Interview manifest": r".\data\config\interview_manifest.json",
     "Collection locations": r".\data\config\collection_locations.json",

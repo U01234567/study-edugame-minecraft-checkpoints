@@ -2176,209 +2176,6 @@ function formatValue(value, header={}){ if(value===null||value===undefined||valu
 
 function statusText(ok, okText, badText){ return ok ? `<span class="status-ok">${escapeHtml(okText)}</span>` : `<span class="status-bad">${escapeHtml(badText)}</span>`; }
 
-function detailsBlock(title, innerHtml, open=false){
-  return `<details class="summary-details"${open ? ' open' : ''}><summary>${escapeHtml(title)}</summary><div class="details-body">${innerHtml}</div></details>`;
-}
-
-function statsRowsByModel(rows, text){
-  return (rows || []).filter(row => String(row.model || '').includes(text));
-}
-
-function statsRowsByHypothesis(rows, hypothesis){
-  return (rows || []).filter(row => String(row.hypothesis || '') === hypothesis);
-}
-
-function renderStatsResultTable(rows){
-  return table([
-    {key:'hypothesis', label:'Hypothesis'},
-    {key:'model', label:'Model'},
-    {key:'outcome', label:'Outcome'},
-    {key:'n', label:'n', num:true},
-    {key:'term', label:'Term'},
-    {key:'b_display', label:'b', num:true},
-    {key:'se_hc3_display', label:'HC3 SE', num:true},
-    {key:'ci_95', label:'95% CI'},
-    {key:'planned_contrast_estimate_display', label:'Planned contrast', num:true},
-    {key:'planned_contrast_ci_95', label:'Contrast 95% CI'},
-    {key:'p_display', label:'p'},
-    {key:'p_holm_display', label:'Holm p'},
-    {key:'std_beta_display', label:'std. beta', num:true},
-    {key:'partial_r2_display', label:'partial r²', num:true},
-    {key:'note', label:'Interpretation note'}
-  ], rows || [], {className:'stats-table'});
-}
-
-function renderModelAudit(models){
-  return table([
-    {key:'model', label:'Model'},
-    {key:'formula', label:'Formula'},
-    {key:'n', label:'n', num:true},
-    {key:'df_residual', label:'df residual', num:true},
-    {key:'r2', label:'R²', num:true},
-    {key:'status', label:'Status'},
-    {key:'omitted_covariates', label:'Omitted covariates'}
-  ], models || [], {className:'stats-model-table'});
-}
-
-function renderIndirectTable(result){
-  if (!result) return '<p class="small">No model result.</p>';
-  const note = `<p class="small">Status: ${escapeHtml(result.status || 'OK')} · complete-case n = ${escapeHtml(result.n ?? '0')}</p>`;
-  return note + table([
-    {key:'contrast', label:'Contrast'},
-    {key:'mediator', label:'Mediator'},
-    {key:'effect', label:'Indirect effect', num:true},
-    {key:'boot_se', label:'Boot SE', num:true},
-    {key:'boot_ci_95', label:'Bootstrap 95% CI'},
-    {key:'bootstrap_samples', label:'Bootstrap samples', num:true},
-    {key:'focal', label:'Focal'}
-  ], result.indirect_rows || [], {className:'stats-table'});
-}
-
-function renderDirectMediationTable(result){
-  if (!result) return '';
-  return table([
-    {key:'contrast', label:'Contrast'},
-    {key:'direct_b', label:'Direct b', num:true}
-  ], result.direct_rows || [], {className:'stats-table'});
-}
-
-function flattenSerialRows(results){
-  return (results || []).flatMap(result => (result.rows || []).map(row => ({...row, n: result.n, status: result.status || 'OK'})));
-}
-
-function renderSerialTable(results){
-  return table([
-    {key:'contrast', label:'Contrast'},
-    {key:'path', label:'Path'},
-    {key:'n', label:'n', num:true},
-    {key:'effect', label:'Serial indirect effect', num:true},
-    {key:'boot_se', label:'Boot SE', num:true},
-    {key:'boot_ci_95', label:'Bootstrap 95% CI'},
-    {key:'bootstrap_samples', label:'Bootstrap samples', num:true},
-    {key:'status', label:'Status'}
-  ], flattenSerialRows(results), {className:'stats-table'});
-}
-
-function renderFactorAnalyses(prefix){
-  const rows = (REPORT.statistics.factor_analyses || []).filter(row => String(row.title || '').startsWith(prefix));
-  const summary = table([
-    {key:'title', label:'Scale check'},
-    {key:'n_complete', label:'complete n', num:true},
-    {key:'items', label:'items', num:true},
-    {key:'alpha', label:'Cronbach α', num:true},
-    {key:'first_eigenvalue', label:'first eigenvalue', num:true},
-    {key:'first_factor_variance_percent', label:'first-factor %', num:true},
-    {key:'loading_range', label:'loading range'},
-    {key:'status', label:'Status'}
-  ], rows, {className:'stats-table'});
-  const loadingDetails = rows.map(row => detailsBlock(
-    `${row.title}: item loadings`,
-    table([{key:'item', label:'Item'}, {key:'loading', label:'Loading', num:true}], row.loadings || [], {className:'stats-table'})
-  )).join('');
-  return detailsBlock(`${prefix} factor-analysis / scale checks`, summary + loadingDetails);
-}
-
-function renderPowerRows(power){
-  const rows = REPORT.condition_order.map(condition => ({
-    condition,
-    planned: power.planned_per_condition,
-    current: (power.current_by_condition || {})[condition] || 0,
-    delayed: (power.current_delayed_by_condition || {})[condition] || 0
-  }));
-  rows.push({condition:'Total', planned:power.planned_total, current:power.current_total, delayed:power.current_delayed_total});
-  return rows;
-}
-
-function calcTokenHtml(name, values) {
-  const valueMap = values || {};
-  const hasValue = Object.prototype.hasOwnProperty.call(valueMap, name) && valueMap[name] !== '' && valueMap[name] !== null && valueMap[name] !== undefined;
-  const text = hasValue ? `[${name} = ${valueMap[name]}]` : `[${name}]`;
-  return `<span class="calc-token">${escapeHtml(text)}</span>`;
-}
-
-function renderCalcText(text, values) {
-  return escapeHtml(text).replace(/\[calc:([A-Za-z0-9_.-]+)\]/g, (_match, name) => calcTokenHtml(name, values));
-}
-
-function renderCalculationLedger(source) {
-  const values = source.values || {};
-  const rows = (source.ledger || []).map(row => ({
-    token: calcTokenHtml(row.name, values),
-    meaning: row.meaning || '',
-  }));
-  return table([
-    {key:'token', label:'Calculated value', html:true},
-    {key:'meaning', label:'Meaning'}
-  ], rows, {className:'calculation-ledger-table'});
-}
-
-function renderCalculationModelLedger(source) {
-  return table([
-    {key:'model', label:'Model'},
-    {key:'formula', label:'Formula produced by _fit_lm'},
-    {key:'n', label:'n', num:true},
-    {key:'df_residual', label:'df residual', num:true},
-    {key:'r2', label:'R²', num:true},
-    {key:'status', label:'Status'}
-  ], source.model_ledger || [], {className:'calculation-model-ledger-table'});
-}
-
-function renderCalculationSourceSection(section, values) {
-  const notes = (section.notes || []).length
-    ? `<ul>${section.notes.map(note => `<li>${renderCalcText(note, values)}</li>`).join('')}</ul>`
-    : '<p class="small">No notes for this source block.</p>';
-  return `
-    <article class="calc-source-block" data-calc-block>
-      <header class="calc-source-header">
-        <h2>${escapeHtml(section.title || 'Source block')}</h2>
-        <button type="button" class="mini-button calc-source-reset" data-calc-layout="reset">reset</button>
-      </header>
-      <div class="calc-source-grid">
-        <section class="calc-pane calc-code-pane" aria-label="Raw source code">
-          <h3><button type="button" class="calc-pane-title" data-calc-layout="raw">Raw code</button></h3>
-          <pre><code>${escapeHtml(section.code || '# No source available.')}</code></pre>
-        </section>
-        <aside class="calc-pane calc-notes-pane" aria-label="Notes">
-          <h3><button type="button" class="calc-pane-title" data-calc-layout="notes">Notes</button></h3>
-          ${notes}
-        </aside>
-      </div>
-    </article>`;
-}
-
-function renderCalculationSource(data) {
-  const panel = document.getElementById('tab-statistics-calculations');
-  if (!panel) return;
-  window.REPORT = data || window.REPORT || {};
-  if (!window.REPORT.statistics && window.REPORT.inferential_statistics) {
-    window.REPORT.statistics = window.REPORT.inferential_statistics;
-  }
-  const stats = REPORT.statistics || {};
-  const source = stats.calculation_source || {};
-  const values = source.values || {};
-  const sections = source.sections || [];
-  panel.innerHTML = `
-    <section class="calculation-page-shell">
-      <div class="calculation-hero">
-        <button class="mini-button back-button" type="button" data-show-tab="statistics" data-nav-tab="statistics">← Back to inferential statistics</button>
-        <h1>${escapeHtml(source.title || 'Inferential calculation source')}</h1>
-        <p>${escapeHtml(source.intro || 'No calculation source was included in this report payload.')}</p>
-        <p class="calc-legend">${escapeHtml(source.legend || 'Cobalt-blue bracketed values are calculated during the current report build.')}</p>
-      </div>
-      <section class="calc-card">
-        <h2>Run value ledger</h2>
-        <p class="small">These values are generated from the same in-memory objects that feed the report. They are deliberately limited to process/model inputs and do not include participant-level data or inferential p-values.</p>
-        ${renderCalculationLedger(source)}
-      </section>
-      <section class="calc-card">
-        <h2>Model ledger</h2>
-        <p class="small">The formulas in this table are generated by _fit_lm from the actual predictor lists and retained categorical covariates for this run.</p>
-        ${renderCalculationModelLedger(source)}
-      </section>
-      ${sections.map(section => renderCalculationSourceSection(section, values)).join('') || '<section class="calc-card"><p>No source sections were available.</p></section>'}
-    </section>`;
-}
-
 function showReportTab(tab, options = {}) {
   const navTab = options.navTab || tab;
   document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
@@ -2392,127 +2189,6 @@ function showReportTab(tab, options = {}) {
   window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 }
 
-function bindCalculationControls() {
-  document.addEventListener('click', event => {
-    const tabButton = event.target.closest('[data-show-tab]');
-    if (tabButton) {
-      showReportTab(tabButton.dataset.showTab, {navTab: tabButton.dataset.navTab || tabButton.dataset.showTab});
-      return;
-    }
-
-    const layoutControl = event.target.closest('[data-calc-layout]');
-    if (!layoutControl) return;
-    const block = layoutControl.closest('[data-calc-block]');
-    if (!block) return;
-    block.classList.remove('raw-wide', 'notes-wide');
-    if (layoutControl.dataset.calcLayout === 'raw') block.classList.add('raw-wide');
-    if (layoutControl.dataset.calcLayout === 'notes') block.classList.add('notes-wide');
-  });
-}
-
-function renderInferentialStatistics(data) {
-  window.REPORT = data || window.REPORT || {};
-  if (!window.REPORT.statistics && window.REPORT.inferential_statistics) {
-    window.REPORT.statistics = window.REPORT.inferential_statistics;
-  }
-  const stats = REPORT.statistics || {};
-  const power = stats.power || {};
-  const h1Immediate = statsRowsByModel(stats.focal_rows, 'H1 immediate');
-  const h1Delayed = statsRowsByModel(stats.focal_rows, 'H1 delayed');
-  const h2Rows = [...statsRowsByHypothesis(stats.focal_rows, 'H2a'), ...statsRowsByHypothesis(stats.focal_rows, 'H2b')];
-  const h3Rows = [...statsRowsByHypothesis(stats.focal_rows, 'H3a'), ...statsRowsByHypothesis(stats.focal_rows, 'H3b')];
-  const h4Rows = statsRowsByHypothesis(stats.focal_rows, 'H4');
-  const manipulationRows = statsRowsByHypothesis(stats.focal_rows, 'Manipulation check');
-  const warningHtml = (stats.warnings || []).length ? `<section class="card"><h2>Warnings / missing inputs</h2><ul>${stats.warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul></section>` : '';
-
-  document.getElementById('tab-statistics').innerHTML = `
-    <section class="card">
-      <h2>Inferential statistics</h2>
-      <p>${escapeHtml(stats.intro || '')}</p>
-      <p class="small"><strong>Status:</strong> ${escapeHtml(stats.status || '')}</p>
-      <p><button class="mini-button calculation-source-button" type="button" data-show-tab="statistics-calculations" data-nav-tab="statistics">Show calculation source</button></p>
-    </section>
-
-    ${warningHtml}
-
-    <section class="card">
-      <h2>Power analysis and current analysis n</h2>
-      <p>The planned sample size was ${escapeHtml(power.planned_total || '')} participants (${escapeHtml(power.planned_per_condition || '')} per condition), anchored to ${escapeHtml(power.planning_effect || '')} for ${escapeHtml(power.planning_test || '')}.</p>
-      <p class="small">${escapeHtml(power.note || '')}</p>
-      ${table([{key:'condition',label:'Condition'},{key:'planned',label:'Planned n',num:true},{key:'current',label:'Current included n',num:true},{key:'delayed',label:'Current delayed scored n',num:true}], renderPowerRows(power), {className:'stats-table'})}
-    </section>
-
-    <section class="card">
-      <h2>Collection location and lab-slot context</h2>
-      <p class="small">Remote participants are coded as At home. For lab participants, the app reads resources/collection_locations.json by collection date, then counts how many included participants were in the same date, time slot, and lab location.</p>
-      ${table([
-        {key:'location',label:'Location'},
-        {key:'n',label:'Included n',num:true},
-        {key:'slot_n_mean',label:'Mean lab-slot n'},
-        {key:'slot_n_min',label:'Min lab-slot n'},
-        {key:'slot_n_max',label:'Max lab-slot n'}
-      ], stats.location_summary || [], {className:'stats-table'})}
-    </section>
-
-    <section class="card">
-      <h2>Calculation audit trail</h2>
-      <p class="small">This is intentionally placed before the results so a reviewer can verify the model coding and the reported effect estimates first.</p>
-      ${table([{key:'item',label:'Calculation'},{key:'calculation',label:'What the code does'}], stats.calculation_notes || [], {className:'stats-table'})}
-      ${detailsBlock('All model formulas and complete-case n', renderModelAudit(stats.model_rows || []))}
-    </section>
-
-    <section class="card">
-      <h2>Checkpoint Design → Retention, immediate (H1, primary)</h2>
-      <p>H1 hypothesises that Checkpoint Design affects immediate retention, with required pauses expected to outperform required continue. Inspect the planned contrast estimate, its uncertainty, and partial r²; the p-value is only one part of that judgement.</p>
-      ${renderStatsResultTable(h1Immediate)}
-    </section>
-
-    <section class="card">
-      <h2>Checkpoint Design → Retention, delayed (H1, secondary)</h2>
-      <p>Delayed retention tests the same planned contrasts, but follow-up attrition lowers the effective n and therefore the precision of the estimates.</p>
-      ${renderStatsResultTable(h1Delayed)}
-    </section>
-
-    <section class="card">
-      <h2>Checkpoint Design → Cognitive Load → Retention (H2a/H2b/H2)</h2>
-      <p>H2 is evaluated in steps: Checkpoint Design should affect the three cognitive-load dimensions (H2a), and those dimensions should relate to retention in the predicted directions (H2b). The indirect effect is then judged from the bootstrap CI, especially the required-pause paths through extraneous and germane load.</p>
-      ${renderStatsResultTable(h2Rows)}
-      ${detailsBlock('Parallel mediation, immediate retention (H2 primary)', renderIndirectTable(stats.mediation?.h2_parallel_immediate) + renderDirectMediationTable(stats.mediation?.h2_parallel_immediate), true)}
-      ${detailsBlock('Parallel mediation, delayed retention (H2 secondary)', renderIndirectTable(stats.mediation?.h2_parallel_delayed) + renderDirectMediationTable(stats.mediation?.h2_parallel_delayed))}
-      ${renderFactorAnalyses('Cognitive load')}
-    </section>
-
-    <section class="card">
-      <h2>Checkpoint Design → Engagement → Retention (H3a/H3b/H3)</h2>
-      <p>H3 tests whether optional pauses improve engagement compared with the two system-controlled checkpoint designs, and whether engagement is positively associated with retention. The indirect effect is again interpreted through the bootstrap CI rather than by requiring a significant total effect first.</p>
-      ${renderStatsResultTable(h3Rows)}
-      ${detailsBlock('Simple mediation, immediate retention (H3 primary)', renderIndirectTable(stats.mediation?.h3_simple_immediate) + renderDirectMediationTable(stats.mediation?.h3_simple_immediate), true)}
-      ${detailsBlock('Simple mediation, delayed retention (H3 secondary)', renderIndirectTable(stats.mediation?.h3_simple_delayed) + renderDirectMediationTable(stats.mediation?.h3_simple_delayed))}
-      ${renderFactorAnalyses('Engagement')}
-    </section>
-
-    <section class="card">
-      <h2>H4: Engagement → cognitive-load dimensions</h2>
-      <p>H4 tests whether higher engagement is associated with lower extraneous cognitive load and higher germane cognitive load; the intrinsic-load association is checked without a directional prediction. Interpret the sign and size of each association together with its uncertainty.</p>
-      ${renderStatsResultTable(h4Rows)}
-    </section>
-
-    <section class="card">
-      <h2>Checkpoint Design → Engagement → Cognitive Load → Retention (EQ1, exploratory serial effect)</h2>
-      <p>This exploratory check asks whether the pattern is consistent with Checkpoint Design affecting engagement, engagement relating to one cognitive-load dimension, and that load dimension relating to retention. Because engagement and cognitive load are measured in the same post-game block, this is a theory-consistency check, not strong evidence for temporal ordering.</p>
-      ${detailsBlock('Serial mediation, immediate retention', renderSerialTable(stats.mediation?.serial_immediate), true)}
-      ${detailsBlock('Serial mediation, delayed retention', renderSerialTable(stats.mediation?.serial_delayed))}
-    </section>
-
-    <section class="card">
-      <h2>Other preregistered checks and robustness</h2>
-      <p class="small">These checks help assess stability and measurement quality, but they should not replace the preregistered primary models.</p>
-      ${detailsBlock('Perceived-control manipulation check', renderStatsResultTable(manipulationRows))}
-      ${detailsBlock('Robustness: age and gender covariates', renderModelAudit(stats.robustness_age_gender || []))}
-      ${detailsBlock('Robustness: room type and shared-slot n', renderModelAudit(stats.robustness_context || []))}
-      ${renderFactorAnalyses('Perceived control')}
-    </section>`;
-}
 
 function renderTbdTabs(data) {
   const tabs = data.tabs || {};
@@ -2522,7 +2198,6 @@ function renderTbdTabs(data) {
     if (['cognitive-load', 'engagement', 'control'].includes(tab) && data.scale_tables) return;
     if (tab === 'logs' && data.game_logs) return;
     if (tab === 'interviews' && data.interviews) return;
-    if (tab === 'statistics' && data.inferential_statistics) return;
     const panel = document.getElementById(`tab-${tab}`);
     if (!panel) return;
     panel.innerHTML = '<section class="card tbd">TBD</section>';
@@ -2561,9 +2236,6 @@ function initialiseScopedTabs(containerId, buttonClass, panelClass) {
 function render() {
   const data = reportData();
   window.REPORT = data;
-  if (!window.REPORT.statistics && window.REPORT.inferential_statistics) {
-    window.REPORT.statistics = window.REPORT.inferential_statistics;
-  }
   if (window.REPORT.game_logs && !window.REPORT.logs) {
     window.REPORT.logs = window.REPORT.game_logs;
   }
@@ -2577,12 +2249,9 @@ function render() {
   renderScaleTabs(data);
   renderGameLogs(data);
   renderInterviews(data);
-  renderInferentialStatistics(data);
-  renderCalculationSource(data);
   renderTbdTabs(data);
   initialiseTabs();
   bindFigureZoom();
-  bindCalculationControls();
 }
 
 render();

@@ -47,6 +47,7 @@ from helpers._retention_coding import (
     prepare_retention_answer_files,
     read_review_manifest,
     write_prompt_score_file,
+    write_retention_scores_final_if_complete,
 )
 from helpers._shared import (
     COLLECTION_LOCATIONS_PATH,
@@ -55,6 +56,7 @@ from helpers._shared import (
     INTERVIEW_MANIFEST_PATH,
     INTERVIEW_TRANSCRIPTS_DIR,
     RETENTION_SCORES_PATH,
+    RETENTION_FINAL_SCORES_PATH,
     RETENTION_COMPONENT_SPECS,
     RETENTION_ELEMENT_SPECS,
     CONDITION_ORDER,
@@ -75,7 +77,6 @@ from helpers._shared import (
     clean,
     parse_numeric,
 )
-from helpers._stats_main import build_inferential_statistics
 from helpers._survey_io import load_survey_export
 
 PUBLIC_ROUTE = False
@@ -115,6 +116,7 @@ def route_paths(paths: dict[str, Path] | None = None) -> dict[str, Path]:
         "data_transcripts_dir": INTERVIEW_TRANSCRIPTS_DIR,
         "data_interview_manifest_path": INTERVIEW_MANIFEST_PATH,
         "data_retention_scores_path": RETENTION_SCORES_PATH,
+        "data_retention_scores_final_path": RETENTION_FINAL_SCORES_PATH,
         "merged_output_path": MERGED_OUTPUT_PATH,
         "included_mcids_output_path": INCLUDED_MCIDS_OUTPUT_PATH,
     }
@@ -808,6 +810,18 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
                 f"Retention scores merged file not written yet. Preview rows available in memory: "
                 f"{len(scoring_rows):,} q_element row(s)."
             )
+
+        if not scoring_problems:
+            final_path = paths.get("data_retention_scores_final_path", RETENTION_FINAL_SCORES_PATH)
+            final_written, final_count, final_messages = write_retention_scores_final_if_complete(scoring_rows, final_path)
+            if final_written:
+                log_step(f"Wrote retention_scores_final.tsv with {final_count:,} participant row(s).")
+            else:
+                for message in final_messages:
+                    log_step(f"Retention final scores not written: {message}")
+            if final_written:
+                for message in final_messages:
+                    log_step(f"Retention final scores warning: {message}")
     else:
         log_step("PUBLIC_ROUTE=False: preparing retention_answers.tsv, configured GenAI score file(s), and GenAI prompt support files.")
         retention_prepare = prepare_retention_answer_files(survey_rows)
@@ -921,9 +935,6 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
         participants,
     )
 
-    log_step("Building inferential-statistics overview.")
-    inferential_statistics = build_inferential_statistics(participants, retention_score_path)
-
     return {
         "meta": {
             "title": "Merged study summary",
@@ -945,8 +956,6 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
         "scale_tables": scale_tables,
         "game_logs": game_logs,
         "interviews": interviews,
-        "inferential_statistics": inferential_statistics,
-        "statistics": inferential_statistics,
         "retention": retention,
         "participants": participants,
         "tabs": {
@@ -957,7 +966,6 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
             "control": "Perceived control",
             "logs": "Game logs",
             "interviews": "Interviews",
-            "statistics": "Inferential statistics",
         },
     }
 

@@ -4,6 +4,13 @@ This folder contains the code used to inspect and analyse study results.
 
 Generated HTML files may contain participant-level information. Treat generated summaries as data files, not as harmless visualisations.
 
+
+## Current `statistics_manuscript.py` behaviour
+
+`apps/statistics_manuscript.py` now keeps the descriptive-statistics workflow and replaces the old final inferential-statistics section with assumption checks and model placeholders only. The generated HTML report includes a sticky left-hand table of contents, complete-case diagnostics per hypothesis chunk, residual/assumption plots where useful, covariate feasibility checks, and explicit placeholders for the final models that should be implemented after diagnostics have been reviewed.
+
+The location covariate is prepared as a three-level categorical variable (`CreaSp`, `LivingR`, `Remote`) whenever those levels are feasible in the relevant complete-case dataset. `Remote` still receives `0` co-present participants.
+
 ## Important
 
 These scripts only work after you have run the experiment locally and exported the required local data files.
@@ -230,6 +237,7 @@ For the public/checking route, only `./data/` and committed resource files are n
 | `./data/retention_scores_genai.tsv` or `./data/retention_scores_genai{int}.tsv` | Unique standardised non-empty q_element answers for external GenAI scoring. `AMOUNT_GENAI = 1` writes the unsuffixed file; higher values write numbered files. First columns: `q_element`, `creature`, `answer_std`. |
 | `./data/retention_scores_grader{int}.tsv` | Human-validation score files generated from one frozen `retention_review_tasks.tsv` manifest. First columns: `q_element`, `creature`, `answer_std`; `task_id` is kept at the end for stable lookup. |
 | `./data/retention_scores_merged.tsv` | q_element-level scoring audit created by `sum_merged` from survey, GenAI, and human score files. First columns: `MCID`, `creature`, `q_element`, `answer`, `answer_std`; source columns use configured labels such as `genai1_score`, `genai2_score`, `grader1_score`, and `grader2_score`; final manual-audit columns are at the end. |
+| `./data/retention_scores_final.tsv` | Participant-level final retention file written by `sum_merged` once every merged `final_score` is valid. Columns: `MCID`, `score_immediate`, `score_delayed`; missing occasions are empty. |
 | `./data/config/genai_prompt.txt` | Generated prompt for the external GenAI tool. |
 | `./data/config/scoring_rubrics.html` | Generated rubric support file, derived directly from `resources/retention_rubrics.json`. |
 | `./data/config/creature_info.pdf` | Generated creature-information appendix PDF, derived directly from `resources/retention_rubrics.json`. Not attached to GenAI; creature information is embedded in the rubric HTML. |
@@ -253,7 +261,6 @@ The merged summary contains these tabs:
 * Perceived control
 * Game logs
 * Interviews
-* Inferential statistics
 
 The Main tab includes the conceptual model, research questions and hypotheses, condition summaries, participant-level checks, exclusion summaries, and merge-audit tables.
 
@@ -265,13 +272,7 @@ The Game logs tab includes time-use summaries, time to sixth creature, optional-
 
 The Interviews tab reads CSV transcripts from `./data/transcripts/`. The `Speaker` column should contain either `Researcher` or an MCID. A single interview CSV can contain one or more MCID speakers. The app infers MCIDs from the CSV and uses `./resources/interview_manifest.json` only to map filenames to selection categories and notes.
 
-The Inferential statistics tab is generated from:
-
-```text
-./helpers/_stats_main.py
-```
-
-It places the calculation audit trail before the results, then reports the preregistered planned-contrast models, mediation checks, factor-analysis/scale checks, collection-location context, and covariate robustness checks. Review this helper file when checking the inferential calculations. We filled `./resources/collection_locations.json` with `Creative Space` or `Living Room` for each data-collection date; `REMOTE = 1` participants are coded as `At home` automatically.
+The merged summary now excludes the removed modelling tab and its hidden source-code page. We filled `./resources/collection_locations.json` with `Creative Space` or `Living Room` for each data-collection date; `REMOTE = 1` participants are coded as `At home` automatically.
 
 ## Current inclusion checks
 
@@ -306,7 +307,7 @@ Q4_env
 
 Q2 creates three rows with the same raw answer and different fact elements. Q4 creates two rows with the same raw answer and different location elements. Every score is an integer `0`, `1`, or `2`.
 
-Participant retention scores are calculated by first reducing the elements to four components: `Q1_name`, the mean of `Q2_fact1`–`Q2_fact3`, `Q3_looks`, and the mean of `Q4_chapter`–`Q4_env`. The final immediate/delayed retention score is the mean of available administered components, normalised to 0–1. This prevents the three fact rubrics and two location rubrics from overweighting the final retention score.
+Participant retention scores are calculated by first reducing the elements to four components: `Q1_name`, the mean of `Q2_fact1`–`Q2_fact3`, `Q3_looks`, and the mean of `Q4_chapter`–`Q4_env`. The final immediate/delayed retention score in `retention_scores_final.tsv` is the mean of available administered components on the original 0–2 rubric scale. This prevents the three fact rubrics and two location rubrics from overweighting the final retention score.
 
 ### File roles
 
@@ -316,7 +317,8 @@ Participant retention scores are calculated by first reducing the elements to fo
 | `./data/retention_scores_genai*.tsv` | `sum_merged` with `PUBLIC_ROUTE=False`, then filled externally | Unique non-empty q_element answers for GenAI scoring. With `AMOUNT_GENAI = 2`, the files are `retention_scores_genai1.tsv` and `retention_scores_genai2.tsv`. |
 | `./data/retention_review_tasks.tsv` | `score_ret prepare` after GenAI scoring | Frozen human review manifest. Both human grader files are generated from this manifest so both humans grade exactly the same answers. |
 | `./data/retention_scores_grader1.tsv`, `./data/retention_scores_grader2.tsv` | `score_ret grader=1` / `score_ret grader=2` | Human-validation scores. With `AMOUNT_HUMAN = 2`, both files are expected before the final merge. |
-| `./data/retention_scores_merged.tsv` | `sum_merged` with `PUBLIC_ROUTE=True`, then optionally `resolve_disagreements` | q_element-level scoring audit used for retention statistics and the merged report. Source-score columns are generated from configured source labels such as `genai1`, `genai2`, `grader1`, and `grader2`; only columns whose names start with `final_` are intended for manual/adjudication edits. |
+| `./data/retention_scores_merged.tsv` | `sum_merged` with `PUBLIC_ROUTE=True`, then optionally `resolve_disagreements` | q_element-level scoring audit used for retention checks and agreement diagnostics. Source-score columns are generated from configured source labels such as `genai1`, `genai2`, `grader1`, and `grader2`; only columns whose names start with `final_` are intended for manual/adjudication edits. |
+| `./data/retention_scores_final.tsv` | `sum_merged` with `PUBLIC_ROUTE=True` after all merged `final_score` values are valid | Participant-level final retention scores used by `statistics_manuscript.py`: `MCID`, `score_immediate`, and `score_delayed`. |
 | `./data/config/genai_prompt.txt` | generated from `./resources/retention_genai_prompt.txt` | Prompt text to paste into the external GenAI tool. |
 | `./data/config/scoring_rubrics.html` | generated from `./resources/retention_rubrics.json` | The HTML rubric file attached to GenAI and used by the human scoring app. |
 | `./data/config/scoring_rubrics.pdf` | generated from the same rubric HTML | Manuscript appendix version of the rubrics. |
@@ -404,12 +406,13 @@ This creates or uses:
 
 ```text
 ./data/retention_scores_merged.tsv
+./data/retention_scores_final.tsv  # only after all merged final_score values are valid
 ./output/merged_summary.html
 ```
 
 If `./data/retention_scores_merged.tsv` does not exist, `sum_merged` creates it only after the configured GenAI and human-review TSVs are complete. If it already exists, `sum_merged` uses it as the manual adjudication workspace and does not rewrite it. The command still attempts to write the HTML report when retention scoring is incomplete. The Retention tab includes a “Retention scoring checks” block showing whether expected GenAI files are present, expected human files are present, the frozen manifest exists, all source scores are valid `0`–`2`, all q_element values are expected, final scores are complete, and any critical merge problems remain.
 
-Final statistics use only rows whose `final_score` is a valid integer `0`–`2`. If conflicts or missing scores remain, unresolved rows are highlighted and the report explains what still needs to be fixed. Use `python main.py resolve_disagreements` to adjudicate final-score conflicts, then rerun `python main.py sum_merged`.
+Final retention output is written only when every merged `final_score` is a valid score in `0`–`2`. If conflicts or missing scores remain, unresolved rows are highlighted and the report explains what still needs to be fixed. Use `python main.py resolve_disagreements` to adjudicate final-score conflicts, then rerun `python main.py sum_merged`.
 
 ### Manual final-score audit columns
 
