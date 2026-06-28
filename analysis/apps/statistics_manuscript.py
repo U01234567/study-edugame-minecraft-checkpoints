@@ -150,8 +150,17 @@ DATA_CONFIG_DIR = DATA_DIR / "config"
 DATA_LOG_DIR = DATA_DIR / "logs"
 
 SURVEY_EXPORT_PATH = DATA_DIR / "survey_export.tsv"
-RETENTION_SCORES_MERGED_PATH = DATA_DIR / "retention_scores_merged.tsv"
-RETENTION_SCORES_FINAL_PATH = DATA_DIR / "retention_scores_final.tsv"  # legacy helper output; this report derives retention from retention_scores_merged.tsv final_score.
+RETENTION_SCORES_MERGED_PATH = DATA_DIR / "retention_scores_merged.tsv"  # q_element-level audit/agreement file only
+RETENTION_SCORES_FINAL_PATH = DATA_DIR / "retention_scores_final.tsv"    # participant-level score file used by stats_manu
+
+RETENTION_FINAL_SCORE_VARIATION_PATHS = {
+    "clean": RETENTION_SCORES_FINAL_PATH,
+    "divide_by_18": DATA_DIR / "retention_scores_final-divide_by_18.tsv",
+    "card_open_count_penalty": DATA_DIR / "retention_scores_final-card_open_count_penalty.tsv",
+    "card_read_seconds_penalty": DATA_DIR / "retention_scores_final-card_read_seconds_penalty.tsv",
+}
+
+RETENTION_ANALYSIS_SCORES_PATH = RETENTION_SCORES_FINAL_PATH
 COLLECTION_LOCATIONS_PATH = DATA_CONFIG_DIR / "collection_locations.json"
 INTERVIEW_TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 INTERVIEW_MANIFEST_PATH = DATA_CONFIG_DIR / "interview_manifest.json"
@@ -334,108 +343,137 @@ def seen_creatures_from_row(row: dict[str, Any]) -> tuple[list[str], list[str], 
     return [], [], ""
 
 
-def normalise_retention_moment(value: object) -> str:
-    """Return Immediate/Delayed for retention_scores_merged.tsv rows."""
-    text = clean(value).lower()
-    if text.startswith("imm") or text in {"0", "false", "no"}:
-        return "Immediate"
-    if text.startswith("del") or text in {"1", "true", "yes"}:
-        return "Delayed"
-    return clean(value)
+RETENTION_FINAL_SCORE_COLUMN_ALIASES = {
+    "Immediate": [
+        "score_immediate",
+        "ret_immediate_score",
+        "immediate_retention",
+        "retention_immediate",
+    ],
+    "Delayed": [
+        "score_delayed",
+        "ret_delayed_score",
+        "delayed_retention",
+        "retention_delayed",
+    ],
+}
 
 
-def valid_final_retention_score(value: object) -> float | None:
-    """Parse the manually adjudicated final_score only.
+def retention_score_file_label(path: Path | None = None) -> str:
+    active_path = path or RETENTION_ANALYSIS_SCORES_PATH
+    try:
+        return "/" + str(active_path.resolve().relative_to(ANALYSIS_DIR.resolve())).replace("\\", "/")
+    except ValueError:
+        return str(active_path)
 
-    The literal conflict placeholder is intentionally treated as missing/NA,
-    not as 0. This follows the original statistics-script prompt.
+
+def retention_scores_final_path_for_mode(mode: str) -> Path:
+    cleaned_mode = clean(mode)
+    if cleaned_mode not in RETENTION_FINAL_SCORE_VARIATION_PATHS:
+        available = ", ".join(RETENTION_FINAL_SCORE_VARIATION_PATHS)
+        raise ValueError(f"Unknown retention final-score mode: {cleaned_mode}. Available modes: {available}")
+    return RETENTION_FINAL_SCORE_VARIATION_PATHS[cleaned_mode]
+
+
+def valid_participant_retention_score(value: object) -> float | None:
+    """Parse participant-level retention from retention_scores_final*.tsv.
+
+    These values are participant-level means, so unlike q_element-level final_score
+    values they are not expected to be integers.
     """
     text = clean(value)
-    if not text or text.lower().startswith("[resolve conflict"):
+    if not text:
         return None
     number = parse_float(text)
-    if number is None or not float(number).is_integer():
+    if number is None:
         return None
-    score = int(number)
-    if score not in {0, 1, 2}:
+    if number < 0 or number > 2:
         return None
-    return float(score)
+    return float(number)
 
 
-def participant_retention_scores_from_merged() -> tuple[dict[str, dict[str, float | None]], list[str], list[str]]:
-    """Build participant-level immediate/delayed retention from final_score in retention_scores_merged.tsv.
+def _has_any_column(header: set[str], candidates: list[str]) -> bool:
+    lower_header = {column.lower() for column in header}
+    return any(candidate.lower() in lower_header for candidate in candidates)
 
-    This deliberately does not read alternative score columns. For each participant
-    and test occasion, creature-level scores are formed by averaging the administered
-    element/component scores: name, facts, looks, and location. This keeps facts and
-    location from receiving extra weight because they contain multiple rubric rows.
-    If any administered row for a participant/test occasion has missing, invalid, or
-    unresolved final_score, that participant/test occasion is treated as missing for
-    complete-case analyses.
+
+def participant_retention_scores_from_final(
+    path: Path | None = None,
+) -> tuple[dict[str, dict[str, float | None]], list[str], list[str]]:
+    """Read participant-level immediate/delayed retention from retention_scores_final*.tsv.
+
+    Default source is data/retention_scores_final.tsv. Mode variations can be used
+    by passing one of the retention_scores_final-{mode}.tsv paths.
     """
+    active_path = path or RETENTION_ANALYSIS_SCORES_PATH
     errors: list[str] = []
     warnings: list[str] = []
-    merged_rows = read_tsv(RETENTION_SCORES_MERGED_PATH)
-    if not RETENTION_SCORES_MERGED_PATH.exists():
-        return {}, [f"Missing merged retention scoring file: {RETENTION_SCORES_MERGED_PATH}"], []
-    if not merged_rows:
-        return {}, ["retention_scores_merged.tsv is empty."], []
 
-    header = set(merged_rows[0].keys())
-    needed = {"MCID", "final_score"}
-    if not needed.issubset(header):
-        return {}, ["retention_scores_merged.tsv must contain at least MCID and final_score."], []
+    final_rows = read_tsv(active_path)
+    if not active_path.exists():
+        return {}, [f"Missing participant-level retention score file: {active_path}"], []
+    if not final_rows:
+        return {}, [f"{retention_score_file_label(active_path)} is empty."], []
 
-    scores_by_unit: dict[tuple[str, str, str], dict[str, float]] = {}
-    invalid_by_participant_moment: dict[tuple[str, str], list[str]] = {}
-    all_participants: set[str] = set()
-    skipped_rows = 0
+    header = set(final_rows[0].keys())
+    if not _has_any_column(header, ["MCID"]):
+        return {}, [f"{retention_score_file_label(active_path)} must contain an MCID column."], []
 
-    for row_index, row in enumerate(merged_rows, start=2):
-        participant_id = clean(row.get("MCID")).upper()
-        moment = normalise_retention_moment(first_present(row, ["moment", "Moment", "test_moment", "phase", "DELAYED", "delayed"]))
-        creature_id = clean(first_present(row, ["creature_id", "creature", "creature_name", "target_creature"]))
-        q_element = clean(first_present(row, ["q_element", "element", "rubric_element", "question_element", "question", "score_element"]))
+    missing_groups = [
+        moment
+        for moment, candidates in RETENTION_FINAL_SCORE_COLUMN_ALIASES.items()
+        if not _has_any_column(header, candidates)
+    ]
+    if missing_groups:
+        return {}, [
+            f"{retention_score_file_label(active_path)} is missing participant-level score column(s) for: "
+            + ", ".join(missing_groups)
+            + ". Expected columns are usually score_immediate and score_delayed."
+        ], []
+
+    participant_scores: dict[str, dict[str, float | None]] = {}
+    invalid_cells: list[str] = []
+    duplicate_mcids: set[str] = set()
+
+    for row_index, row in enumerate(final_rows, start=2):
+        participant_id = clean(first_present(row, ["MCID"])).upper()
         if not participant_id:
-            skipped_rows += 1
+            warnings.append(f"Skipped row {row_index} in {retention_score_file_label(active_path)} because MCID is empty.")
             continue
-        all_participants.add(participant_id)
-        if moment not in {"Immediate", "Delayed"} or not creature_id or q_element not in VALID_RETENTION_ELEMENTS:
-            skipped_rows += 1
-            continue
-        score = valid_final_retention_score(row.get("final_score"))
-        key_pm = (participant_id, moment)
-        if score is None:
-            invalid_by_participant_moment.setdefault(key_pm, []).append(str(row_index))
-            continue
-        scores_by_unit.setdefault((participant_id, moment, creature_id), {})[q_element] = score
 
-    if skipped_rows:
-        warnings.append(f"Skipped {skipped_rows} retention row(s) because MCID, moment, creature_id, or q_element could not be read.")
-    if invalid_by_participant_moment:
-        affected = len(invalid_by_participant_moment)
-        examples = "; ".join(f"{mcid}/{moment}: rows {', '.join(rows[:5])}" for (mcid, moment), rows in list(invalid_by_participant_moment.items())[:5])
-        warnings.append(f"Found missing/invalid/[resolve conflict] final_score values for {affected} participant-test occasion(s); these occasions are treated as NA. Examples: {examples}.")
-
-    participant_scores: dict[str, dict[str, float | None]] = {mcid: {"Immediate": None, "Delayed": None} for mcid in all_participants}
-    grouped_keys = sorted({(mcid, moment) for (mcid, moment, _creature) in scores_by_unit})
-    for participant_id, moment in grouped_keys:
-        if (participant_id, moment) in invalid_by_participant_moment:
-            participant_scores.setdefault(participant_id, {"Immediate": None, "Delayed": None})[moment] = None
+        if participant_id in participant_scores:
+            duplicate_mcids.add(participant_id)
             continue
-        creature_scores: list[float] = []
-        creature_ids = sorted(creature for (mcid, mm, creature) in scores_by_unit if mcid == participant_id and mm == moment)
-        for creature_id in creature_ids:
-            element_scores = scores_by_unit.get((participant_id, moment, creature_id), {})
-            component_means: list[float] = []
-            for _component, elements in RETENTION_COMPONENTS:
-                values = [element_scores[element] for element in elements if element in element_scores]
-                if values:
-                    component_means.append(statistics.fmean(values))
-            if component_means:
-                creature_scores.append(statistics.fmean(component_means))
-        if creature_scores:
-            participant_scores.setdefault(participant_id, {"Immediate": None, "Delayed": None})[moment] = statistics.fmean(creature_scores)
+
+        immediate_raw = first_present(row, RETENTION_FINAL_SCORE_COLUMN_ALIASES["Immediate"])
+        delayed_raw = first_present(row, RETENTION_FINAL_SCORE_COLUMN_ALIASES["Delayed"])
+
+        immediate_score = valid_participant_retention_score(immediate_raw)
+        delayed_score = valid_participant_retention_score(delayed_raw)
+
+        if clean(immediate_raw) and immediate_score is None:
+            invalid_cells.append(f"{participant_id}/Immediate row {row_index}")
+        if clean(delayed_raw) and delayed_score is None:
+            invalid_cells.append(f"{participant_id}/Delayed row {row_index}")
+
+        participant_scores[participant_id] = {
+            "Immediate": immediate_score,
+            "Delayed": delayed_score,
+        }
+
+    if duplicate_mcids:
+        warnings.append(
+            f"{retention_score_file_label(active_path)} contains duplicate MCID row(s); the first row was kept for: "
+            + ", ".join(sorted(duplicate_mcids)[:20])
+        )
+
+    if invalid_cells:
+        preview = "; ".join(invalid_cells[:20])
+        suffix = f"; plus {len(invalid_cells) - 20} more" if len(invalid_cells) > 20 else ""
+        warnings.append(
+            f"Found invalid participant-level retention score cell(s) in {retention_score_file_label(active_path)}; "
+            f"these cells are treated as NA: {preview}{suffix}."
+        )
 
     return participant_scores, errors, warnings
 
@@ -1461,7 +1499,7 @@ def descriptive_perceived_control() -> str:
 
 
 def descriptive_retention(moment_label: str) -> str:
-    """Display participant-level retention descriptives from retention_scores_merged.tsv final_score only."""
+    """Display participant-level retention descriptives from retention_scores_final.tsv."""
     IN_BODY = True
     errors: list[str] = []
     warnings: list[str] = []
@@ -1479,7 +1517,8 @@ def descriptive_retention(moment_label: str) -> str:
     for participant_id, row in immediate_by_mcid.items():
         condition_by_mcid[participant_id] = canonical_condition(first_present(row, ["condition", "Condition", "CONDITION", "experiment_condition", "condition_raw"]))
 
-    participant_scores, score_errors, score_warnings = participant_retention_scores_from_merged()
+    score_source = retention_score_file_label()
+    participant_scores, score_errors, score_warnings = participant_retention_scores_from_final()
     errors.extend(score_errors)
     warnings.extend(score_warnings)
 
@@ -1494,7 +1533,7 @@ def descriptive_retention(moment_label: str) -> str:
             continue
         value = scores.get(moment_key)
         if value is None:
-            excluded.append({"MCID": participant_id, "condition": condition, "reason": f"No complete {moment_key.lower()} final_score-based retention value in retention_scores_merged.tsv"})
+            excluded.append({"MCID": participant_id, "condition": condition, "reason": f"No complete {moment_key.lower()} participant-level retention value in {score_source}"})
             continue
         if value < 0 or value > 2:
             errors.append(f"{moment_key} retention outside 0-2 for {participant_id}.")
@@ -1505,12 +1544,12 @@ def descriptive_retention(moment_label: str) -> str:
             "condition": condition,
             "value": value,
             "retention_score": f"{value:.2f}",
-            "source_column": "final_score only",
+            "source_column": score_source,
         })
 
     if excluded:
         warnings.append(
-            f"retention_scores_merged.tsv yielded {len(participant_scores)} participant row(s), but this table displays "
+            f"{score_source} yielded {len(participant_scores)} participant row(s), but this table displays "
             f"{len(complete_rows)} complete {moment_label.lower()} retention score(s)."
         )
 
@@ -1523,16 +1562,16 @@ def descriptive_retention(moment_label: str) -> str:
     return table_shell(
         f"Descriptives: {moment_label.lower()} retention",
         IN_BODY,
-        f"{moment_label} participant-level retention is derived from retention_scores_merged.tsv using the manually adjudicated final_score column only. [resolve conflict] is treated as NA. Scores remain on the 0-2 rubric scale.",
+        f"{moment_label} participant-level retention is read directly from {score_source}. Scores remain on the 0-2 retention scale.",
         table_html,
         boxplot_svg(f"{moment_label.lower()}-retention-boxplot", complete_rows, "value", f"{moment_label} retention boxplot", min_value=0, max_value=2),
-        status_messages(errors, warnings, f"All displayed {moment_label.lower()} retention scores came from retention_scores_merged.tsv final_score only."),
+        status_messages(errors, warnings, f"All displayed {moment_label.lower()} retention scores came from {score_source}."),
         excluded_details(excluded) + first_three_details(complete_rows, ["retention_score", "source_column"]),
     )
 
 
 def descriptive_retention_decay() -> str:
-    """Display participant-level retention change/decay descriptives from paired immediate and delayed final_score-based scores."""
+    """Display participant-level retention change/decay descriptives from paired immediate and delayed participant-level final-score-file values."""
     IN_BODY = True
     errors: list[str] = []
     warnings: list[str] = []
@@ -1550,7 +1589,8 @@ def descriptive_retention_decay() -> str:
     for participant_id, row in immediate_by_mcid.items():
         condition_by_mcid[participant_id] = canonical_condition(first_present(row, ["condition", "Condition", "CONDITION", "experiment_condition", "condition_raw"]))
 
-    participant_scores, score_errors, score_warnings = participant_retention_scores_from_merged()
+    score_source = retention_score_file_label()
+    participant_scores, score_errors, score_warnings = participant_retention_scores_from_final()
     errors.extend(score_errors)
     warnings.extend(score_warnings)
 
@@ -1564,7 +1604,7 @@ def descriptive_retention_decay() -> str:
         immediate = scores.get("Immediate")
         delayed = scores.get("Delayed")
         if immediate is None or delayed is None:
-            excluded.append({"MCID": participant_id, "condition": condition, "reason": "Requires both complete immediate and delayed final_score-based retention values"})
+            excluded.append({"MCID": participant_id, "condition": condition, "reason": f"Requires both complete immediate and delayed participant-level retention values in {score_source}"})
             continue
         if immediate < 0 or immediate > 2 or delayed < 0 or delayed > 2:
             errors.append(f"Immediate or delayed retention outside 0-2 for {participant_id}.")
@@ -1578,12 +1618,12 @@ def descriptive_retention_decay() -> str:
             "retention_decay": f"{value:.2f}",
             "immediate_retention": f"{float(immediate):.2f}",
             "delayed_retention": f"{float(delayed):.2f}",
-            "source_column": "delayed - immediate; final_score only",
+            "source_column": f"delayed - immediate; {score_source}",
         })
 
     if excluded:
         warnings.append(
-            f"retention_scores_merged.tsv yielded {len(participant_scores)} participant row(s), but this table displays "
+            f"{score_source} yielded {len(participant_scores)} participant row(s), but this table displays "
             f"{len(complete_rows)} paired immediate-delayed retention-change score(s)."
         )
 
@@ -1596,7 +1636,7 @@ def descriptive_retention_decay() -> str:
     return table_shell(
         "Descriptives: retention decay",
         IN_BODY,
-        "Participant-level retention decay/change is calculated as delayed retention minus immediate retention after both occasion scores have been derived from retention_scores_merged.tsv final_score only. Negative values indicate lower delayed than immediate retention; positive values indicate improvement.",
+        f"Participant-level retention decay/change is calculated as delayed retention minus immediate retention after both occasion scores have been read from {score_source}. Negative values indicate lower delayed than immediate retention; positive values indicate improvement.",
         table_html,
         boxplot_svg("retention-decay-boxplot", complete_rows, "value", "Retention decay/change boxplot", min_value=-2, max_value=2),
         status_messages(errors, warnings, "All displayed retention-decay values are paired participant-level delayed-minus-immediate differences."),
@@ -2433,37 +2473,86 @@ def categorical_if_available(rows: list[dict[str, Any]], variable: str, outcome:
     return [variable] if len(levels) >= 2 else []
 
 
-def h1_confirmatory_models_html(rows: list[dict[str, Any]]) -> str:
+def h1_confirmatory_models_html(
+    rows: list[dict[str, Any]],
+    *,
+    heading: str = "Confirmatory preregistered H1 models: separate HC3 linear models",
+    note: str = "These are placed before the integrated retention/decay LMM because the preregistration specified separate immediate and delayed retention models with HC3 standard errors. The LMM below is an added sensitivity/extension, not a replacement for this table.",
+    model_label_prefix: str = "Confirmatory H1",
+) -> str:
     """Preregistered H1 route: separate HC3 linear models for immediate and delayed retention."""
     immediate_form = categorical_if_available(rows, "retention_form_order", "ret_immediate_score")
     delayed_form = categorical_if_available(rows, "retention_form_order", "ret_delayed_score")
     immediate_note = " + retention_form_order" if immediate_form else " (retention_form_order unavailable/constant; omitted)"
     delayed_note = " + retention_form_order" if delayed_form else " (retention_form_order unavailable/constant; omitted)"
     return (
-        '<h4>Confirmatory preregistered H1 models: separate HC3 linear models</h4>'
-        '<p class="small">These are placed before the integrated retention/decay LMM because the preregistration specified separate immediate and delayed retention models with HC3 standard errors. The LMM below is an added sensitivity/extension, not a replacement for this table.</p>'
+        f"<h4>{h(heading)}</h4>"
+        f'<p class="small">{h(note)}</p>'
         + ols_model_html(
-            "Confirmatory H1 base model: immediate retention",
+            f"{model_label_prefix} base model: immediate retention",
             "immediate_retention ~ C1 + C2" + immediate_note,
             fit_ols_arrays(rows, "ret_immediate_score", ["required_pause_contrast", "optional_pause_contrast"], immediate_form),
         )
         + ols_model_html(
-            "Confirmatory H1 base model: delayed retention",
+            f"{model_label_prefix} base model: delayed retention",
             "delayed_retention ~ C1 + C2" + delayed_note,
             fit_ols_arrays(rows, "ret_delayed_score", ["required_pause_contrast", "optional_pause_contrast"], delayed_form),
         )
-        + '<h4>Covariate-adjusted H1 sensitivity models</h4>'
+        + f"<h4>{h(model_label_prefix)} covariate-adjusted sensitivity models</h4>"
         + ols_model_html(
-            "H1 sensitivity model: immediate retention + covariates",
+            f"{model_label_prefix} sensitivity model: immediate retention + covariates",
             "immediate_retention ~ C1 + C2 + retention_form_order + location + co_present_participants + age + gender",
             fit_ols_arrays(rows, "ret_immediate_score", ["required_pause_contrast", "optional_pause_contrast", "co_present_participants", "age"], [*immediate_form, "location", "gender"]),
         )
         + ols_model_html(
-            "H1 sensitivity model: delayed retention + covariates",
+            f"{model_label_prefix} sensitivity model: delayed retention + covariates",
             "delayed_retention ~ C1 + C2 + retention_form_order + location + co_present_participants + age + gender",
             fit_ols_arrays(rows, "ret_delayed_score", ["required_pause_contrast", "optional_pause_contrast", "co_present_participants", "age"], [*delayed_form, "location", "gender"]),
         )
     )
+
+
+def h1_retention_score_variation_models_html() -> str:
+    """Exploratory H1-only reruns for alternative participant-level retention score files."""
+    blocks: list[str] = [
+        '<h4>Exploratory H1 reruns with alternative retention-score calculations</h4>'
+        '<p class="small">These models are exploratory sensitivity checks. They use modified participant-level retention-score files and do not replace the main preregistered retention outcome. Only the H1 immediate and delayed retention models are rerun here.</p>'
+    ]
+
+    for mode, path in RETENTION_FINAL_SCORE_VARIATION_PATHS.items():
+        if mode == "clean":
+            continue
+
+        source = retention_score_file_label(path)
+
+        if not path.exists():
+            blocks.append(
+                f'<details class="compact-details"><summary>{h(mode)}</summary>'
+                + model_status_note(f"Skipped: {source} does not exist yet.", "orange")
+                + '</details>'
+            )
+            continue
+
+        variant_rows, variant_warnings = build_rows_for_inferential_models(retention_scores_path=path)
+        variant_errors: list[str] = [] if variant_rows else [f"No participant-level rows could be built from {source}."]
+
+        blocks.append(
+            f'<details class="compact-details" open><summary>{h(mode)} · source: {h(source)}</summary>'
+            + status_messages(
+                variant_errors,
+                variant_warnings,
+                f"Exploratory H1 rows were built from {source}.",
+            )
+            + h1_confirmatory_models_html(
+                variant_rows,
+                heading=f"Exploratory H1 models: {mode}",
+                note=f"Participant-level retention scores are read from {source}. This is an exploratory modified-score analysis only.",
+                model_label_prefix=f"Exploratory H1 ({mode})",
+            )
+            + '</details>'
+        )
+
+    return "".join(blocks)
 
 
 def h2a_holm_table_html(rows: list[dict[str, Any]], *, include_covariates: bool) -> str:
@@ -3103,18 +3192,11 @@ def normalise_interview_comparison_rows(participants: list[dict[str, Any]]) -> l
 
 
 def attach_retention_scores_for_interview_rows(participants: list[dict[str, Any]], warnings: list[str]) -> None:
-    if load_retention_scores is not None and attach_retention_scores is not None:
-        try:
-            scores_by_id, retention_warnings = load_retention_scores(RETENTION_SCORES_MERGED_PATH)
-            attach_retention_scores(participants, scores_by_id)
-            warnings.extend(retention_warnings)
-            return
-        except Exception as exc:
-            warnings.append(f"Could not attach retention scores with sum_merged helper logic: {exc}")
-
-    participant_scores, errors, retention_warnings = participant_retention_scores_from_merged()
+    """Attach participant-level retention scores from retention_scores_final.tsv."""
+    participant_scores, errors, retention_warnings = participant_retention_scores_from_final()
     warnings.extend(errors)
     warnings.extend(retention_warnings)
+
     for participant in participants:
         participant_id = first_present(participant, ["participant_id", "MCID", "mcid"]).upper()
         scores = participant_scores.get(participant_id, {})
@@ -3481,7 +3563,9 @@ def inferential_interview_representativeness() -> str:
 # the final planned models plus covariate-adjusted sensitivity models where feasible.
 
 
-def build_rows_for_inferential_models() -> tuple[list[dict[str, Any]], list[str]]:
+def build_rows_for_inferential_models(
+    retention_scores_path: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Build one transparent participant-level row used for assumption checks and final models."""
     warnings: list[str] = []
     survey_rows = read_tsv(SURVEY_EXPORT_PATH)
@@ -3493,7 +3577,7 @@ def build_rows_for_inferential_models() -> tuple[list[dict[str, Any]], list[str]
         if not delayed_flag(row):
             immediate_by_mcid.setdefault(participant_id, row)
 
-    participant_retention_scores, retention_errors, retention_warnings = participant_retention_scores_from_merged()
+    participant_retention_scores, retention_errors, retention_warnings = participant_retention_scores_from_final(retention_scores_path)
     for error in retention_errors:
         warnings.append(error)
     warnings.extend(retention_warnings)
@@ -3699,6 +3783,7 @@ def inferential_h1_y_assumptions() -> str:
     data_html = participant_counts + condition_count_table(base_long, "Base complete observation rows", ["retention_score", "time"]) + covariate_feasibility_table(cov_long)
     final_models_html = final_models_wrapper(
         h1_confirmatory_models_html(rows),
+        h1_retention_score_variation_models_html(),
         '<h4>Added integrated retention/decay model</h4><p class="small">This LMM uses immediate and delayed rows together. It is useful, but should be labelled as a sensitivity/extension because the preregistration specified separate HC3 models.</p>',
         fit_mixedlm_html(
             "Sensitivity LMM: retention and decay",
@@ -3961,7 +4046,7 @@ def preregistration_alignment_section() -> str:
     rows = [
         ("Manipulation and hypotheses", "Three checkpoint-design conditions; H1-H4/EQ1-EQ3.", "Kept.", "Confirmatory / planned."),
         ("H1 retention model", "Separate HC3 linear models for immediate and delayed retention.", "Now printed first; integrated LMM retained below as sensitivity/extension.", "Confirmatory first; sensitivity second."),
-        ("Retention score source", "Retention scores derived from administered rubric rows.", "Derived directly from retention_scores_merged.tsv final_score only; [resolve conflict] is NA.", "Revised implementation; document clearly."),
+        ("Retention score source", "Retention scores derived from administered rubric rows.", "Read directly from retention_scores_final.tsv for participant-level analyses; retention_scores_merged.tsv is used only for scoring/agreement diagnostics.", "Revised implementation; document clearly."),
         ("Retention reliability", "Quadratic weighted Cohen's kappa for a predefined subset.", "Agreement table includes ordinal Krippendorff's alpha, exact agreement, and pairwise weighted kappa.", "Improved but deviates; note in manuscript."),
         ("H2a and H4 multiplicity", "Holm correction for relevant test families.", "Raw and Holm-adjusted p-values are now shown in the Results-template report.", "Confirmatory correction visible."),
         ("Covariate sensitivity", "Age/gender and contextual variables retained for sensitivity/robustness where feasible.", "Location is CreaSp/LivingR/Remote; Remote co-present participants = 0; age numeric; gender categorical.", "Sensitivity / robustness."),

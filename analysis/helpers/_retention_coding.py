@@ -378,7 +378,20 @@ def _final_retention_score_text(value: float | None) -> str:
     return f"{float(value):.6g}"
 
 
+# Legacy/manual default for direct helper calls. sum_merged no longer relies on
+# changing this global: write_retention_scores_final_if_complete() always writes
+# the clean participant-level score to retention_scores_final.tsv and writes all
+# exploratory mode files next to it.
 RETENTION_FINAL_SCORE_MODE = "clean"
+RETENTION_FINAL_SCORE_MODES = (
+    "clean",
+    "divide_by_18",
+    "card_open_count_penalty",
+    "card_read_seconds_penalty",
+)
+RETENTION_FINAL_SCORE_VARIATION_MODES = tuple(
+    mode for mode in RETENTION_FINAL_SCORE_MODES if mode != "clean"
+)
 # Available modes:
 #   "clean"                     = mean of creature averages over creatures with administered scores
 #   "divide_by_18"              = sum of creature averages divided by 18
@@ -389,12 +402,37 @@ RETENTION_FINAL_MIN_CARD_OPEN_COUNT = 1
 RETENTION_FINAL_MIN_CARD_READ_SECONDS = 1.0
 
 
+def _normalise_retention_final_score_mode(mode: object | None) -> str:
+    resolved = clean(mode or RETENTION_FINAL_SCORE_MODE)
+    if resolved not in RETENTION_FINAL_SCORE_MODES:
+        raise ValueError(
+            "RETENTION_FINAL_SCORE_MODE must be one of: "
+            + ", ".join(RETENTION_FINAL_SCORE_MODES)
+        )
+    return resolved
+
+
+def retention_scores_final_path_for_mode(mode: object, base_path: Path = RETENTION_FINAL_SCORES_PATH) -> Path:
+    """Return the participant-level output path for a final-score mode.
+
+    The clean mode is always the canonical file used by the rest of sum_merged.
+    Exploratory modes are written beside it with a -{mode} suffix.
+    """
+    resolved = _normalise_retention_final_score_mode(mode)
+    if resolved == "clean":
+        return base_path
+    return base_path.with_name(f"{base_path.stem}-{resolved}{base_path.suffix}")
+
+
 def _normalise_retention_creature_id(value: object) -> str:
     """Return a creature id comparable across retention rows and raw logs."""
     text = clean(value).lower()
     if not text:
         return ""
-    text = text.replace("minecraft:", "")
+    # Raw logs may contain either a display label ("Abyss deer"), a spawn name
+    # ("abyss_deer_a"), or a namespaced entity type
+    # ("study-checkpoints:abyss_deer"). Collapse all three to the same species id.
+    text = re.sub(r"^[a-z0-9_.-]+:", "", text)
     text = re.sub(r"_[a-z]$", "", text)
     text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
@@ -551,6 +589,12 @@ def _event_creature_id(event: dict[str, Any]) -> str:
         "creature_id",
         "creature",
         "creature_name",
+        # Critical for read-time penalties: StudyCreatureInfoScreen closes cards
+        # through StudyEventLog.logCreatureCardClosed(), and that close event
+        # contains creature_label + read_duration_ms, not creature_name/entity_type.
+        "creature_label",
+        "display_name",
+        "label",
         "species",
         "entity",
         "entity_type",
@@ -560,8 +604,61 @@ def _event_creature_id(event: dict[str, Any]) -> str:
     ]))
 
 
+RETENTION_LOG_LINE_RE = re.compile(
+    r"^\[(?P<date>\d{4}-\d{2}-\d{2})\] \[(?P<time>\d{2}:\d{2}:\d{2}:\d{3})\] \| (?P<body>.+)$"
+)
+
+
+def _parse_retention_log_line(line: str) -> dict[str, Any] | None:
+    """Parse one StudyEventLog line into the same event/fields shape used below.
+
+    The custom mod writes raw .log rows as:
+    [yyyy-mm-dd] [hh:mm:ss:ms] | event_type | session_id=... | key=value ...
+
+    The public data route stores the same event body in data/logs/{MCID}.csv as
+    Date, Time, Activity. _read_retention_log_events reconstructs this line and
+    sends it through this parser.
+    """
+    match = RETENTION_LOG_LINE_RE.match(clean(line))
+    if not match:
+        return None
+
+    parts = [part.strip() for part in match.group("body").split("|")]
+    if not parts or not parts[0]:
+        return None
+
+    fields: dict[str, str] = {}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        fields[clean(key)] = clean(value)
+
+    timestamp: datetime | None = None
+    timestamp_text = f"{match.group('date')} {match.group('time')}"
+    for fmt in ("%Y-%m-%d %H:%M:%S:%f", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            timestamp = datetime.strptime(timestamp_text, fmt)
+            break
+        except ValueError:
+            pass
+
+    return {
+        "timestamp_dt": timestamp,
+        "timestamp": timestamp.isoformat(sep=" ") if timestamp else "",
+        "event": parts[0],
+        "fields": fields,
+    }
+
+
 def _read_retention_log_events(path: Path) -> list[dict[str, Any]]:
-    """Parse CSV, JSON/JSONL, or simple text logs into event-like dictionaries."""
+    """Parse raw logs, publishable CSV logs, JSON/JSONL, or simple text logs.
+
+    Trust boundary: the retention penalties need the event fields exactly as the
+    custom mod wrote them. For publishable CSV logs, the Date + Time + Activity
+    columns are reconstructed into the original StudyEventLog line shape before
+    parsing.
+    """
     try:
         encoding = detect_text_encoding(path)
         text = path.read_text(encoding=encoding, errors="replace")
@@ -570,9 +667,25 @@ def _read_retention_log_events(path: Path) -> list[dict[str, Any]]:
 
     if path.suffix.lower() == ".csv":
         try:
-            return [dict(row) for row in csv.DictReader(io.StringIO(text))]
+            rows = [dict(row) for row in csv.DictReader(io.StringIO(text))]
         except csv.Error:
             return []
+
+        parsed_events: list[dict[str, Any]] = []
+        for row in rows:
+            lower_lookup = {clean(key).lower(): key for key in row.keys()}
+            date = clean(row.get(lower_lookup.get("date", "Date")))
+            time = clean(row.get(lower_lookup.get("time", "Time")))
+            activity = clean(row.get(lower_lookup.get("activity", "Activity")))
+            if not date or not time or not activity:
+                continue
+            parsed = _parse_retention_log_line(f"[{date}] [{time}] | {activity}")
+            if parsed is not None:
+                parsed_events.append(parsed)
+
+        # Fall back to raw rows only for nonstandard CSVs. For the project
+        # publishable logs, parsed_events is the expected route.
+        return parsed_events if parsed_events else rows
 
     stripped = text.strip()
     if not stripped:
@@ -597,6 +710,12 @@ def _read_retention_log_events(path: Path) -> list[dict[str, Any]]:
         line = line.strip()
         if not line:
             continue
+
+        parsed_line = _parse_retention_log_line(line)
+        if parsed_line is not None:
+            events.append(parsed_line)
+            continue
+
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
@@ -614,7 +733,6 @@ def _read_retention_log_events(path: Path) -> list[dict[str, Any]]:
             event[key] = value.strip("'\"")
         events.append(event)
     return events
-
 
 def _retention_card_exposure_index() -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], float], list[str]]:
     """Return per-participant/per-creature card-open counts and card-open seconds.
@@ -703,6 +821,11 @@ def _retention_card_exposure_index() -> tuple[dict[tuple[str, str], int], dict[t
         warnings.append(
             "Individual log files were found, but no creature-card exposure events could be matched."
         )
+    elif open_counts and not open_seconds:
+        warnings.append(
+            "Creature-card open events were matched, but no card-read seconds were derived. "
+            "Check that creature_card_closed rows contain creature_label and read_duration_ms."
+        )
     return open_counts, open_seconds, warnings
 
 
@@ -712,6 +835,7 @@ def _participant_moment_retention_final_score(
     creature_ids: set[str],
     scores_by_creature: dict[tuple[str, str, str], dict[str, float]],
     *,
+    mode: str | None = None,
     card_open_counts: dict[tuple[str, str], int] | None = None,
     card_open_seconds: dict[tuple[str, str], float] | None = None,
 ) -> float | None:
@@ -729,13 +853,15 @@ def _participant_moment_retention_final_score(
     if not creature_scores:
         return None
 
-    if RETENTION_FINAL_SCORE_MODE == "clean":
+    resolved_mode = _normalise_retention_final_score_mode(mode)
+
+    if resolved_mode == "clean":
         return sum(creature_scores.values()) / len(creature_scores)
 
-    if RETENTION_FINAL_SCORE_MODE == "divide_by_18":
+    if resolved_mode == "divide_by_18":
         return sum(creature_scores.values()) / float(RETENTION_FINAL_EXPECTED_CREATURE_COUNT)
 
-    if RETENTION_FINAL_SCORE_MODE == "card_open_count_penalty":
+    if resolved_mode == "card_open_count_penalty":
         adjusted_scores: list[float] = []
         for creature_id, score in creature_scores.items():
             opened = RETENTION_FINAL_MIN_CARD_OPEN_COUNT
@@ -747,7 +873,7 @@ def _participant_moment_retention_final_score(
             adjusted_scores.append(score / opened)
         return sum(adjusted_scores) / len(adjusted_scores) if adjusted_scores else None
 
-    if RETENTION_FINAL_SCORE_MODE == "card_read_seconds_penalty":
+    if resolved_mode == "card_read_seconds_penalty":
         adjusted_scores = []
         for creature_id, score in creature_scores.items():
             seconds = RETENTION_FINAL_MIN_CARD_READ_SECONDS
@@ -761,11 +887,17 @@ def _participant_moment_retention_final_score(
 
     raise ValueError(
         "RETENTION_FINAL_SCORE_MODE must be one of: "
-        "clean, divide_by_18, card_open_count_penalty, card_read_seconds_penalty"
+        + ", ".join(RETENTION_FINAL_SCORE_MODES)
     )
 
 
-def build_retention_scores_final_rows(scoring_rows: list[dict[str, Any]]) -> tuple[list[dict[str, str]], list[str]]:
+def build_retention_scores_final_rows(
+    scoring_rows: list[dict[str, Any]],
+    *,
+    mode: str | None = None,
+    card_open_counts: dict[tuple[str, str], int] | None = None,
+    card_open_seconds: dict[tuple[str, str], float] | None = None,
+) -> tuple[list[dict[str, str]], list[str]]:
     """Build participant-level final retention scores from complete merged final_score rows.
 
     The output is intentionally narrow: MCID, score_immediate, and score_delayed.
@@ -780,6 +912,7 @@ def build_retention_scores_final_rows(scoring_rows: list[dict[str, Any]]) -> tup
     to Q1/Q2 or Q3/Q4.
     """
     warnings: list[str] = []
+    resolved_mode = _normalise_retention_final_score_mode(mode)
     if not scoring_rows:
         return [], ["No retention_scores_merged rows were available for retention_scores_final.tsv."]
 
@@ -824,11 +957,31 @@ def build_retention_scores_final_rows(scoring_rows: list[dict[str, Any]]) -> tup
             f"{skipped_rows} row(s) with missing/unknown MCID, moment, creature_id, or q_element."
         ]
 
-    card_open_counts: dict[tuple[str, str], int] | None = None
-    card_open_seconds: dict[tuple[str, str], float] | None = None
-    if RETENTION_FINAL_SCORE_MODE in {"card_open_count_penalty", "card_read_seconds_penalty"}:
+    if resolved_mode in {"card_open_count_penalty", "card_read_seconds_penalty"} and (
+        card_open_counts is None or card_open_seconds is None
+    ):
         card_open_counts, card_open_seconds, exposure_warnings = _retention_card_exposure_index()
         warnings.extend(exposure_warnings)
+
+    scored_creature_keys = {
+        (participant_id, creature_id)
+        for (participant_id, _moment, creature_id), element_scores in scores_by_creature.items()
+        if element_scores
+    }
+    if resolved_mode == "card_open_count_penalty" and card_open_counts is not None:
+        matched = sum(1 for key in scored_creature_keys if int(card_open_counts.get(key, 0) or 0) > 0)
+        if scored_creature_keys and matched == 0:
+            warnings.append(
+                "card_open_count_penalty was calculated, but no scored participant/creature pair had a matched card-open count. "
+                "Scores therefore use the 1-open floor throughout."
+            )
+    if resolved_mode == "card_read_seconds_penalty" and card_open_seconds is not None:
+        matched = sum(1 for key in scored_creature_keys if float(card_open_seconds.get(key, 0.0) or 0.0) > 0.0)
+        if scored_creature_keys and matched == 0:
+            warnings.append(
+                "card_read_seconds_penalty was calculated, but no scored participant/creature pair had matched card-read seconds. "
+                "Scores therefore use the 1-second floor throughout."
+            )
 
     participant_scores: dict[str, dict[str, float | None]] = {
         participant_id: {"Immediate": None, "Delayed": None}
@@ -842,6 +995,7 @@ def build_retention_scores_final_rows(scoring_rows: list[dict[str, Any]]) -> tup
                 moment,
                 creature_ids,
                 scores_by_creature,
+                mode=resolved_mode,
                 card_open_counts=card_open_counts,
                 card_open_seconds=card_open_seconds,
             )
@@ -862,13 +1016,46 @@ def write_retention_scores_final_if_complete(
     scoring_rows: list[dict[str, Any]],
     path: Path = RETENTION_FINAL_SCORES_PATH,
 ) -> tuple[bool, int, list[str]]:
-    """Write data/retention_scores_final.tsv only when all merged final_score values are usable."""
-    rows, warnings = build_retention_scores_final_rows(scoring_rows)
-    if not rows:
-        return False, 0, warnings
-    write_tsv(path, RETENTION_FINAL_SCORE_FIELDNAMES, rows)
-    return True, len(rows), warnings
+    """Write clean final scores plus all exploratory final-score variants.
 
+    Contract for sum_merged:
+    - retention_scores_final.tsv is always the clean/main participant-level score.
+    - retention_scores_final-{mode}.tsv files are written automatically for
+      exploratory H1 sensitivity analyses.
+    - No downstream part of sum_merged needs to point at the variant files.
+    """
+    messages: list[str] = []
+
+    clean_rows, clean_messages = build_retention_scores_final_rows(scoring_rows, mode="clean")
+    messages.extend(clean_messages)
+    if not clean_rows:
+        return False, 0, messages
+
+    write_tsv(path, RETENTION_FINAL_SCORE_FIELDNAMES, clean_rows)
+
+    card_open_counts: dict[tuple[str, str], int] | None = None
+    card_open_seconds: dict[tuple[str, str], float] | None = None
+    exposure_warnings: list[str] = []
+    if any(mode in {"card_open_count_penalty", "card_read_seconds_penalty"} for mode in RETENTION_FINAL_SCORE_VARIATION_MODES):
+        card_open_counts, card_open_seconds, exposure_warnings = _retention_card_exposure_index()
+        messages.extend(exposure_warnings)
+
+    for mode in RETENTION_FINAL_SCORE_VARIATION_MODES:
+        variant_path = retention_scores_final_path_for_mode(mode, path)
+        variant_rows, variant_messages = build_retention_scores_final_rows(
+            scoring_rows,
+            mode=mode,
+            card_open_counts=card_open_counts,
+            card_open_seconds=card_open_seconds,
+        )
+        messages.extend(f"{mode}: {message}" for message in variant_messages)
+        if not variant_rows:
+            messages.append(f"{mode}: {variant_path.name} was not written because no rows could be built.")
+            continue
+        write_tsv(variant_path, RETENTION_FINAL_SCORE_FIELDNAMES, variant_rows)
+        messages.append(f"{mode}: wrote {variant_path.name} with {len(variant_rows):,} participant row(s).")
+
+    return True, len(clean_rows), messages
 
 def _score_key(value: object) -> str:
     text = clean(value)
