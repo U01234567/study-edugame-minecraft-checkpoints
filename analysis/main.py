@@ -9,6 +9,7 @@ from apps.summarise_last_session import main as summarise_last_session_main
 from apps.summarise_merged import main as merged_summary_main
 from apps.summarise_survey import main as summarise_survey_main
 from apps.statistics_manuscript import main as statistics_manuscript_main
+from apps.stats_explore import main as statistics_exploratory_main
 
 # ---------------------------------------------------------------------------
 # Data-route toggle
@@ -84,6 +85,7 @@ def print_usage() -> None:
     print("  python main.py resolve_disagreements port=8767")
     print("  python main.py resolve_disagreements input=./data/retention_scores_merged.tsv port=8767")
     print("  python main.py stats_manu")
+    print("  python main.py stats_explore")
     print()
     print(f"Current route: PUBLIC_ROUTE={PUBLIC_ROUTE}")
 
@@ -127,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
     
     if command == "stats_manu":
         return statistics_manuscript_main()
+    
+    if command == "stats_explore":
+        return statistics_exploratory_main()
 
     print(f"Unknown command: {command}")
     print_usage()
