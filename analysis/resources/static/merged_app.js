@@ -2086,7 +2086,7 @@ function renderIntervieweeTranslationStatus(message){
 
   return `
     <div style="border:1px solid #f79009; background:#fffaeb; padding:0.75rem 1rem; border-radius:8px; margin-bottom:1rem;">
-      <strong>Interviewee translation table update:</strong>
+      <strong>Participant-code translation table update:</strong>
       ${escapeHtml(message)}
     </div>
   `;
@@ -2097,14 +2097,15 @@ function renderIntervieweeTranslationTable(rows){
 
   return `
     <section class="card">
-      <h2>Interviewee code translation table</h2>
+      <h2>Participant-code translation table</h2>
       <p class="small">
-        These codes are neutral reporting labels for interviewed participants.
+        These P-codes are neutral reporting labels for interviewed participants.
         They do not indicate recruitment order, interview order, condition, or performance.
+        The numbers are sampled from the full included-participant range.
       </p>
       ${table(
         [
-          {key:'interviewee_id', label:'Interviewee code'},
+          {key:'participant_code', label:'Participant code'},
           {key:'MCID', label:'MCID'}
         ],
         translationRows

@@ -315,16 +315,16 @@ def add_interview_comparison_summaries(
     return enriched
 
 
-def _interviewee_code_sort_key(row: dict[str, str]) -> tuple[int, str]:
-    code = clean(row.get("interviewee_id"))
-    match = re.fullmatch(r"I(\d+)", code)
+def _participant_code_sort_key(row: dict[str, str]) -> tuple[int, str]:
+    code = clean(row.get("participant_code"))
+    match = re.fullmatch(r"P([1-9]\d*)", code)
     if match:
         return (int(match.group(1)), code)
     return (10**9, code)
 
 
 def read_interviewee_translation_html(path: Path) -> list[dict[str, str]]:
-    """Read the generated interviewee-code table.
+    """Read the generated participant-code table for interviewed participants.
 
     The HTML file contains a human-readable table and an embedded JSON payload.
     The JSON payload keeps reading robust without adding a new dependency.
@@ -335,20 +335,21 @@ def read_interviewee_translation_html(path: Path) -> list[dict[str, str]]:
     text = path.read_text(encoding="utf-8")
 
     match = re.search(
-        r'<script[^>]*id=["\']interviewee-mcid-data["\'][^>]*>(.*?)</script>',
+        r'<script[^>]*id=["\'](?:participant-code-mcid-data|interviewee-mcid-data)["\'][^>]*>(.*?)</script>',
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
     if match:
         try:
-            rows = json.loads(match.group(1).strip())
+            payload = json.loads(match.group(1).strip())
+            rows = payload.get("rows", []) if isinstance(payload, dict) else payload
             return [
                 {
-                    "interviewee_id": clean(row.get("interviewee_id")),
+                    "participant_code": clean(row.get("participant_code") or row.get("interviewee_id")),
                     "MCID": clean(row.get("MCID")),
                 }
                 for row in rows
-                if clean(row.get("interviewee_id")) and clean(row.get("MCID"))
+                if clean(row.get("participant_code") or row.get("interviewee_id")) and clean(row.get("MCID"))
             ]
         except json.JSONDecodeError:
             pass
@@ -361,23 +362,33 @@ def read_interviewee_translation_html(path: Path) -> list[dict[str, str]]:
     )
     return [
         {
-            "interviewee_id": clean(html.unescape(re.sub(r"<.*?>", "", code))),
+            "participant_code": clean(html.unescape(re.sub(r"<.*?>", "", code))),
             "MCID": clean(html.unescape(re.sub(r"<.*?>", "", mcid))),
         }
         for code, mcid in body_rows
-        if clean(html.unescape(re.sub(r"<.*?>", "", code))).startswith("I")
+        if clean(html.unescape(re.sub(r"<.*?>", "", code))).startswith("P")
     ]
 
 
-def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -> None:
+def write_interviewee_translation_html(
+    rows: list[dict[str, str]],
+    path: Path,
+    participant_number_pool_n: int,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    sorted_rows = sorted(rows, key=_interviewee_code_sort_key)
-    json_payload = json.dumps(sorted_rows, ensure_ascii=False).replace("</", "<\\/")
+    sorted_rows = sorted(rows, key=_participant_code_sort_key)
+    json_payload = json.dumps(
+        {
+            "participant_number_pool_n": participant_number_pool_n,
+            "rows": sorted_rows,
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
 
     table_rows = "\n".join(
         "<tr>"
-        f"<td>{html.escape(row.get('interviewee_id', ''))}</td>"
+        f"<td>{html.escape(row.get('participant_code', ''))}</td>"
         f"<td>{html.escape(row.get('MCID', ''))}</td>"
         "</tr>"
         for row in sorted_rows
@@ -388,7 +399,7 @@ def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Interviewee code translation table</title>
+  <title>Participant-code translation table</title>
   <style>
     body {{
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -414,16 +425,18 @@ def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -
   </style>
 </head>
 <body>
-  <h1>Interviewee code translation table</h1>
+  <h1>Participant-code translation table for interviewed participants</h1>
   <p class="note">
-    Interviewee codes are neutral reporting labels. They do not reflect recruitment order,
-    interview order, experimental condition, or performance.
+    Participant codes are neutral reporting labels. They do not reflect recruitment order,
+    interview order, experimental condition, or performance. Codes are sampled without replacement
+    from P1 through P{participant_number_pool_n}, where {participant_number_pool_n} is the number
+    of included MCIDs in the merged dataset at generation time.
   </p>
 
   <table>
     <thead>
       <tr>
-        <th>interviewee_id</th>
+        <th>participant_code</th>
         <th>MCID</th>
       </tr>
     </thead>
@@ -432,7 +445,7 @@ def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -
     </tbody>
   </table>
 
-  <script type="application/json" id="interviewee-mcid-data">{json_payload}</script>
+  <script type="application/json" id="participant-code-mcid-data">{json_payload}</script>
 </body>
 </html>
 """,
@@ -443,35 +456,54 @@ def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -
 def ensure_interviewee_translation_table(
     interviewee_mcids: list[str],
     path: Path,
+    total_included_mcids: int,
 ) -> tuple[list[dict[str, str]], str | None]:
-    """Create or reuse a stable I-code to MCID translation table.
+    """Create or reuse a stable P-code to MCID translation table for interviewees.
 
-    Existing tables are reused when the MCID set is unchanged. If the set changes,
-    a new random order is generated and persisted.
+    Codes are sampled without replacement from P1 through P{N}, where N is the
+    number of included MCIDs in the merged dataset. Existing tables are reused
+    when the interviewee MCID set is unchanged and all stored codes remain valid
+    for the current participant-number pool.
     """
     current_mcids = sorted({clean(mcid) for mcid in interviewee_mcids if clean(mcid)})
 
     if not current_mcids:
         return [], None
 
+    participant_number_pool_n = max(int(total_included_mcids or 0), len(current_mcids))
     existing_rows = read_interviewee_translation_html(path)
     existing_mcids = sorted({clean(row.get("MCID")) for row in existing_rows if clean(row.get("MCID"))})
+    existing_codes = [clean(row.get("participant_code")) for row in existing_rows]
+    existing_code_numbers = [
+        int(code[1:])
+        for code in existing_codes
+        if re.fullmatch(r"P[1-9]\d*", code)
+    ]
+    valid_existing_codes = (
+        len(existing_rows) == len(current_mcids)
+        and len(existing_codes) == len(set(existing_codes))
+        and len(existing_code_numbers) == len(existing_codes)
+        and all(1 <= number <= participant_number_pool_n for number in existing_code_numbers)
+    )
 
-    if path.exists() and set(existing_mcids) == set(current_mcids):
-        return sorted(existing_rows, key=_interviewee_code_sort_key), None
+    if path.exists() and set(existing_mcids) == set(current_mcids) and valid_existing_codes:
+        return sorted(existing_rows, key=_participant_code_sort_key), None
 
     shuffled_mcids = current_mcids[:]
-    random.SystemRandom().shuffle(shuffled_mcids)
+    participant_numbers = list(range(1, participant_number_pool_n + 1))
+    rng = random.SystemRandom()
+    rng.shuffle(shuffled_mcids)
+    sampled_numbers = rng.sample(participant_numbers, len(current_mcids))
 
     new_rows = [
         {
-            "interviewee_id": f"I{index:02d}",
+            "participant_code": f"P{number}",
             "MCID": mcid,
         }
-        for index, mcid in enumerate(shuffled_mcids, start=1)
+        for mcid, number in zip(shuffled_mcids, sampled_numbers)
     ]
 
-    write_interviewee_translation_html(new_rows, path)
+    write_interviewee_translation_html(new_rows, path, participant_number_pool_n)
 
     if existing_rows:
         added = sorted(set(current_mcids) - set(existing_mcids))
@@ -481,17 +513,20 @@ def ensure_interviewee_translation_table(
             details.append("added MCID(s): " + ", ".join(added))
         if removed:
             details.append("removed MCID(s): " + ", ".join(removed))
+        if set(existing_mcids) == set(current_mcids) and not valid_existing_codes:
+            details.append(f"existing codes were not valid P-codes within P1-P{participant_number_pool_n}")
 
         return (
             new_rows,
-            "Interviewee translation table was regenerated because the interviewee MCID set changed. "
-            f"Previous n = {len(existing_mcids)}; current n = {len(current_mcids)}."
+            "Participant-code translation table was regenerated. "
+            f"Interviewee n = {len(current_mcids)}; participant-code pool = P1-P{participant_number_pool_n}."
             + (f" {'; '.join(details)}." if details else ""),
         )
 
     return (
         new_rows,
-        f"Interviewee translation table was created at {path}.",
+        f"Participant-code translation table was created at {path}. "
+        f"Codes were sampled from P1-P{participant_number_pool_n}.",
     )
 
 
@@ -1131,6 +1166,7 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     interviewee_translation_rows, interviewee_translation_status = ensure_interviewee_translation_table(
         interview_overview.get("unique_participant_ids") or [],
         interviewee_translation_path,
+        total_included_mcids=len(participants),
     )
 
     if interviewee_translation_status:
