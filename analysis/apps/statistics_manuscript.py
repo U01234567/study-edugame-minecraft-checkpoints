@@ -1662,6 +1662,98 @@ def _mean_valid_scale_items(row: dict[str, str], columns: list[str], *, minimum:
     return statistics.fmean(values), missing, out_of_range
 
 
+ScaleItemSpec = tuple[str, float, float, bool]
+
+
+def _format_cronbach_alpha(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        return "—"
+    return f"{value:.3f}".replace("0.", ".").replace("-0.", "-.")
+
+
+def _score_scale_item(row: dict[str, str], spec: ScaleItemSpec) -> float | None:
+    column, minimum, maximum, reverse = spec
+    value = parse_float(row.get(column))
+    if value is None or value < minimum or value > maximum:
+        return None
+    if reverse:
+        return minimum + maximum - value
+    return value
+
+
+def _cronbach_alpha_from_vectors(vectors: list[list[float]]) -> float | None:
+    """Calculate Cronbach's alpha over complete item/component vectors."""
+    if len(vectors) < 2:
+        return None
+    item_count = len(vectors[0]) if vectors else 0
+    if item_count < 2:
+        return None
+    if any(len(vector) != item_count for vector in vectors):
+        return None
+
+    item_variances = [statistics.variance([vector[index] for vector in vectors]) for index in range(item_count)]
+    total_scores = [sum(vector) for vector in vectors]
+    total_variance = statistics.variance(total_scores)
+    if total_variance <= 0:
+        return None
+    return item_count / (item_count - 1) * (1 - sum(item_variances) / total_variance)
+
+
+def _scale_vectors_from_item_specs(
+    immediate_by_mcid: dict[str, dict[str, str]],
+    item_specs: list[ScaleItemSpec],
+) -> tuple[list[list[float]], int]:
+    """Return complete participant vectors for item-level alpha and the eligible n."""
+    vectors: list[list[float]] = []
+    eligible_n = 0
+    for _participant_id, row in sorted(immediate_by_mcid.items()):
+        condition = canonical_condition(first_present(row, ["condition", "Condition", "CONDITION", "experiment_condition", "condition_raw"]))
+        if condition not in CONDITION_ORDER:
+            continue
+        eligible_n += 1
+        values: list[float] = []
+        for spec in item_specs:
+            value = _score_scale_item(row, spec)
+            if value is None:
+                values = []
+                break
+            values.append(value)
+        if values:
+            vectors.append(values)
+    return vectors, eligible_n
+
+
+def _scale_vectors_from_component_specs(
+    immediate_by_mcid: dict[str, dict[str, str]],
+    component_specs: list[list[ScaleItemSpec]],
+) -> tuple[list[list[float]], int]:
+    """Return complete participant vectors for alpha over intermediate component means."""
+    vectors: list[list[float]] = []
+    eligible_n = 0
+    for _participant_id, row in sorted(immediate_by_mcid.items()):
+        condition = canonical_condition(first_present(row, ["condition", "Condition", "CONDITION", "experiment_condition", "condition_raw"]))
+        if condition not in CONDITION_ORDER:
+            continue
+        eligible_n += 1
+        component_values: list[float] = []
+        complete = True
+        for specs in component_specs:
+            values: list[float] = []
+            for spec in specs:
+                value = _score_scale_item(row, spec)
+                if value is None:
+                    complete = False
+                    break
+                values.append(value)
+            if not complete or not values:
+                complete = False
+                break
+            component_values.append(statistics.fmean(values))
+        if complete:
+            vectors.append(component_values)
+    return vectors, eligible_n
+
+
 def descriptive_chapter_scale(
     *,
     title: str,
@@ -1787,6 +1879,119 @@ def descriptive_engagement_by_chapter() -> str:
         minimum=1,
         maximum=7,
         status_ok="All displayed engagement chapter scores were calculated from valid 1-7 chapter-level engagement items.",
+    )
+
+
+def internal_consistency_cognitive_load_engagement() -> str:
+    """Report Cronbach's alpha only for Cognitive Load and Engagement scales.
+
+    Full-construct alpha follows the same aggregation logic as the final score:
+    when a score is based on intermediate chapter/component means, alpha is
+    calculated over those intermediate means rather than over all raw items equally.
+    """
+    IN_BODY = True
+    errors: list[str] = []
+    warnings: list[str] = []
+    survey_rows = read_tsv(SURVEY_EXPORT_PATH)
+    if not SURVEY_EXPORT_PATH.exists():
+        errors.append(f"Missing survey file: {SURVEY_EXPORT_PATH}")
+
+    immediate_by_mcid: dict[str, dict[str, str]] = {}
+    for row in survey_rows:
+        participant_id = mcid_from_row(row)
+        if participant_id and not delayed_flag(row):
+            immediate_by_mcid.setdefault(participant_id, row)
+
+    table_rows: list[str] = []
+
+    def cl(column: str, reverse: bool = False) -> ScaleItemSpec:
+        return (column, 0.0, 10.0, reverse)
+
+    def eng(column: str, reverse: bool = False) -> ScaleItemSpec:
+        return (column, 1.0, 7.0, reverse)
+
+    def add_item_alpha(construct: str, scope: str, item_specs: list[ScaleItemSpec], basis: str) -> None:
+        vectors, eligible_n = _scale_vectors_from_item_specs(immediate_by_mcid, item_specs)
+        alpha = _cronbach_alpha_from_vectors(vectors)
+        excluded_n = max(0, eligible_n - len(vectors))
+        table_rows.append(
+            f'<tr><th>{h(construct)}</th><td>{h(scope)}</td><td>{len(vectors)}</td><td>{len(item_specs)}</td>'
+            f'<td>{_format_cronbach_alpha(alpha)}</td><td>{excluded_n}</td><td>{h(basis)}</td></tr>'
+        )
+
+    def add_component_alpha(construct: str, scope: str, component_specs: list[list[ScaleItemSpec]], basis: str) -> None:
+        vectors, eligible_n = _scale_vectors_from_component_specs(immediate_by_mcid, component_specs)
+        alpha = _cronbach_alpha_from_vectors(vectors)
+        excluded_n = max(0, eligible_n - len(vectors))
+        table_rows.append(
+            f'<tr><th>{h(construct)}</th><td>{h(scope)}</td><td>{len(vectors)}</td><td>{len(component_specs)}</td>'
+            f'<td>{_format_cronbach_alpha(alpha)}</td><td>{excluded_n}</td><td>{h(basis)}</td></tr>'
+        )
+
+    def add_not_applicable(construct: str, scope: str, reason: str) -> None:
+        table_rows.append(
+            f'<tr><th>{h(construct)}</th><td>{h(scope)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{h(reason)}</td></tr>'
+        )
+
+    intrinsic_chapter_specs = [
+        [cl(f"cl_ch{chapter}_scores_{index}") for index in (1, 2, 3)]
+        for chapter in (1, 2, 3)
+    ]
+    for chapter, specs in zip((1, 2, 3), intrinsic_chapter_specs, strict=True):
+        add_item_alpha("Intrinsic cognitive load", f"Chapter {chapter}", specs, "Three chapter-specific intrinsic-load items.")
+    add_not_applicable("Intrinsic cognitive load", "Game overall", "No game-overall intrinsic-load items were administered.")
+    add_component_alpha("Intrinsic cognitive load", "Full construct", intrinsic_chapter_specs, "Three chapter means, matching the final equal-chapter aggregation.")
+
+    extraneous_environment_chapter_specs = [
+        [cl(f"cl_ch{chapter}_scores_{index}") for index in (4, 5, 6, 7)]
+        for chapter in (1, 2, 3)
+    ]
+    for chapter, specs in zip((1, 2, 3), extraneous_environment_chapter_specs, strict=True):
+        add_item_alpha("Extraneous cognitive load", f"Chapter {chapter}", specs, "Four environment-related extraneous-load items.")
+    extraneous_instruction_specs = [cl(f"cl_overall_scores_{index}", reverse=True) for index in (1, 2, 3)]
+    extraneous_interaction_specs = [cl(f"cl_overall_scores_{index}", reverse=True) for index in (4, 5, 6, 7)]
+    add_item_alpha("Extraneous cognitive load", "Game overall", extraneous_instruction_specs + extraneous_interaction_specs, "Seven overall instruction- and interaction-related items after reverse-coding.")
+    extraneous_environment_specs = [spec for chapter_specs in extraneous_environment_chapter_specs for spec in chapter_specs]
+    add_component_alpha("Extraneous cognitive load", "Full construct", [extraneous_environment_specs, extraneous_instruction_specs, extraneous_interaction_specs], "Environment, instruction, and interaction means, matching the final equal-component aggregation.")
+
+    for chapter in (1, 2, 3):
+        add_not_applicable("Germane cognitive load", f"Chapter {chapter}", "No chapter-specific germane-load items were administered.")
+    germane_overall_specs = [cl(f"cl_overall_scores_{index}") for index in (8, 9, 10, 11)]
+    add_item_alpha("Germane cognitive load", "Game overall", germane_overall_specs, "Four overall germane-load items.")
+    add_item_alpha("Germane cognitive load", "Full construct", germane_overall_specs, "Same four overall germane-load items; no intermediate aggregation was used.")
+
+    engagement_chapter_specs = [
+        [eng(f"eng_ch{chapter}_scores_{index}") for index in (1, 2, 3, 4, 5)]
+        for chapter in (1, 2, 3)
+    ]
+    for chapter, specs in zip((1, 2, 3), engagement_chapter_specs, strict=True):
+        add_item_alpha("Engagement", f"Chapter {chapter}", specs, "Five chapter-specific engagement items.")
+    engagement_overall_specs = [
+        eng("eng_overall_scores_1", reverse=True),
+        eng("eng_overall_scores_2", reverse=True),
+        eng("eng_overall_scores_3"),
+        eng("eng_overall_scores_4"),
+    ]
+    add_item_alpha("Engagement", "Game overall", engagement_overall_specs, "Four overall engagement items after reverse-coding frustration and confusion.")
+    engagement_all_chapter_specs = [spec for chapter_specs in engagement_chapter_specs for spec in chapter_specs]
+    add_component_alpha("Engagement", "Full construct", [engagement_all_chapter_specs, engagement_overall_specs], "Chapter-specific engagement mean and overall engagement mean, matching the final equal-component aggregation.")
+
+    table_html = (
+        '<table><thead><tr><th>Construct</th><th>Scope</th><th>complete n</th><th>input units k</th>'
+        '<th>Cronbach&apos;s α</th><th>excluded n</th><th>Input used</th></tr></thead><tbody>'
+        + "".join(table_rows)
+        + '</tbody></table>'
+    )
+    if not immediate_by_mcid:
+        warnings.append("No immediate survey rows were available for internal-consistency estimates.")
+    return table_shell(
+        "Internal consistency: cognitive load and engagement",
+        IN_BODY,
+        "Cronbach's alpha is reported only for Cognitive Load and Engagement. Estimates are calculated after reverse-coding, and full-construct estimates use the same intermediate chapter/component means as the final scale scores rather than weighting all raw items equally.",
+        table_html,
+        "",
+        status_messages(errors, warnings, "Internal-consistency estimates were generated for Cognitive Load and Engagement only."),
+        "",
     )
 
 
@@ -4179,6 +4384,7 @@ def html_document(sections: list[str]) -> str:
         <li><a href="#{slugify('Descriptives: germane cognitive load')}">Germane load</a></li>
         <li><a href="#{slugify('Descriptives: engagement')}">Engagement</a></li>
         <li><a href="#{slugify('Descriptives: engagement by chapter')}">Engagement by chapter</a></li>
+        <li><a href="#{slugify('Internal consistency: cognitive load and engagement')}">Internal consistency</a></li>
       </ol>
       <h3>Alignment + assumptions + final models</h3>
       <ol>
@@ -4231,6 +4437,7 @@ def main() -> int:
         descriptive_germane_load(),
         descriptive_engagement(),
         descriptive_engagement_by_chapter(),
+        internal_consistency_cognitive_load_engagement(),
         preregistration_alignment_section(),
         inferential_x_assumptions(),
         inferential_h1_y_assumptions(),
