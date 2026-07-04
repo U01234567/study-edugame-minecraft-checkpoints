@@ -2081,10 +2081,45 @@ function renderSelectionCategoryTable(rows){
   `;
 }
 
+function renderIntervieweeTranslationStatus(message){
+  if (!message) return '';
+
+  return `
+    <div style="border:1px solid #f79009; background:#fffaeb; padding:0.75rem 1rem; border-radius:8px; margin-bottom:1rem;">
+      <strong>Interviewee translation table update:</strong>
+      ${escapeHtml(message)}
+    </div>
+  `;
+}
+
+function renderIntervieweeTranslationTable(rows){
+  const translationRows = rows || [];
+
+  return `
+    <section class="card">
+      <h2>Interviewee code translation table</h2>
+      <p class="small">
+        These codes are neutral reporting labels for interviewed participants.
+        They do not indicate recruitment order, interview order, condition, or performance.
+      </p>
+      ${table(
+        [
+          {key:'interviewee_id', label:'Interviewee code'},
+          {key:'MCID', label:'MCID'}
+        ],
+        translationRows
+      )}
+    </section>
+  `;
+}
+
 function renderInterviewsV2(){
   const data = REPORT.interviews || {};
 
   document.getElementById('tab-interviews').innerHTML = `
+    ${renderIntervieweeTranslationStatus(data.interviewee_translation_status)}
+    ${renderIntervieweeTranslationTable(data.interviewee_translation_rows || [])}
+
     <section class="card">
       <h2>Prospect interviewees / selected interviews</h2>
       <p class="small">Each selection criterion shows three ID slots by default. If a criterion has more than three assigned interviews, the table expands with equal-width ID columns. Click a filled slot to open the linked transcript below. Click the selected slot again to deselect it. Red slots are interview transcripts whose speaker MCID is not in the included merged dataset.</p>

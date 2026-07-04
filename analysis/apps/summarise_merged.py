@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import html
 import json
+import random
 import re
 import sys
 from pathlib import Path
@@ -115,6 +117,7 @@ def route_paths(paths: dict[str, Path] | None = None) -> dict[str, Path]:
         "data_collection_locations_path": COLLECTION_LOCATIONS_PATH,
         "data_transcripts_dir": INTERVIEW_TRANSCRIPTS_DIR,
         "data_interview_manifest_path": INTERVIEW_MANIFEST_PATH,
+        "data_interviewee_translation_path": DATA_DIR / "interviewee_mcid_translation.html",
         "data_retention_scores_path": RETENTION_SCORES_PATH,
         "data_retention_scores_final_path": RETENTION_FINAL_SCORES_PATH,
         "merged_output_path": MERGED_OUTPUT_PATH,
@@ -285,7 +288,13 @@ def require_delayed_included_column(survey_rows: list[dict[str, str]], header: l
         )
 
 
-def add_interview_comparison_summaries(interview_data: dict[str, Any], participants: list[dict[str, Any]]) -> dict[str, Any]:
+def add_interview_comparison_summaries(
+    interview_data: dict[str, Any],
+    participants: list[dict[str, Any]],
+    interviewee_translation_rows: list[dict[str, str]] | None = None,
+    interviewee_translation_status: str | None = None,
+    interviewee_translation_path: Path | None = None,
+) -> dict[str, Any]:
     """Attach full-sample and interview-subsample summaries for the interview viewer."""
     interview_ids = set(interview_data.get("unique_participant_ids") or [])
     interview_participants = [
@@ -300,7 +309,190 @@ def add_interview_comparison_summaries(interview_data: dict[str, Any], participa
     enriched["interview_participant_ids_not_in_merged_data"] = sorted(
         interview_ids - {participant.get("participant_id") for participant in interview_participants}
     )
+    enriched["interviewee_translation_rows"] = interviewee_translation_rows or []
+    enriched["interviewee_translation_status"] = interviewee_translation_status or ""
+    enriched["interviewee_translation_path"] = str(interviewee_translation_path or "")
     return enriched
+
+
+def _interviewee_code_sort_key(row: dict[str, str]) -> tuple[int, str]:
+    code = clean(row.get("interviewee_id"))
+    match = re.fullmatch(r"I(\d+)", code)
+    if match:
+        return (int(match.group(1)), code)
+    return (10**9, code)
+
+
+def read_interviewee_translation_html(path: Path) -> list[dict[str, str]]:
+    """Read the generated interviewee-code table.
+
+    The HTML file contains a human-readable table and an embedded JSON payload.
+    The JSON payload keeps reading robust without adding a new dependency.
+    """
+    if not path.exists():
+        return []
+
+    text = path.read_text(encoding="utf-8")
+
+    match = re.search(
+        r'<script[^>]*id=["\']interviewee-mcid-data["\'][^>]*>(.*?)</script>',
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if match:
+        try:
+            rows = json.loads(match.group(1).strip())
+            return [
+                {
+                    "interviewee_id": clean(row.get("interviewee_id")),
+                    "MCID": clean(row.get("MCID")),
+                }
+                for row in rows
+                if clean(row.get("interviewee_id")) and clean(row.get("MCID"))
+            ]
+        except json.JSONDecodeError:
+            pass
+
+    # Fallback for a manually simplified HTML table.
+    body_rows = re.findall(
+        r"<tr>\s*<td>(.*?)</td>\s*<td>(.*?)</td>\s*</tr>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return [
+        {
+            "interviewee_id": clean(html.unescape(re.sub(r"<.*?>", "", code))),
+            "MCID": clean(html.unescape(re.sub(r"<.*?>", "", mcid))),
+        }
+        for code, mcid in body_rows
+        if clean(html.unescape(re.sub(r"<.*?>", "", code))).startswith("I")
+    ]
+
+
+def write_interviewee_translation_html(rows: list[dict[str, str]], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    sorted_rows = sorted(rows, key=_interviewee_code_sort_key)
+    json_payload = json.dumps(sorted_rows, ensure_ascii=False).replace("</", "<\\/")
+
+    table_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(row.get('interviewee_id', ''))}</td>"
+        f"<td>{html.escape(row.get('MCID', ''))}</td>"
+        "</tr>"
+        for row in sorted_rows
+    )
+
+    path.write_text(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Interviewee code translation table</title>
+  <style>
+    body {{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 2rem;
+      line-height: 1.45;
+    }}
+    table {{
+      border-collapse: collapse;
+      min-width: 420px;
+    }}
+    th, td {{
+      border: 1px solid #d0d5dd;
+      padding: 0.4rem 0.65rem;
+      text-align: left;
+    }}
+    th {{
+      background: #f2f4f7;
+    }}
+    .note {{
+      color: #667085;
+      max-width: 760px;
+    }}
+  </style>
+</head>
+<body>
+  <h1>Interviewee code translation table</h1>
+  <p class="note">
+    Interviewee codes are neutral reporting labels. They do not reflect recruitment order,
+    interview order, experimental condition, or performance.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>interviewee_id</th>
+        <th>MCID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {table_rows}
+    </tbody>
+  </table>
+
+  <script type="application/json" id="interviewee-mcid-data">{json_payload}</script>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+
+def ensure_interviewee_translation_table(
+    interviewee_mcids: list[str],
+    path: Path,
+) -> tuple[list[dict[str, str]], str | None]:
+    """Create or reuse a stable I-code to MCID translation table.
+
+    Existing tables are reused when the MCID set is unchanged. If the set changes,
+    a new random order is generated and persisted.
+    """
+    current_mcids = sorted({clean(mcid) for mcid in interviewee_mcids if clean(mcid)})
+
+    if not current_mcids:
+        return [], None
+
+    existing_rows = read_interviewee_translation_html(path)
+    existing_mcids = sorted({clean(row.get("MCID")) for row in existing_rows if clean(row.get("MCID"))})
+
+    if path.exists() and set(existing_mcids) == set(current_mcids):
+        return sorted(existing_rows, key=_interviewee_code_sort_key), None
+
+    shuffled_mcids = current_mcids[:]
+    random.SystemRandom().shuffle(shuffled_mcids)
+
+    new_rows = [
+        {
+            "interviewee_id": f"I{index:02d}",
+            "MCID": mcid,
+        }
+        for index, mcid in enumerate(shuffled_mcids, start=1)
+    ]
+
+    write_interviewee_translation_html(new_rows, path)
+
+    if existing_rows:
+        added = sorted(set(current_mcids) - set(existing_mcids))
+        removed = sorted(set(existing_mcids) - set(current_mcids))
+        details = []
+        if added:
+            details.append("added MCID(s): " + ", ".join(added))
+        if removed:
+            details.append("removed MCID(s): " + ", ".join(removed))
+
+        return (
+            new_rows,
+            "Interviewee translation table was regenerated because the interviewee MCID set changed. "
+            f"Previous n = {len(existing_mcids)}; current n = {len(current_mcids)}."
+            + (f" {'; '.join(details)}." if details else ""),
+        )
+
+    return (
+        new_rows,
+        f"Interviewee translation table was created at {path}.",
+    )
 
 
 RETENTION_SCORE_HISTOGRAM_CATEGORIES = [
@@ -926,13 +1118,30 @@ def build_payload(*, public_route: bool, paths: dict[str, Path]) -> dict[str, An
     game_logs = build_game_log_report(participants)
 
     log_step("Building interview overview.")
+    interview_overview = load_interview_overview(
+        paths.get("data_transcripts_dir", INTERVIEW_TRANSCRIPTS_DIR),
+        participants=participants,
+        manifest_path=paths.get("data_interview_manifest_path", INTERVIEW_MANIFEST_PATH),
+    )
+
+    interviewee_translation_path = paths.get(
+        "data_interviewee_translation_path",
+        DATA_DIR / "interviewee_mcid_translation.html",
+    )
+    interviewee_translation_rows, interviewee_translation_status = ensure_interviewee_translation_table(
+        interview_overview.get("unique_participant_ids") or [],
+        interviewee_translation_path,
+    )
+
+    if interviewee_translation_status:
+        log_step(interviewee_translation_status)
+
     interviews = add_interview_comparison_summaries(
-        load_interview_overview(
-            paths.get("data_transcripts_dir", INTERVIEW_TRANSCRIPTS_DIR),
-            participants=participants,
-            manifest_path=paths.get("data_interview_manifest_path", INTERVIEW_MANIFEST_PATH),
-        ),
+        interview_overview,
         participants,
+        interviewee_translation_rows=interviewee_translation_rows,
+        interviewee_translation_status=interviewee_translation_status,
+        interviewee_translation_path=interviewee_translation_path,
     )
 
     return {
