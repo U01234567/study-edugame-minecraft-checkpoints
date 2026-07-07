@@ -9,7 +9,7 @@ from apps.summarise_last_session import main as summarise_last_session_main
 from apps.summarise_merged import main as merged_summary_main
 from apps.summarise_survey import main as summarise_survey_main
 from apps.statistics_manuscript import main as statistics_manuscript_main
-from apps.stats_explore import main as statistics_exploratory_main
+from apps.statistics_subscales import main as statistics_subscales_main
 
 # ---------------------------------------------------------------------------
 # Data-route toggle
@@ -85,7 +85,7 @@ def print_usage() -> None:
     print("  python main.py resolve_disagreements port=8767")
     print("  python main.py resolve_disagreements input=./data/retention_scores_merged.tsv port=8767")
     print("  python main.py stats_manu")
-    print("  python main.py stats_explore")
+    print("  python main.py stats_subscales")
     print()
     print(f"Current route: PUBLIC_ROUTE={PUBLIC_ROUTE}")
 
@@ -103,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     - resolve_disagreements: open the final retention adjudication app; it first
       auto-fills safe conflicts with backups, then lets you manually resolve the rest
     - stats_manu: calculate all descriptive and inferential statistics for the manuscript.
+    - stats_subscales: calculate all inferential statistics using the subscales instead of merged constructs.
     """
     args = argv if argv is not None else sys.argv[1:]
 
@@ -130,8 +131,8 @@ def main(argv: list[str] | None = None) -> int:
     if command == "stats_manu":
         return statistics_manuscript_main()
     
-    if command == "stats_explore":
-        return statistics_exploratory_main()
+    if command == "stats_subscales":
+        return statistics_subscales_main()
 
     print(f"Unknown command: {command}")
     print_usage()
